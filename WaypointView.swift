@@ -1,0 +1,93 @@
+import SwiftUI
+import CoreLocation
+
+struct WaypointView: View {
+    @ObservedObject var locationManager: LocationManager
+    @State private var showInstructions = true
+    
+    var bearingToWaypoint: Double {
+        guard let currentLocation = locationManager.lastLocation,
+              let waypointLocation = locationManager.averagedWaypointLocation else { return 0 }
+        
+        let bearingFromNorth = currentLocation.bearing(to: waypointLocation)
+        let userHeading = locationManager.userHeading
+        
+        // Calculate the relative bearing
+        let relativeBearing = bearingFromNorth - userHeading
+        return relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
+    }
+    
+    
+    
+    var body: some View {
+        VStack {
+            Text("Waypoint Direction")
+                .font(.system(size: 20))
+                .bold()
+                .frame(maxWidth: .infinity, alignment: .center)
+            
+            if let currentLocation = locationManager.latestLocation,
+               let waypointLocation = locationManager.averagedWaypointLocation {
+                let bearing = currentLocation.bearing(to: waypointLocation)
+                let distance = currentLocation.distance(from: waypointLocation)
+                
+                Text("Distance to Location: \(distance) meters")
+                    .font(.caption)
+                
+                Image(systemName: "arrow.up")
+                    .foregroundColor(Color(hex: "#00ff81")) // Use your desired hex color code
+                    .font(Font.system(size: 36)) // Adjust the size as needed
+                    .rotationEffect(.degrees(bearing)) //or bearingToWaypoint
+            } else {
+                Spacer()
+                Text("No waypoint defined. Please create one.")
+                    .foregroundColor(Color(hex: "#00ff81"))
+            }
+            
+            Spacer()
+        }
+    }
+}
+
+struct InstructionsScreen: View {
+    var dismissAction: () -> Void
+    
+    var body: some View {
+        VStack {
+            Text("Waypoint Directions")
+                .font(.system(size: 20))
+                .bold()
+                .frame(maxWidth: .infinity, alignment: .center)
+            
+            Text("Follow these directions to reach your waypoint:")
+                .padding(.top, 20)
+            
+            
+        }
+    }
+}
+
+
+extension CLLocation {
+    func bearing(to destination: CLLocation) -> Double {
+        let lat1 = self.coordinate.latitude.toRadians()
+        let lon1 = self.coordinate.longitude.toRadians()
+        
+        let lat2 = destination.coordinate.latitude.toRadians()
+        let lon2 = destination.coordinate.longitude.toRadians()
+        
+        let dLon = lon2 - lon1
+        let y = sin(dLon) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+        let bearing = atan2(y, x).toDegrees()
+        
+        return (bearing >= 0) ? bearing : (360 + bearing)
+    }
+}
+
+extension Double {
+    func toRadians() -> Double { self * .pi / 180 }
+    func toDegrees() -> Double { self * 180 / .pi }
+}
+
+
