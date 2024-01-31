@@ -29,9 +29,10 @@ struct WaypointView: View {
             if let currentLocation = locationManager.latestLocation,
                let waypointLocation = locationManager.averagedWaypointLocation {
                 let bearing = currentLocation.bearing(to: waypointLocation)
-                let distance = currentLocation.distance(from: waypointLocation)
-                
-                Text("Distance to Location: \(distance) meters")
+                let distanceInMeters = currentLocation.distance(from: waypointLocation)
+                let distanceInFeet = distanceInMeters * 3.28084 // Convert meters to feet
+
+                Text("Distance to Location: \(String(format: "%.2f", distanceInFeet)) feet")
                     .font(.caption)
                 
                 Image(systemName: "arrow.up")
