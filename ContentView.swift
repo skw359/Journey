@@ -205,7 +205,8 @@ struct ContentView: View {
                         if let accuracy = locationManager.gpsAccuracy {
                             SignalStrengthView(accuracy: accuracy)
                             
-                                .frame(width: 50, height: 20) // Adjust size as needed
+                                .frame(width: 50, height: 20)
+                            
                             
                         } else {
                             // Text("No GPS") // Placeholder text or view when GPS accuracy is not available
@@ -264,13 +265,13 @@ struct ContentView: View {
                                 .offset(y: -5) // Adjust vertical position
                             
                             Text("Total Time")
-                                .font(.system(size: 14)) // Adjust font size as needed
+                                .font(.system(size: 14))
                                 .foregroundColor(Color(UIColor(hex: "#05df73"))) // Light green
-                                .frame(width: 68, alignment: .trailing) // Adjust width to match the width of your time text
+                                .frame(width: 68, alignment: .trailing)
                                 .offset(y: -5)
                                 .offset(x: -5)
                         }
-                        .offset(x: -5) // Adjust horizontal position of the entire VStack
+                        .offset(x: -5)
                     }
                     
                     .offset(y: timeOffset)
@@ -361,10 +362,10 @@ struct ContentView: View {
                                         "\(locationManager.currentElevation * 3.28084, specifier: "%.0f") ft")
                                 .font(.system(size: 26))
                                 
-                                .foregroundColor(userSettings.isDarkMode ? .black : .white) // Conditional color
+                                .foregroundColor(userSettings.isDarkMode ? .black : .white)
                                 Text("Elevation")
                                     .font(.system(size: 14))
-                                // .fontWeight(.bold)
+                                
                                     .foregroundColor(Color(UIColor(hex: "#05df73")))
                             }
                             .padding([.leading, .bottom], 20)
@@ -378,8 +379,8 @@ struct ContentView: View {
                         isMetric.toggle() // Toggle between metric and imperial units
                     }
                 }
-                    .edgesIgnoringSafeArea(.bottom), // Ensures the overlay respects the bottom safe area
-                alignment: .bottomLeading // Align the overlay to the bottom leading (bottom left)
+                    .edgesIgnoringSafeArea(.bottom),
+                alignment: .bottomLeading
             )
             // Displays current city, state
             if locationManager.isRecording {
@@ -399,7 +400,7 @@ struct ContentView: View {
                     .padding(8)
                     .background(Color.black.opacity(0.0))
                     .cornerRadius(10)
-                    .foregroundColor(Color(hex: "#bee0ec")) //.gray before, .white before
+                    .foregroundColor(Color(hex: "#bee0ec"))
                     .padding(.bottom, 155)
                     .transition(.opacity)
                     .animation(.easeInOut(duration: 0.2), value: locationManager.isRecording)
@@ -410,9 +411,9 @@ struct ContentView: View {
                 if !locationManager.isRecording {
                     HStack {
                         Button(action: {
-                            showSettings = true // Toggle state to show SettingsView
+                            showSettings = true
                         }) {
-                            Image(systemName: "gear") // Using gear icon from SF Symbols
+                            Image(systemName: "gear")
                                 .font(.title)
                                 .foregroundColor(.white)
                                 .offset(x: -50, y: -70)
@@ -443,7 +444,7 @@ struct ContentView: View {
         device.play(.start)
     }
     
-    // Code to display the water locok button and its respective actions
+    // Code to display the water lock button and its respective actions
     
     struct WaterLockButtonView: View {
         @Binding var isLocked: Bool
@@ -457,7 +458,7 @@ struct ContentView: View {
                 }
             }) {
                 ZStack {
-                    Image(systemName: "drop.degreesign.fill") // Icon changed to drop.circle
+                    Image(systemName: "drop.degreesign.fill")
                         .font(.title2)
                         .foregroundColor(Color(hex: "#44d7b6"))
                 }
@@ -489,7 +490,7 @@ struct ContentView: View {
                 }) {
                     VStack {
                         ZStack {
-                            Image(systemName: "drop.degreesign.fill") // Icon changed to drop.circle
+                            Image(systemName: "drop.degreesign.fill")
                                 .font(.title2)
                                 .foregroundColor(isLocked ? Color(hex: "#44d7b6") : Color(hex: "#44d7b6"))
                         }
@@ -524,18 +525,16 @@ struct ContentView: View {
                             isCreatingWaypoint = false
                         }
                     }) {
-                        // Use a VStack to stack the icon and background together
-                        VStack {
-                            Image(systemName: "plus") // Replace with the desired icon
+                        VStack {  // Use a VStack to stack the icon and background together
+                            Image(systemName: "plus")
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .frame(width: 30, height: 30) // Adjust size as needed
-                                .foregroundColor(Color(hex: "#34d34b")) // Adjust color as needed
+                                .frame(width: 30, height: 30)
+                                .foregroundColor(Color(hex: "#34d34b"))
                             
-                            
-                                .frame(width: 80, height: 80) // Set the frame for the entire button content
-                                .background(Color(hex: "#292929")) // Set the background color for the button
-                                .cornerRadius(100) // Rounded corners
+                                .frame(width: 80, height: 80)
+                                .background(Color(hex: "#292929"))
+                                .cornerRadius(100)
                             Text("Waypoint")
                                 .font(.caption)
                                 .foregroundColor(.white)
@@ -550,8 +549,6 @@ struct ContentView: View {
                 .offset(y: 0)
                 
             }
-            
-            
             
             Spacer() // Pushes everything to the top and bottom
             
@@ -568,44 +565,43 @@ struct ContentView: View {
                     }
                 }) {
                     VStack {
-                        Image(systemName: "xmark") // Use the 'X' system image for the icon
-                            .font(.title2) // Smaller font size
+                        Image(systemName: "xmark")
+                            .font(.title2)
                             .foregroundColor(Color(hex: "#FF2727")) // Red icon color
-                            .padding(.bottom, 2) // Add padding to create space between the icon and text
+                            .padding(.bottom, 2)
                         
                         Text("End")
-                            .font(.caption) // Smaller font size for the text
-                            .foregroundColor(.white) // White text color
+                            .font(.caption)
+                            .foregroundColor(.white)
                     }
-                    .frame(width: 80, height: 80) // Set frame for the button
-                    .background(Color(hex: "#220100")) // Dark red background color
+                    .frame(width: 80, height: 80)
+                    .background(Color(hex: "#220100"))
                     .cornerRadius(10)
                 }
-                .padding([.bottom, .leading], 20) // Add padding to move the button downwards and to the left
+                .padding([.bottom, .leading], 20)
                 .buttonStyle(PlainButtonStyle())
                 
                 Spacer() // Pushes the button to the side
                 
                 // Bottom Right - Pause Button
                 Button(action: {
-                    // Toggle le pause
-                    isPaused.toggle()
+                    isPaused.toggle() // Toggle le pause
                 }) {
                     VStack {
                         Image(systemName: isPaused ? "play.fill" : "pause.fill")
-                            .font(.title2) // Smaller font size to match the "End" button
-                            .foregroundColor(isPaused ? Color(hex: "#ffd700") : Color(hex: "#ffd700")) // Adjust the color for play/pause
-                            .padding(.bottom, 2) // Space between the icon and text
+                            .font(.title2)
+                            .foregroundColor(isPaused ? Color(hex: "#ffd700") : Color(hex: "#ffd700"))
+                            .padding(.bottom, 2)
                         Text(isPaused ? "Resume" : "Pause")
-                            .font(.caption) // Smaller font size for the text
+                            .font(.caption)
                             .foregroundColor(.white)
                     }
-                    .frame(width: 80, height: 80) // Set frame for the button to match the "End" button
-                    .background(Color(hex: "#2b2917")) // Updated background color for pause
+                    .frame(width: 80, height: 80)
+                    .background(Color(hex: "#2b2917"))
                     .cornerRadius(10)
                 }
-                .padding([.bottom, .trailing], 20) // Add padding to move the button downwards and to the right
-                .buttonStyle(PlainButtonStyle()) // Removes the gray background that comes default with OS buttons
+                .padding([.bottom, .trailing], 20)
+                .buttonStyle(PlainButtonStyle())
             }
         }
         
@@ -613,20 +609,18 @@ struct ContentView: View {
             ZStack {
                 if isCreatingWaypoint {
                     HStack {
-                        Spacer() // Pushes the button to the right
+                        Spacer() // Pushes button to right
                         Button(action: {
-                            // Action to stop waypoint functionalities and close the screen
-                            isCreatingWaypoint = false
-                            // Reset or stop any other functionalities related to waypoint
+                            isCreatingWaypoint = false // Action to stop waypoint functionalities and close the screen
                         }) {
                             ZStack {
                                 Circle() // This creates the circular background
                                     .fill(Color.black.opacity(0.0)) // Semi-transparent black background
                                     .frame(width: 44, height: 44) // Adjust the size as needed
                                 
-                                Image(systemName: "xmark.circle.fill") // "X" button
-                                    .font(.title) // Adjust size as needed
-                                    .foregroundColor(.white) // Ensures the "X" is white
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.title)
+                                    .foregroundColor(.white)
                             }
                         }
                         .opacity(showExitButton ? 1 : 0)
@@ -653,7 +647,6 @@ struct ContentView: View {
                     }
                     // Place the exit button in the top left corner
                     if showExitButton {
-                        
                         HStack {
                             Button(action: {
                                 // Action to stop waypoint functionalities and close the screen
@@ -661,10 +654,9 @@ struct ContentView: View {
                                 messageIndex = 0
                                 elapsedTime = 0
                                 showSpecialMessage = false
-                                // Reset or stop any other functionalities related to waypoint
                             }) {
-                                Image(systemName: "xmark.circle.fill") // "X" button
-                                    .font(.title) // Adjust size as needed
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.title)
                                     .foregroundColor(.white)
                             }
                             .background(Color.black.opacity(0.5))
@@ -689,7 +681,6 @@ struct ContentView: View {
                         
                         if elapsedTime == 30 {
                             // Play haptic feedback only once
-                            
                             
                             showSpecialMessage = true
                             showExitButton = true
@@ -855,8 +846,7 @@ struct SignalStrengthView: View {
         .onDisappear {
             timer?.invalidate()
         }
-        
-        // Pulsating recording icon to visualize that the travel recording has started.
+
         Image(systemName: "circle.fill")
             .foregroundColor(Color(UIColor(hex: "#00ff81")))
             .offset(x: 13, y: -35) // Adjust to align with location.fill icon
