@@ -242,26 +242,22 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
-        guard let latestLocation = locations.last else { return }
-        guard let newLocation = locations.last else { return }
-        self.latestLocation = newLocation
-        
-        let assateagueIslandLatRange = (minLat: 38.00, maxLat: 38.10)
-        let assateagueIslandLonRange = (minLon: -75.20, maxLon: -75.10)
-        
-        print("Received location update")
-        
-        if isRecording, let lastLocation = self.lastLocation {
-            let deltaDistance = newLocation.distance(from: self.lastLocation ?? newLocation)
-            distance += deltaDistance * 0.00062137 // Convert meters to miles
-            // Check for significant elevation change (e.g., more than 5 meters)
-            let elevationChangeThreshold = 1.0 // Defines threshold @ 0 feet (every change is detected and graphed)
-            if let lastElevation = self.lastLocation?.altitude,
-               abs(newLocation.altitude - lastElevation) > elevationChangeThreshold {
-                recordElevationReading(elevation: newLocation.altitude)
-            }
+    guard let newLocation = locations.last else { return }
+    self.latestLocation = newLocation
+    
+    print("Received location update")
+    
+    if isRecording, let lastLocation = self.lastLocation {
+        let deltaDistance = newLocation.distance(from: lastLocation) // Calculate the distance in meters
+        distance += deltaDistance * 0.00062137 // Convert meters to miles
+
+        // Check for significant elevation change (e.g., more than 5 meters)
+        let elevationChangeThreshold = 1.0 // Defines the threshold in meters
+        if abs(newLocation.altitude - lastLocation.altitude) > elevationChangeThreshold {
+            recordElevationReading(elevation: newLocation.altitude)
         }
+    }
+}
         
         self.lastLocation = newLocation
         
