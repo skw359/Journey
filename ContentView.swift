@@ -11,8 +11,8 @@ struct TravelData: Hashable {
     var milesTraveled: Double
     var topSpeed: Double
     var averageSpeed: Double
-    var totalTime: Int  // Keep if needed
-    var elapsedTime: String // Changed to String to match totalTimeTextTimer
+    var totalTime: Int
+    var elapsedTime: String
 }
 
 // Define NavigationItem enum outside ContentView
@@ -127,8 +127,8 @@ struct ContentView: View {
             }
             
             .onChange(of: isCreatingWaypoint) {
-                if !isCreatingWaypoint { // Directly access `isCreatingWaypoint` state variable
-                    selectedTab = -1 // Switch to Tab 1 only when waypoint creation is completed
+                if !isCreatingWaypoint {
+                    selectedTab = -1
                     playHapticFeedback()
                 }
             }
@@ -139,7 +139,7 @@ struct ContentView: View {
     
     private func playHapticFeedback() {
         let device = WKInterfaceDevice.current()
-        device.play(.success) // You can choose a different haptic type if needed
+        device.play(.success)
     }
     
     func prepareTravelData() -> TravelData {
@@ -153,7 +153,7 @@ struct ContentView: View {
     }
     
     
-    // Swift code that shows the welcome screen. Only displays on first launch.
+    // Shows the welcome screen. Only displays on first launch.
     struct WelcomeView: View {
         @Binding var hasShownWelcomeScreen: Bool
         var body: some View {
@@ -199,8 +199,6 @@ struct ContentView: View {
         ZStack {
             VStack {
                 if locationManager.isRecording {
-                    //  Text("\(locationManager.currentLocationName)")
-                    // Add the Signal Strength Indicator at the top left
                     HStack {
                         if let accuracy = locationManager.gpsAccuracy {
                             SignalStrengthView(accuracy: accuracy)
@@ -209,7 +207,6 @@ struct ContentView: View {
                             
                             
                         } else {
-                            // Text("No GPS") // Placeholder text or view when GPS accuracy is not available
                         }
                         Spacer()
                     }
@@ -239,13 +236,11 @@ struct ContentView: View {
                         .foregroundColor(userSettings.isDarkMode ? .black : .white) +
                         Text(userSettings.isMetric ? "KPH" : "MPH")
                             .font(.headline)
-                        //  .fontWeight(.bold)
                             .foregroundColor(Color(UIColor(hex: "#05df73")))
                     }
                     
                     .offset(y: -15)
                     .onTapGesture {
-                        // isMetric.toggle() // Toggle between metric and imperial units
                     }
                     // .padding()
                     .onAppear {
@@ -256,14 +251,13 @@ struct ContentView: View {
                     }
                     
                     HStack {
-                        Spacer() // Push content to the right
+                        Spacer()
                         VStack(alignment: .trailing) {
                             Text(locationManager.totalTimeTextTimer)
                                 .font(.system(size: 26))
-                            //  .fontWeight(.bold)
+                          
                                 .foregroundColor(userSettings.isDarkMode ? .black : .white) // Conditional color
                                 .offset(y: -5) // Adjust vertical position
-                            
                             Text("Total Time")
                                 .font(.system(size: 14))
                                 .foregroundColor(Color(UIColor(hex: "#05df73"))) // Light green
@@ -324,27 +318,26 @@ struct ContentView: View {
                     // Pushes everything up and creates space at the bottom 4cd947
                     .overlay(
                         VStack {
-                            Spacer() // Push everything up
+                            Spacer()
                             HStack {
-                                Spacer() // Push content to center
-                                Image(systemName: "exclamationmark.circle") // SF Symbol
+                                Spacer()
+                                Image(systemName: "exclamationmark.circle")
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.red) // Red color for the icon
-                                // .padding(.trailing, 0) // Optional spacing between icon and text
-                                
+                                    .foregroundColor(.red)
+                               
                                 Text("Not meant for indoor use")
-                                    .font(.system(size: 12)) // Set font size
-                                    .foregroundColor(Color.white) // Set text color to white
-                                    .padding() // Add padding around the text
-                                Spacer() // Push content to center
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Color.white)
+                                    .padding()
+                                Spacer()
                                 
                             }
                             
-                            .background(Color(hex: "#3b0d07")) // Set background color
-                            .cornerRadius(100) // Rounded corners
+                            .background(Color(hex: "#3b0d07"))
+                            .cornerRadius(100)
                             .frame(width:200)
-                            .offset(y: 80) // Adjust vertical position
-                            Spacer() // This can be adjusted or removed based on your layout needs
+                            .offset(y: 80)
+                            Spacer()
                             
                         }
                     )
@@ -352,8 +345,7 @@ struct ContentView: View {
             }
             .overlay(
                 VStack {
-                    Spacer() // Pushes the elevation to the bottom
-                    // Elevation Display
+                    Spacer()
                     HStack {
                         if locationManager.isRecording {
                             VStack(alignment: .leading) {
@@ -507,7 +499,7 @@ struct ContentView: View {
                 .padding(.leading, 20)
                 .offset(x: -3)
                 .buttonStyle(PlainButtonStyle())
-                Spacer() // Pushes the button to the left
+                Spacer()
                 
                 VStack {
                     Button(action: {
@@ -550,7 +542,7 @@ struct ContentView: View {
                 
             }
             
-            Spacer() // Pushes everything to the top and bottom
+            Spacer()
             
             // Bottom Left - End Button
             HStack {
@@ -609,14 +601,14 @@ struct ContentView: View {
             ZStack {
                 if isCreatingWaypoint {
                     HStack {
-                        Spacer() // Pushes button to right
+                        Spacer()
                         Button(action: {
-                            isCreatingWaypoint = false // Action to stop waypoint functionalities and close the screen
+                            isCreatingWaypoint = false
                         }) {
                             ZStack {
                                 Circle() // This creates the circular background
-                                    .fill(Color.black.opacity(0.0)) // Semi-transparent black background
-                                    .frame(width: 44, height: 44) // Adjust the size as needed
+                                    .fill(Color.black.opacity(0.0))
+                                    .frame(width: 44, height: 44)
                                 
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.title)
@@ -649,7 +641,6 @@ struct ContentView: View {
                     if showExitButton {
                         HStack {
                             Button(action: {
-                                // Action to stop waypoint functionalities and close the screen
                                 isCreatingWaypoint = false
                                 messageIndex = 0
                                 elapsedTime = 0
@@ -661,12 +652,12 @@ struct ContentView: View {
                             }
                             .background(Color.black.opacity(0.5))
                             
-                            .padding() // Add padding for easier tapping
-                            Spacer() // Pushes the button to the left
+                            .padding()
+                            Spacer()
                             
                         }
-                        .padding(.top, -120) // Adjust for status bar, if necessary
-                        Spacer() // Aligns HStack to top
+                        .padding(.top, -120)
+                        Spacer()
                         
                     }
                 }
@@ -697,11 +688,11 @@ struct ContentView: View {
                     print("isCreatingWaypoint changed to: \($isCreatingWaypoint)")
                 }
                 .background(Color.black.edgesIgnoringSafeArea(.all))
-            // .background(userSettings.isDarkMode ? Color.black.opacity(1.0) : Color.white.opacity(1.0))
+           
         )
     }
-    
 }
+
 // Extensions to utilize hex colors
 extension Color {
     init(hex: String) {
@@ -773,7 +764,7 @@ struct SignalStrengthView: View {
     
     private var signalStrength: Int {
         guard let accuracy = accuracy else {
-            return 0 // No signal
+            return 0
         }
         
         let accuracyInFeet = accuracy * 3.28084
@@ -849,8 +840,7 @@ struct SignalStrengthView: View {
 
         Image(systemName: "circle.fill")
             .foregroundColor(Color(UIColor(hex: "#00ff81")))
-            .offset(x: 13, y: -35) // Adjust to align with location.fill icon
-        //.scaleEffect(pulsate ? 1.3 : 1)
+            .offset(x: 13, y: -35)
             .opacity(pulsate ? 0.3 : 1)
             .animation(Animation.easeInOut(duration: 1).repeatForever(autoreverses: true), value: pulsate)
             .onAppear {
