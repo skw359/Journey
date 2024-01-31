@@ -777,7 +777,7 @@ struct SignalStrengthView: View {
         }
         
         let accuracyInFeet = accuracy * 3.28084
-        if accuracyInFeet > 570 || accuracy == 0 || accuracyInFeet == 0 {
+        if accuracyInFeet > 500 || accuracy == 0 || accuracyInFeet == 0 {
             return 0
         }
         
