@@ -3,7 +3,7 @@ import CoreLocation // Framework that providess GPS coordinates, monitoring loca
 import Combine // Framework introduced by Apple for handling asynchronous and event-driven code using a declarative Swift API. It's used for working with asynchronous data streams and reactive programming.
 import WatchKit // Provides components and APIs tailored for Apple Watch app development.
 import CoreMotion // Altimeter stuff
-import WatchConnectivity // The coolest ever
+import WatchConnectivity
 import UserNotifications //for later use
 
 // Define TravelData as a standalone struct outside ContentView
@@ -54,10 +54,8 @@ struct ContentView: View {
     @State private var showCounty = false
     @State private var countyName: String = ""
 
-    // @EnvironmentObject var userSettings: UserSettings
     // Array of messages
     private let messages = ["Creating Waypoint..."]
-    // private let messages = ["Creating Waypoint...", "Plotting Waypoint...", "Marking spot...", "Pinning it...", "Dropping pin...", "Planting the flag..."]
     private let specialMessage = "Please ensure clear sky view."
     
     let animationDuration = 0.4
@@ -68,8 +66,6 @@ struct ContentView: View {
     }
     
     private func setupTimer() {
-        // timer?.invalidate()
-        
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             self.elapsedTime += 1
             print("Elapsed Time: \(self.elapsedTime)")
