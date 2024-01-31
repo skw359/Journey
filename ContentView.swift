@@ -156,11 +156,11 @@ struct ContentView: View {
             
             VStack(spacing: 20) {
                 Text("Welcome to Journey.")
-                    .font(.system(size: 17)) // Change the font size as needed for the title
+                    .font(.system(size: 17))
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                 Text("Journey helps you track your traveled distance and current speed. Not meant for indoor use.")
-                    .font(.system(size: 11)) // Adjust the size for the body text
+                    .font(.system(size: 11))
                     .multilineTextAlignment(.center)
                 
                 Text("Continue")
