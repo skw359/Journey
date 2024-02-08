@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct MenuView: View {
-    // Add properties to handle actions or states if necessary
 
     var body: some View {
         VStack {
