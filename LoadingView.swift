@@ -8,7 +8,7 @@ struct LoadingView: View {
     
     var body: some View {
         ZStack {
-            Circle() // Static background ring
+            Circle()
                 .stroke(lineWidth: 5)
                 .opacity(0.3)
                 .foregroundColor(Color.blue)
@@ -25,4 +25,3 @@ struct LoadingView: View {
         .frame(width: 25, height: 25)
     }
 }
-// Animation.timingCurve(0.5, 0.4, 0.5, 1.0, duration: 2)
