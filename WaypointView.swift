@@ -1,4 +1,3 @@
-H
 
 import SwiftUI
 import CoreLocation
@@ -8,6 +7,10 @@ struct WaypointView: View {
     @State private var showInstructions = true
     @State private var pulsate = false
     @State private var showCircle = false
+    @State private var backgroundColor = Color.black
+    @State private var textColor = Color.white
+    @State private var circleColor = Color(hex: "#00ff81")
+    @State private var ringColor = Color.gray
     
     var bearingToWaypoint: Double {
         guard let currentLocation = locationManager.lastLocation,
@@ -26,7 +29,12 @@ struct WaypointView: View {
     }
     
     var body: some View {
-            GeometryReader { geometry in
+        GeometryReader { geometry in
+            ZStack {
+                // Background color
+                backgroundColor
+                    .edgesIgnoringSafeArea(.all)
+                
                 VStack {
                     if let currentLocation = locationManager.latestLocation,
                        let waypointLocation = locationManager.averagedWaypointLocation {
@@ -36,52 +44,72 @@ struct WaypointView: View {
                         Text(distanceInFeet >= 528 ? String(format: "%.1f miles", distanceInFeet / 5280) : String(format: "%.0f feet", distanceInFeet))
                             .font(.system(size: 20))
                             .bold()
+                            .foregroundColor(textColor)
                             .frame(maxWidth: .infinity, alignment: .center)
-                        
-                        ZStack {
-                            Image(systemName: "arrow.up")
-                                .foregroundColor(Color(hex: "#00ff81"))
-                                .font(Font.system(size: 46))
-                                .rotationEffect(.degrees(bearingToWaypoint))
-                                .scaleEffect(showCircle ? 0 : 1)
-                                .opacity(showCircle ? 0 : 1)
                             
-                            if showCircle {
-                                PulsatingCircle()
-                                    .frame(width: 30, height: 30)
-                                    .scaleEffect(showCircle ? 1 : 0)
+                            Text(distanceInFeet >= 528 ? String(format: "%.1f miles", distanceInFeet / 5280) : String(format: "%.0f feet", distanceInFeet))
+                                .font(.system(size: 20))
+                                .bold()
+                                .foregroundColor(textColor)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                            
+                            ZStack {
+                                Image(systemName: "arrow.up")
+                                    .foregroundColor(circleColor) // Use circleColor for the arrow as well
+                                    .font(Font.system(size: 46))
+                                    .rotationEffect(.degrees(bearingToWaypoint))
+                                    .scaleEffect(showCircle ? 0 : 1)
+                                    .opacity(showCircle ? 0 : 1)
+                                
+                                if showCircle {
+                                    PulsatingCircle(circleColor: circleColor, ringColor: ringColor)
+                                        .frame(width: 30, height: 30)
+                                        .scaleEffect(showCircle ? 1 : 0)
+                                }
                             }
-                        }
-                        .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
-                        .onChange(of: distanceInFeet) { newValue in
-                            withAnimation(.easeInOut(duration: 0.5)) {
-                                showCircle = newValue < 10
-                            }
-                        }
+                            .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
+                            
                     } else {
-                        Spacer()
-                        Text("No waypoint defined. Please create one.")
-                            .foregroundColor(Color(hex: "#00ff81"))
-                    }
-                }
-                Spacer()
-            }
-        }
-}
+                                           Text("No waypoint defined. Please create one.")
+                                               .foregroundColor(Color(hex: "#00ff81"))
+                                       }
+                                       Spacer()
+                                   }
+                               }
+                               .onChange(of: distanceInFeet) { newValue in
+                                   withAnimation {
+                                       if newValue < 10 {
+                                           backgroundColor = .green
+                                           textColor = .white
+                                           circleColor = .white
+                                           ringColor = Color(hex: "#8de4b6")
+                                       } else {
+                                           backgroundColor = .black
+                                           textColor = .black
+                                           circleColor = Color(hex: "#00ff81")
+                                           ringColor = .gray
+                                       }
+                                   }
+                               }
+                           }
+                       }
+                   }
 
 struct PulsatingCircle: View {
     @State private var pulsate = false
+    var circleColor: Color
+    var ringColor: Color
 
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.gray, lineWidth: 2)
+                .stroke(ringColor, lineWidth: 2)
                 .scaleEffect(pulsate ? 1.2 : 1.0)
                 .opacity(pulsate ? 0.0 : 1.0)
                 .animation(Animation.easeInOut(duration: 1).repeatForever(autoreverses: false), value: pulsate)
             
             Circle()
-                .fill(Color.green)
+                .fill(circleColor)
         }
         .onAppear {
             self.pulsate.toggle()
