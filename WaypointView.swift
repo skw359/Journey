@@ -12,6 +12,7 @@ struct WaypointView: View {
         let bearingFromNorth = currentLocation.bearing(to: waypointLocation)
         let userHeading = locationManager.userHeading
         
+        // Calculate the relative bearing
         let relativeBearing = bearingFromNorth - userHeading
         let finalBearing = relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
         //return relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
@@ -22,45 +23,30 @@ struct WaypointView: View {
     
     var body: some View {
         VStack {
-            waypointDirectionText
-
             if let currentLocation = locationManager.latestLocation,
                let waypointLocation = locationManager.averagedWaypointLocation {
                 let bearing = currentLocation.bearing(to: waypointLocation)
-
+                let distanceInMeters = currentLocation.distance(from: waypointLocation)
+                let distanceInFeet = distanceInMeters * 3.28084
+                
+                Text(distanceInFeet > 5280 ? String(format: "%.2f miles", distanceInFeet / 5280) : String(format: "%.2f feet", distanceInFeet))
+                .font(.system(size: 20))
+                .bold()
+                .frame(maxWidth: .infinity, alignment: .center)
+                
                 Image(systemName: "arrow.up")
                     .foregroundColor(Color(hex: "#00ff81"))
                     .font(Font.system(size: 46))
-                    .rotationEffect(.degrees(bearing)) 
+                    .rotationEffect(.degrees(bearingToWaypoint)) //or bearingToWaypoint
+            } else {
+                Spacer()
+                Text("No waypoint defined. Please create one.")
+                    .foregroundColor(Color(hex: "#00ff81"))
             }
+            
             Spacer()
         }
     }
-
-    private var waypointDirectionText: some View {
-        Group { 
-            if let currentLocation = locationManager.latestLocation,
-               let waypointLocation = locationManager.averagedWaypointLocation {
-                let distanceInMeters = currentLocation.distance(from: waypointLocation)
-                let distanceInFeet = distanceInMeters * 3.28084
-
-                Text(distanceInFeet > 5280 ? String(format: "%.2f miles", distanceInFeet / 5280) : String(format: "%.2f feet", distanceInFeet))
-                    .font(.system(size: 20))
-                    .bold()
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else {
-
-                Text("No waypoint defined. Please create one.")
-                    .font(.system(size: 20))
-                    .bold()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .foregroundColor(Color(hex: "#00ff81"))
-            }
-        }
-    }
-
-
-
 }
 
 struct InstructionsScreen: View {
