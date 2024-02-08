@@ -22,7 +22,7 @@ struct WaypointView: View {
         let relativeBearing = bearingFromNorth - userHeading
         let finalBearing = relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
         
-        print("Current Location: \(currentLocation), Waypoint Location: \(waypointLocation), User Heading: \(userHeading), Bearing to Waypoint: \(finalBearing)")
+        print("Current Location: \(currentLocation), Waypoint Location: \(waypointLocation), User Heading: \(userHeading), Bearing to Waypoint: \(finalBearing)") // debug message
         return finalBearing
     }
     
@@ -31,7 +31,6 @@ struct WaypointView: View {
             ZStack {
                 backgroundColor
                     .edgesIgnoringSafeArea(.all)
-                
                 VStack {
                     if locationManager.latestLocation != nil,
                        locationManager.averagedWaypointLocation != nil {
@@ -117,22 +116,6 @@ struct PulsatingCircle: View {
         }
         .onAppear {
             self.pulsate.toggle()
-        }
-    }
-}
-
-struct InstructionsScreen: View {
-    var dismissAction: () -> Void
-    
-    var body: some View {
-        VStack {
-            Text("Waypoint Directions")
-                .font(.system(size: 20))
-                .bold()
-                .frame(maxWidth: .infinity, alignment: .center)
-            
-            Text("Follow these directions to reach your waypoint:")
-                .padding(.top, 20)
         }
     }
 }
