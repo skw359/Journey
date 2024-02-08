@@ -49,7 +49,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         DispatchQueue.main.async {
             print("New heading: \(newHeading.trueHeading)")
-                self.heading = newHeading.trueHeading // trueHeading for geographic North
+                self.userHeading = newHeading.trueHeading // trueHeading for geographic North
             }
     }
     
@@ -141,6 +141,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
          }
          }
          */
+        
         self.locationManager = CLLocationManager()
         self.locationManager.delegate = self
         locationManager.requestAlwaysAuthorization() // Request 'Always' authorization
