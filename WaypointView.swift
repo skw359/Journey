@@ -1,3 +1,5 @@
+H
+
 import SwiftUI
 import CoreLocation
 
@@ -6,7 +8,6 @@ struct WaypointView: View {
     @State private var showInstructions = true
     @State private var pulsate = false
     @State private var showCircle = false
-    @State private var showGhostDot = false
     
     var bearingToWaypoint: Double {
         guard let currentLocation = locationManager.lastLocation,
@@ -57,12 +58,6 @@ struct WaypointView: View {
                                 showCircle = newValue < 10
                             }
                         }
-                        DirectionIndicatorView(
-                                                userHeading: locationManager.userHeading,
-                                                bearingToWaypoint: bearingToWaypoint,
-                                                within20Feet: distanceInFeet < 20,
-                                                size: min(geometry.size.width, geometry.size.height) / 2 // adjust size as needed
-                                            )
                     } else {
                         Spacer()
                         Text("No waypoint defined. Please create one.")
@@ -72,81 +67,6 @@ struct WaypointView: View {
                 Spacer()
             }
         }
-}
-
-struct DirectionIndicatorView: View {
-    var userHeading: Double
-    var bearingToWaypoint: Double
-    var within20Feet: Bool
-    var size: CGFloat
-    
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(lineWidth: 2)
-                .opacity(0.5)
-            
-            // Line from user's current heading to the bearing
-            if within20Feet {
-                LineBetweenDots(startAngle: userHeading, endAngle: bearingToWaypoint, radius: size / 2)
-            }
-            
-            DotView(angle: userHeading, radius: size / 2)
-                .opacity(0.5)
-            
-            DotView(angle: bearingToWaypoint, radius: size / 2)
-        }
-        .frame(width: size, height: size, alignment: .center)
-    }
-}
-
-struct LineBetweenDots: View {
-    var startAngle: Double // Angle in degrees
-    var endAngle: Double // Angle in degrees
-    var radius: CGFloat // Radius of the circular path
-    
-    private var startPoint: CGPoint {
-        CGPoint(angle: startAngle, radius: radius, center: .init(x: radius, y: radius))
-    }
-    
-    private var endPoint: CGPoint {
-        CGPoint(angle: endAngle, radius: radius, center: .init(x: radius, y: radius))
-    }
-    
-    var body: some View {
-        Path { path in
-            path.move(to: startPoint)
-            path.addLine(to: endPoint)
-        }
-        .stroke(Color.white, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-        .opacity(0.5)
-    }
-}
-
-struct DotView: View {
-    var angle: Double // Angle in degrees
-    var radius: CGFloat // Radius of the circular path
-    
-    var body: some View {
-        Circle()
-            .frame(width: 20, height: 20) // Size of the dot
-            .offset(x: radius * cos(CGFloat(angle).degreesToRadians) - 10, y: radius * sin(CGFloat(angle).degreesToRadians) - 10)
-    }
-}
-
-extension CGPoint {
-    init(angle: Double, radius: CGFloat, center: CGPoint) {
-        self.init(
-            x: center.x + radius * cos(CGFloat(angle).degreesToRadians) - 10,
-            y: center.y + radius * sin(CGFloat(angle).degreesToRadians) - 10
-        )
-    }
-}
-
-extension CGFloat {
-    var degreesToRadians: CGFloat {
-        return self * .pi / 180
-    }
 }
 
 struct PulsatingCircle: View {
@@ -168,7 +88,6 @@ struct PulsatingCircle: View {
         }
     }
 }
-
 
 struct InstructionsScreen: View {
     var dismissAction: () -> Void
