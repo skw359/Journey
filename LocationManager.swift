@@ -49,7 +49,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         DispatchQueue.main.async {
             print("New heading: \(newHeading.trueHeading)")
-                self.userHeading = newHeading.trueHeading // trueHeading for geographic North
+                self.userHeading = newHeading.trueHeading
+                self.heading = newHeading.trueHeading
             }
     }
     
@@ -167,7 +168,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.stopUpdatingLocation()
     }
     
-    // Add a method to refresh GPS
     func refreshGPS() {
         stopUpdatingLocation()
         startUpdatingLocation()
@@ -231,7 +231,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private func observeGPSAccuracy() {
         cancellable = $gpsAccuracy
             .sink { [weak self] accuracy in
-                if accuracy == nil || accuracy! > 200 { // Set your threshold for poor accuracy
+                if accuracy == nil || accuracy! > 200 {
                     self?.refreshGPS()
                 }
             }
@@ -416,7 +416,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             let elevationInMeters = validLastLocation.altitude // + relativeAltitude
             self.currentElevation = elevationInMeters
             let elevationInFeet = elevationInMeters * 3.28084 // Convert meters to feet
-            // Formatting to two decimal places
             let elevationMetersFormatted = String(format: "%.2f", elevationInMeters)
             let elevationFeetFormatted = String(format: "%.2f", elevationInFeet)
             
