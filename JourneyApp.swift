@@ -1,10 +1,3 @@
-//
-//  JourneyApp.swift
-//  Journey Watch App
-//
-//  Created by Mason Doan on 12/3/23.
-//
-
 import SwiftUI
 
 @main
