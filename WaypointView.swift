@@ -37,13 +37,6 @@ struct WaypointView: View {
                             .bold()
                             .frame(maxWidth: .infinity, alignment: .center)
                         
-                        if distanceInFeet < 20 {
-                            GhostDotView(ghostDotBearing: bearingToWaypoint - locationManager.userHeading,
-                                         userHeading: locationManager.userHeading,
-                                         within20Feet: distanceInFeet < 20)
-                            .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
-                        }
-                        
                         ZStack {
                             Image(systemName: "arrow.up")
                                 .foregroundColor(Color(hex: "#00ff81"))
@@ -64,6 +57,12 @@ struct WaypointView: View {
                                 showCircle = newValue < 10
                             }
                         }
+                        DirectionIndicatorView(
+                                                userHeading: locationManager.userHeading,
+                                                bearingToWaypoint: bearingToWaypoint,
+                                                within20Feet: distanceInFeet < 20,
+                                                size: min(geometry.size.width, geometry.size.height) / 2 // adjust size as needed
+                                            )
                     } else {
                         Spacer()
                         Text("No waypoint defined. Please create one.")
@@ -75,27 +74,74 @@ struct WaypointView: View {
         }
 }
 
-struct GhostDotView: View {
-    let ghostDotBearing: Double
-    let userHeading: Double
-    let within20Feet: Bool
+struct DirectionIndicatorView: View {
+    var userHeading: Double
+    var bearingToWaypoint: Double
+    var within20Feet: Bool
+    var size: CGFloat
     
     var body: some View {
-        GeometryReader { geometry in
-            let radius = min(geometry.size.width, geometry.size.height) / 4
-            let angle = Angle(degrees: ghostDotBearing)
-            let circleCenter = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
-            let ghostDotX = circleCenter.x + radius * cos(CGFloat(angle.radians))
-            let ghostDotY = circleCenter.y + radius * sin(CGFloat(angle.radians))
+        ZStack {
+            Circle()
+                .stroke(lineWidth: 2)
+                .opacity(0.5)
             
+            // Line from user's current heading to the bearing
             if within20Feet {
-                Circle()
-                    .fill(Color.gray)
-                    .frame(width: 20, height: 20)
-                    .position(x: ghostDotX, y: ghostDotY)
-                    .transition(.opacity) 
+                LineBetweenDots(startAngle: userHeading, endAngle: bearingToWaypoint, radius: size / 2)
             }
+            
+            DotView(angle: userHeading, radius: size / 2)
+                .opacity(0.5)
+            
+            DotView(angle: bearingToWaypoint, radius: size / 2)
         }
+        .frame(width: size, height: size, alignment: .center)
+    }
+}
+
+struct LineBetweenDots: View {
+    var startAngle: Double
+    var endAngle: Double
+    var radius: CGFloat
+    
+    var body: some View {
+        Path { path in
+            let center = CGPoint(x: radius, y: radius)
+            let startPoint = CGPoint(angle: startAngle, radius: radius, center: center)
+            let endPoint = CGPoint(angle: endAngle, radius: radius, center: center)
+            
+            path.move(to: startPoint)
+            path.addLine(to: endPoint)
+        }
+        .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round))
+        .opacity(0.5)
+    }
+}
+
+struct DotView: View {
+    var angle: Double // Angle in degrees
+    var radius: CGFloat // Radius of the circular path
+    
+    var body: some View {
+        Circle()
+            .frame(width: 20, height: 20) // Size of the dot
+            .offset(x: radius * cos(CGFloat(angle).degreesToRadians) - 10, y: radius * sin(CGFloat(angle).degreesToRadians) - 10)
+    }
+}
+
+extension CGPoint {
+    init(angle: Double, radius: CGFloat, center: CGPoint) {
+        self.init(
+            x: center.x + radius * cos(CGFloat(angle).degreesToRadians) - 10,
+            y: center.y + radius * sin(CGFloat(angle).degreesToRadians) - 10
+        )
+    }
+}
+
+extension CGFloat {
+    var degreesToRadians: CGFloat {
+        return self * .pi / 180
     }
 }
 
@@ -118,6 +164,7 @@ struct PulsatingCircle: View {
         }
     }
 }
+
 
 struct InstructionsScreen: View {
     var dismissAction: () -> Void
