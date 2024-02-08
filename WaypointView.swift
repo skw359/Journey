@@ -17,8 +17,6 @@ struct WaypointView: View {
         return relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
     }
     
-    
-    
     var body: some View {
         VStack {
             Text("Waypoint Direction")
@@ -30,15 +28,15 @@ struct WaypointView: View {
                let waypointLocation = locationManager.averagedWaypointLocation {
                 let bearing = currentLocation.bearing(to: waypointLocation)
                 let distanceInMeters = currentLocation.distance(from: waypointLocation)
-                let distanceInFeet = distanceInMeters * 3.28084 // Convert meters to feet
+                let distanceInFeet = distanceInMeters * 3.28084
 
                 Text("Distance to Location: \(String(format: "%.2f", distanceInFeet)) feet")
                     .font(.caption)
                 
                 Image(systemName: "arrow.up")
-                    .foregroundColor(Color(hex: "#00ff81")) // Use your desired hex color code
-                    .font(Font.system(size: 36)) // Adjust the size as needed
-                    .rotationEffect(.degrees(bearing)) //or bearingToWaypoint
+                    .foregroundColor(Color(hex: "#00ff81"))
+                    .font(Font.system(size: 36))
+                    .rotationEffect(.degrees(bearingToWaypoint))
             } else {
                 Spacer()
                 Text("No waypoint defined. Please create one.")
