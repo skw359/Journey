@@ -30,7 +30,7 @@ struct WaypointView: View {
                     let distanceInMeters = currentLocation.distance(from: waypointLocation)
                     let distanceInFeet = distanceInMeters * 3.28084
                     
-                    Text(distanceInFeet > 5280 ? String(format: "%.2f miles", distanceInFeet / 5280) : String(format: "%.2f feet", distanceInFeet))
+                    Text(distanceInFeet >= 528 ? String(format: "%.1f miles", distanceInFeet / 5280) : String(format: "%.0f feet", distanceInFeet))
                         .font(.system(size: 20))
                         .bold()
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -40,7 +40,6 @@ struct WaypointView: View {
                         .font(Font.system(size: 46))
                         .rotationEffect(.degrees(bearingToWaypoint))
                         .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
-                    
                     
                 } else {
                     Spacer()
