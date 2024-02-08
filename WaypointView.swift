@@ -36,7 +36,7 @@ struct WaypointView: View {
                 Image(systemName: "arrow.up")
                     .foregroundColor(Color(hex: "#00ff81"))
                     .font(Font.system(size: 36))
-                    .rotationEffect(.degrees(bearing)) //or bearingToWaypoint
+                    .rotationEffect(.degrees(bearingToWaypoint)) //or bearingToWaypoint
             } else {
                 Spacer()
                 Text("No waypoint defined. Please create one.")
