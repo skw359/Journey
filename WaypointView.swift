@@ -21,35 +21,57 @@ struct WaypointView: View {
         return finalBearing
     }
     
-    var body: some View {
-        VStack {
-            Text("Waypoint Direction")
-                .font(.system(size: 20))
-                .bold()
-                .frame(maxWidth: .infinity, alignment: .center)
-            
-            if let currentLocation = locationManager.latestLocation,
-               let waypointLocation = locationManager.averagedWaypointLocation {
-                let bearing = currentLocation.bearing(to: waypointLocation)
-                let distanceInMeters = currentLocation.distance(from: waypointLocation)
-                let distanceInFeet = distanceInMeters * 3.28084
+var body: some View {
+    VStack {
+        // Use a computed property or a function to create the Text view
+        waypointDirectionText
 
-                Text("Distance to Location: \(String(format: "%.2f", distanceInFeet)) feet")
-                    .font(.caption)
-                
-                Image(systemName: "arrow.up")
-                    .foregroundColor(Color(hex: "#00ff81"))
-                    .font(Font.system(size: 36))
-                    .rotationEffect(.degrees(bearingToWaypoint)) //or bearingToWaypoint
-            } else {
-                Spacer()
-                Text("No waypoint defined. Please create one.")
-                    .foregroundColor(Color(hex: "#00ff81"))
-            }
-            
-            Spacer()
+        // Additional UI components like the direction arrow can remain here
+        if let currentLocation = locationManager.latestLocation,
+           let waypointLocation = locationManager.averagedWaypointLocation {
+            let bearing = currentLocation.bearing(to: waypointLocation)
+
+            Image(systemName: "arrow.up")
+                .foregroundColor(Color(hex: "#00ff81"))
+                .font(Font.system(size: 46))
+                .rotationEffect(.degrees(bearing)) // Make sure bearingToWaypoint is calculated correctly
         }
+        
+        Spacer()
     }
+}
+
+// Computed property to create the appropriate Text view
+private var waypointDirectionText: some View {
+    if let currentLocation = locationManager.latestLocation,
+       let waypointLocation = locationManager.averagedWaypointLocation {
+        let distanceInMeters = currentLocation.distance(from: waypointLocation)
+        let distanceInFeet = distanceInMeters * 3.28084
+
+        // Decide whether to show miles or feet
+        let distanceText: String
+        if distanceInFeet > 5280 {
+            let distanceInMiles = distanceInFeet / 5280
+            distanceText = String(format: "%.2f miles", distanceInMiles)
+        } else {
+            distanceText = String(format: "%.2f feet", distanceInFeet)
+        }
+        
+        // Return a Text view with the distance
+        return Text(distanceText)
+            .font(.system(size: 20))
+            .bold()
+            .frame(maxWidth: .infinity, alignment: .center)
+    } else {
+        // Return a Text view with the fallback message
+        return Text("No waypoint defined. Please create one.")
+            .font(.system(size: 20))
+            .bold()
+            .frame(maxWidth: .infinity, alignment: .center)
+            .foregroundColor(Color(hex: "#00ff81"))
+    }
+}
+
 }
 
 struct InstructionsScreen: View {
