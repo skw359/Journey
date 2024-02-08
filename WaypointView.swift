@@ -12,7 +12,6 @@ struct WaypointView: View {
         let bearingFromNorth = currentLocation.bearing(to: waypointLocation)
         let userHeading = locationManager.userHeading
         
-        // Calculate the relative bearing
         let relativeBearing = bearingFromNorth - userHeading
         let finalBearing = relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
         //return relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
@@ -21,56 +20,46 @@ struct WaypointView: View {
         return finalBearing
     }
     
-var body: some View {
-    VStack {
-        // Use a computed property or a function to create the Text view
-        waypointDirectionText
+    var body: some View {
+        VStack {
+            waypointDirectionText
 
-        // Additional UI components like the direction arrow can remain here
-        if let currentLocation = locationManager.latestLocation,
-           let waypointLocation = locationManager.averagedWaypointLocation {
-            let bearing = currentLocation.bearing(to: waypointLocation)
+            if let currentLocation = locationManager.latestLocation,
+               let waypointLocation = locationManager.averagedWaypointLocation {
+                let bearing = currentLocation.bearing(to: waypointLocation)
 
-            Image(systemName: "arrow.up")
-                .foregroundColor(Color(hex: "#00ff81"))
-                .font(Font.system(size: 46))
-                .rotationEffect(.degrees(bearing)) // Make sure bearingToWaypoint is calculated correctly
+                Image(systemName: "arrow.up")
+                    .foregroundColor(Color(hex: "#00ff81"))
+                    .font(Font.system(size: 46))
+                    .rotationEffect(.degrees(bearing)) 
+            }
+            Spacer()
         }
-        
-        Spacer()
     }
-}
 
-// Computed property to create the appropriate Text view
-private var waypointDirectionText: some View {
-    if let currentLocation = locationManager.latestLocation,
-       let waypointLocation = locationManager.averagedWaypointLocation {
-        let distanceInMeters = currentLocation.distance(from: waypointLocation)
-        let distanceInFeet = distanceInMeters * 3.28084
+    private var waypointDirectionText: some View {
+        Group { 
+            if let currentLocation = locationManager.latestLocation,
+               let waypointLocation = locationManager.averagedWaypointLocation {
+                let distanceInMeters = currentLocation.distance(from: waypointLocation)
+                let distanceInFeet = distanceInMeters * 3.28084
 
-        // Decide whether to show miles or feet
-        let distanceText: String
-        if distanceInFeet > 5280 {
-            let distanceInMiles = distanceInFeet / 5280
-            distanceText = String(format: "%.2f miles", distanceInMiles)
-        } else {
-            distanceText = String(format: "%.2f feet", distanceInFeet)
+                Text(distanceInFeet > 5280 ? String(format: "%.2f miles", distanceInFeet / 5280) : String(format: "%.2f feet", distanceInFeet))
+                    .font(.system(size: 20))
+                    .bold()
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+
+                Text("No waypoint defined. Please create one.")
+                    .font(.system(size: 20))
+                    .bold()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .foregroundColor(Color(hex: "#00ff81"))
+            }
         }
-        
-        // Return a Text view with the distance
-        return Text(distanceText)
-            .font(.system(size: 20))
-            .bold()
-            .frame(maxWidth: .infinity, alignment: .center)
-    } else {
-        // Return a Text view with the fallback message
-        return Text("No waypoint defined. Please create one.")
-            .font(.system(size: 20))
-            .bold()
-            .frame(maxWidth: .infinity, alignment: .center)
-            .foregroundColor(Color(hex: "#00ff81"))
     }
-}
+
+
 
 }
 
