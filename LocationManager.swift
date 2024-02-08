@@ -123,7 +123,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         self.locationManager = CLLocationManager()
         self.locationManager.delegate = self
         self.locationManager.startUpdatingHeading()
-        // Default no-signal state initialization
         isGPSConnected = false
         gpsAccuracy = nil
         // Start altimeter updates if available
