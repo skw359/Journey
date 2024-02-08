@@ -22,26 +22,31 @@ struct WaypointView: View {
     }
     
     var body: some View {
-        VStack {
-            if let currentLocation = locationManager.latestLocation,
-               let waypointLocation = locationManager.averagedWaypointLocation {
-                let bearing = currentLocation.bearing(to: waypointLocation)
-                let distanceInMeters = currentLocation.distance(from: waypointLocation)
-                let distanceInFeet = distanceInMeters * 3.28084
-                
-                Text(distanceInFeet > 5280 ? String(format: "%.2f miles", distanceInFeet / 5280) : String(format: "%.2f feet", distanceInFeet))
-                .font(.system(size: 20))
-                .bold()
-                .frame(maxWidth: .infinity, alignment: .center)
-                
-                Image(systemName: "arrow.up")
-                    .foregroundColor(Color(hex: "#00ff81"))
-                    .font(Font.system(size: 46))
-                    .rotationEffect(.degrees(bearingToWaypoint)) //or bearingToWaypoint
-            } else {
-                Spacer()
-                Text("No waypoint defined. Please create one.")
-                    .foregroundColor(Color(hex: "#00ff81"))
+        GeometryReader { geometry in
+            VStack {
+                if let currentLocation = locationManager.latestLocation,
+                   let waypointLocation = locationManager.averagedWaypointLocation {
+                    let bearing = currentLocation.bearing(to: waypointLocation)
+                    let distanceInMeters = currentLocation.distance(from: waypointLocation)
+                    let distanceInFeet = distanceInMeters * 3.28084
+                    
+                    Text(distanceInFeet > 5280 ? String(format: "%.2f miles", distanceInFeet / 5280) : String(format: "%.2f feet", distanceInFeet))
+                        .font(.system(size: 20))
+                        .bold()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    
+                    Image(systemName: "arrow.up")
+                        .foregroundColor(Color(hex: "#00ff81"))
+                        .font(Font.system(size: 46))
+                        .rotationEffect(.degrees(bearingToWaypoint))
+                        .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
+                    
+                    
+                } else {
+                    Spacer()
+                    Text("No waypoint defined. Please create one.")
+                        .foregroundColor(Color(hex: "#00ff81"))
+                }
             }
             
             Spacer()
