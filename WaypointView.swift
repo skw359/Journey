@@ -6,15 +6,16 @@ struct WaypointView: View {
     @State private var showInstructions = true
     
     var bearingToWaypoint: Double {
-            guard let currentLocation = locationManager.lastLocation,
-                  let waypointLocation = locationManager.averagedWaypointLocation else { return 0 }
-            
-            let bearingFromNorth = currentLocation.bearing(to: waypointLocation)
-            let userHeading = locationManager.userHeading
-            
-            let relativeBearing = bearingFromNorth - userHeading
-            return relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
-        }
+        guard let currentLocation = locationManager.lastLocation,
+              let waypointLocation = locationManager.averagedWaypointLocation else { return 0 }
+        
+        let bearingFromNorth = currentLocation.bearing(to: waypointLocation)
+        let userHeading = locationManager.userHeading
+        
+        // Calculate the relative bearing
+        let relativeBearing = bearingFromNorth - userHeading
+        return relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
+    }
     
     var body: some View {
         VStack {
@@ -35,7 +36,7 @@ struct WaypointView: View {
                 Image(systemName: "arrow.up")
                     .foregroundColor(Color(hex: "#00ff81"))
                     .font(Font.system(size: 36))
-                    .rotationEffect(.degrees(bearingToWaypoint))
+                    .rotationEffect(.degrees(bearing)) //or bearingToWaypoint
             } else {
                 Spacer()
                 Text("No waypoint defined. Please create one.")
@@ -43,9 +44,6 @@ struct WaypointView: View {
             }
             
             Spacer()
-        }
-        .onReceive(locationManager.$userHeading) { _ in
-            
         }
     }
 }
