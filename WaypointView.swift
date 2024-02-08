@@ -14,7 +14,11 @@ struct WaypointView: View {
         
         // Calculate the relative bearing
         let relativeBearing = bearingFromNorth - userHeading
-        return relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
+        let finalBearing = relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
+        //return relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
+        
+        print("Current Location: \(currentLocation), Waypoint Location: \(waypointLocation), User Heading: \(userHeading), Bearing to Waypoint: \(finalBearing)")
+        return finalBearing
     }
     
     var body: some View {
