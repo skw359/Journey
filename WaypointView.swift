@@ -101,20 +101,24 @@ struct DirectionIndicatorView: View {
 }
 
 struct LineBetweenDots: View {
-    var startAngle: Double
-    var endAngle: Double
-    var radius: CGFloat
+    var startAngle: Double // Angle in degrees
+    var endAngle: Double // Angle in degrees
+    var radius: CGFloat // Radius of the circular path
+    
+    private var startPoint: CGPoint {
+        CGPoint(angle: startAngle, radius: radius, center: .init(x: radius, y: radius))
+    }
+    
+    private var endPoint: CGPoint {
+        CGPoint(angle: endAngle, radius: radius, center: .init(x: radius, y: radius))
+    }
     
     var body: some View {
         Path { path in
-            let center = CGPoint(x: radius, y: radius)
-            let startPoint = CGPoint(angle: startAngle, radius: radius, center: center)
-            let endPoint = CGPoint(angle: endAngle, radius: radius, center: center)
-            
             path.move(to: startPoint)
             path.addLine(to: endPoint)
         }
-        .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round))
+        .stroke(Color.white, style: StrokeStyle(lineWidth: 2, lineCap: .round))
         .opacity(0.5)
     }
 }
