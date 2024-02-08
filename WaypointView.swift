@@ -1,4 +1,3 @@
-
 import SwiftUI
 import CoreLocation
 
@@ -11,6 +10,7 @@ struct WaypointView: View {
     @State private var textColor = Color.white
     @State private var circleColor = Color(hex: "#00ff81")
     @State private var ringColor = Color.gray
+    @State private var distanceInFeet: Double = 0
     
     var bearingToWaypoint: Double {
         guard let currentLocation = locationManager.lastLocation,
@@ -19,10 +19,8 @@ struct WaypointView: View {
         let bearingFromNorth = currentLocation.bearing(to: waypointLocation)
         let userHeading = locationManager.userHeading
         
-        // Calculate the relative bearing
         let relativeBearing = bearingFromNorth - userHeading
         let finalBearing = relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
-        //return relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
         
         print("Current Location: \(currentLocation), Waypoint Location: \(waypointLocation), User Heading: \(userHeading), Bearing to Waypoint: \(finalBearing)")
         return finalBearing
@@ -31,75 +29,81 @@ struct WaypointView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background color
                 backgroundColor
                     .edgesIgnoringSafeArea(.all)
                 
                 VStack {
-                    if let currentLocation = locationManager.latestLocation,
-                       let waypointLocation = locationManager.averagedWaypointLocation {
-                        let distanceInMeters = currentLocation.distance(from: waypointLocation)
-                        let distanceInFeet = distanceInMeters * 3.28084
-                        
+                    if locationManager.latestLocation != nil,
+                       locationManager.averagedWaypointLocation != nil {
                         Text(distanceInFeet >= 528 ? String(format: "%.1f miles", distanceInFeet / 5280) : String(format: "%.0f feet", distanceInFeet))
-                            .font(.system(size: 20))
+                            .font(.system(size: 45))
                             .bold()
-                            .foregroundColor(textColor)
+                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .center)
-                            
-                            Text(distanceInFeet >= 528 ? String(format: "%.1f miles", distanceInFeet / 5280) : String(format: "%.0f feet", distanceInFeet))
-                                .font(.system(size: 20))
+                        
+                        ZStack {
+                            Image(systemName: "arrow.up")
+                                .foregroundColor(circleColor)
+                                .font(Font.system(size: 60))
                                 .bold()
-                                .foregroundColor(textColor)
-                                .frame(maxWidth: .infinity, alignment: .center)
+                                .rotationEffect(.degrees(bearingToWaypoint))
+                                .scaleEffect(showCircle ? 0 : 1)
+                                .opacity(showCircle ? 0 : 1)
                             
-                            ZStack {
-                                Image(systemName: "arrow.up")
-                                    .foregroundColor(circleColor) // Use circleColor for the arrow as well
-                                    .font(Font.system(size: 46))
-                                    .rotationEffect(.degrees(bearingToWaypoint))
-                                    .scaleEffect(showCircle ? 0 : 1)
-                                    .opacity(showCircle ? 0 : 1)
-                                
-                                if showCircle {
-                                    PulsatingCircle(circleColor: circleColor, ringColor: ringColor)
-                                        .frame(width: 30, height: 30)
-                                        .scaleEffect(showCircle ? 1 : 0)
-                                }
+                            if showCircle {
+                                PulsatingCircle(circleColor: circleColor, ringColor: ringColor)
+                                    .frame(width: 30, height: 30)
+                                    .scaleEffect(showCircle ? 1 : 0)
                             }
-                            .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
-                            
+                        }
+                        .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
+                        
                     } else {
-                                           Text("No waypoint defined. Please create one.")
-                                               .foregroundColor(Color(hex: "#00ff81"))
-                                       }
-                                       Spacer()
-                                   }
-                               }
-                               .onChange(of: distanceInFeet) { newValue in
-                                   withAnimation {
-                                       if newValue < 10 {
-                                           backgroundColor = .green
-                                           textColor = .white
-                                           circleColor = .white
-                                           ringColor = Color(hex: "#8de4b6")
-                                       } else {
-                                           backgroundColor = .black
-                                           textColor = .black
-                                           circleColor = Color(hex: "#00ff81")
-                                           ringColor = .gray
-                                       }
-                                   }
-                               }
-                           }
-                       }
-                   }
+                        Text("No waypoint defined. Please create one.")
+                            .foregroundColor(Color(hex: "#00ff81"))
+                    }
+                    Spacer()
+                }
+            }
+            .onChange(of: locationManager.latestLocation) { _ in
+                updateDistance()
+            }
+            .onChange(of: distanceInFeet) { newValue in
+                withAnimation {
+                    updateColors(for: newValue)
+                }
+            }
+        }
+    }
+    
+    private func updateDistance() {
+        guard let currentLocation = locationManager.latestLocation,
+              let waypointLocation = locationManager.averagedWaypointLocation else { return }
+        
+        let distanceInMeters = currentLocation.distance(from: waypointLocation)
+        distanceInFeet = distanceInMeters * 3.28084
+    }
+    
+    private func updateColors(for distance: Double) {
+        if distance < 10 {
+            backgroundColor = .green
+            textColor = .white
+            circleColor = .white
+            ringColor = Color(hex: "#8de4b6")
+        } else {
+            backgroundColor = .black
+            textColor = .black
+            circleColor = Color(hex: "#00ff81")
+            ringColor = .gray
+        }
+    }
+}
 
 struct PulsatingCircle: View {
     @State private var pulsate = false
     var circleColor: Color
     var ringColor: Color
-
+    
     var body: some View {
         ZStack {
             Circle()
@@ -129,12 +133,9 @@ struct InstructionsScreen: View {
             
             Text("Follow these directions to reach your waypoint:")
                 .padding(.top, 20)
-            
-            
         }
     }
 }
-
 
 extension CLLocation {
     func bearing(to destination: CLLocation) -> Double {
@@ -157,5 +158,3 @@ extension Double {
     func toRadians() -> Double { self * .pi / 180 }
     func toDegrees() -> Double { self * 180 / .pi }
 }
-
-
