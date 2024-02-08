@@ -6,6 +6,7 @@ struct WaypointView: View {
     @State private var showInstructions = true
     @State private var pulsate = false
     @State private var showCircle = false
+    @State private var showGhostDot = false
     
     var bearingToWaypoint: Double {
         guard let currentLocation = locationManager.lastLocation,
@@ -36,6 +37,13 @@ struct WaypointView: View {
                             .bold()
                             .frame(maxWidth: .infinity, alignment: .center)
                         
+                        if distanceInFeet < 20 {
+                            GhostDotView(ghostDotBearing: bearingToWaypoint - locationManager.userHeading,
+                                         userHeading: locationManager.userHeading,
+                                         within20Feet: distanceInFeet < 20)
+                            .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
+                        }
+                        
                         ZStack {
                             Image(systemName: "arrow.up")
                                 .foregroundColor(Color(hex: "#00ff81"))
@@ -65,6 +73,30 @@ struct WaypointView: View {
                 Spacer()
             }
         }
+}
+
+struct GhostDotView: View {
+    let ghostDotBearing: Double
+    let userHeading: Double
+    let within20Feet: Bool
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let radius = min(geometry.size.width, geometry.size.height) / 4
+            let angle = Angle(degrees: ghostDotBearing)
+            let circleCenter = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+            let ghostDotX = circleCenter.x + radius * cos(CGFloat(angle.radians))
+            let ghostDotY = circleCenter.y + radius * sin(CGFloat(angle.radians))
+            
+            if within20Feet {
+                Circle()
+                    .fill(Color.gray)
+                    .frame(width: 20, height: 20)
+                    .position(x: ghostDotX, y: ghostDotY)
+                    .transition(.opacity) 
+            }
+        }
+    }
 }
 
 struct PulsatingCircle: View {
