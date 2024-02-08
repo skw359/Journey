@@ -48,6 +48,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         DispatchQueue.main.async {
+            print("New heading: \(newHeading.trueHeading)")
                 self.heading = newHeading.trueHeading // trueHeading for geographic North
             }
     }
