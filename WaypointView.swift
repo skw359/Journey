@@ -61,6 +61,7 @@ struct WaypointView: View {
                         Spacer()
                         Text("No waypoint defined. Please create one.")
                             .foregroundColor(Color(hex: "#00ff81"))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     }
                     Spacer()
                 }
