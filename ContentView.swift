@@ -148,7 +148,6 @@ struct ContentView: View {
         )
     }
     
-    
     // Shows the welcome screen. Only displays on first launch.
     struct WelcomeView: View {
         @Binding var hasShownWelcomeScreen: Bool
@@ -160,7 +159,7 @@ struct ContentView: View {
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                 Text("Journey helps you track your traveled distance and current speed. Not meant for indoor use.")
-                    .font(.system(size: 11))
+                    .font(.system(size: 11)) 
                     .multilineTextAlignment(.center)
                 
                 Text("Continue")
@@ -209,13 +208,14 @@ struct ContentView: View {
                     .padding(.leading, 10)
                     .padding(.top, 5)
                     
-                    // Tap gesture area for toggling between metric and imperial units
                     VStack(spacing: -10) {
-                        // Distance Display
+                        
                         Text(userSettings.isMetric ?
-                             "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) " :
-                                "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) ")
-                        .font(.system(size: 45)) //previously 45
+                             (userSettings.usePreciseUnits || locationManager.speed * 1.60934 <= 32.19 ? "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) " :
+                                String(format: "%.0f", locationManager.distance * 1.60934)) :
+                                (userSettings.usePreciseUnits || locationManager.speed <= 10 ? "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) " :
+                                    String(format: "%.0f", locationManager.distance)))
+                        .font(.system(size: 45))
                         .fontWeight(.bold)
                         .foregroundColor(userSettings.isDarkMode ? .black : .white) +
                         Text(userSettings.isMetric ? "KM" : "MILES")
@@ -223,17 +223,21 @@ struct ContentView: View {
                             .fontWeight(.bold)
                             .foregroundColor(Color(UIColor(hex: "#05df73")))
                         
-                        // Speed Display
                         Text(userSettings.isMetric ?
-                             "\(formatDisplayValue(max(locationManager.speed * 1.60934, 0), usePreciseUnits: userSettings.usePreciseUnits)) " :
-                                "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: userSettings.usePreciseUnits)) ")
-                        .font(.system(size: 45)) //previously 45
+                             (userSettings.usePreciseUnits ? "\(formatDisplayValue(max(locationManager.speed * 1.60934, 0), usePreciseUnits: true)) " :
+                                (locationManager.speed * 1.60934 > 32.19 ? String(format: "%.0f", max(locationManager.speed * 1.60934, 0)) :
+                                    "\(formatDisplayValue(max(locationManager.speed * 1.60934, 0), usePreciseUnits: false)) ")) :
+                                (userSettings.usePreciseUnits ? "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: true)) " :
+                                    (locationManager.speed > 10 ? String(format: "%.0f", max(locationManager.speed, 0)) :
+                                        "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: false)) ")))
+                        .font(.system(size: 45))
                         .fontWeight(.bold)
                         .foregroundColor(userSettings.isDarkMode ? .black : .white) +
                         Text(userSettings.isMetric ? "KPH" : "MPH")
                             .font(.headline)
                             .foregroundColor(Color(UIColor(hex: "#05df73")))
                     }
+
                     
                     .offset(y: -15)
                     .onTapGesture {
@@ -253,7 +257,7 @@ struct ContentView: View {
                                 .font(.system(size: 26))
                           
                                 .foregroundColor(userSettings.isDarkMode ? .black : .white) // Conditional color
-                                .offset(y: -5) // Adjust vertical position
+                                .offset(y: -5)
                             Text("Total Time")
                                 .font(.system(size: 14))
                                 .foregroundColor(Color(UIColor(hex: "#05df73"))) // Light green
@@ -290,7 +294,6 @@ struct ContentView: View {
                             isCreatingWaypoint = false
                             // locationManager.startAltimeterUpdates()
                             self.isRecording.toggle()
-                            // self.startElevationRefresh()
                         }
                     }) {
                         HStack(alignment: .center, spacing: 10) {
@@ -311,7 +314,6 @@ struct ContentView: View {
                         .cornerRadius(15)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    // Pushes everything up and creates space at the bottom 4cd947
                     .overlay(
                         VStack {
                             Spacer()
@@ -364,7 +366,7 @@ struct ContentView: View {
                     }
                     
                     .onTapGesture {
-                        isMetric.toggle() // Toggle between metric and imperial units
+                        isMetric.toggle()
                     }
                 }
                     .edgesIgnoringSafeArea(.bottom),
@@ -406,7 +408,7 @@ struct ContentView: View {
                                 .foregroundColor(.white)
                                 .offset(x: -50, y: -70)
                         }
-                        .background(Color.clear) // Optional, for debugging tap area
+                        .background(Color.clear)
                         .offset(x: -20, y: -20)
                         .buttonStyle(PlainButtonStyle())
                         .zIndex(1)
@@ -433,7 +435,6 @@ struct ContentView: View {
     }
     
     // Code to display the water lock button and its respective actions
-    
     struct WaterLockButtonView: View {
         @Binding var isLocked: Bool
         
@@ -500,11 +501,13 @@ struct ContentView: View {
                 VStack {
                     Button(action: {
                         locationManager.startWaypointCalculation()
+                        //clear locationmanager's waypointed location
                         locationManager.averagedWaypointLocation = nil
                         messageIndex = 0
                         elapsedTime = 0
                         showSpecialMessage = false
                         isCreatingWaypoint = true
+                        
                         locationManager.averageWaypointLocation { averagedLocation in
                             // Step 3: Handle the completion with the new location
                             if let averagedLocation = averagedLocation {
@@ -620,6 +623,7 @@ struct ContentView: View {
                         .imageScale(.large)
                         .opacity(isCreatingWaypoint ? 1 : 0)
                         .animation(.easeInOut(duration: 2.0), value: isCreatingWaypoint)
+                    
                     
                     VStack {
                         LoadingView()
