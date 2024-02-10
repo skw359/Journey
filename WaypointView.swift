@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreLocation
+import UIKit
 
 struct WaypointView: View {
     @ObservedObject var locationManager: LocationManager
@@ -11,6 +12,7 @@ struct WaypointView: View {
     @State private var circleColor = Color(hex: "#00ff81")
     @State private var ringColor = Color.gray
     @State private var distanceInFeet: Double = 0
+    @State private var hapticFeedbackPlayed = false
     
     var bearingToWaypoint: Double {
         guard let currentLocation = locationManager.lastLocation,
@@ -34,7 +36,7 @@ struct WaypointView: View {
                 VStack {
                     if locationManager.latestLocation != nil,
                        locationManager.averagedWaypointLocation != nil {
-                        Text(distanceInFeet >= 5280 ? (distanceInFeet / 5280 > 10 ? String(format: "%.0f miles", distanceInFeet / 5280) : String(format: "%.1f miles", distanceInFeet / 5280)) : String(format: "%.0f feet", distanceInFeet))
+                        Text(distanceInFeet >= 528 ? String(format: "%.1f miles", distanceInFeet / 5280) : String(format: "%.0f feet", distanceInFeet))
                             .font(.system(size: 45))
                             .bold()
                             .foregroundColor(.white)
@@ -86,18 +88,27 @@ struct WaypointView: View {
     }
     
     private func updateColors(for distance: Double) {
-        if distance < 10 {
-            backgroundColor = .green
-            textColor = .white
-            circleColor = .white
-            ringColor = Color(hex: "#8de4b6")
-        } else {
-            backgroundColor = .black
-            textColor = .black
-            circleColor = Color(hex: "#00ff81")
-            ringColor = .gray
+            let previousBackgroundColor = backgroundColor
+
+            if distance < 10 {
+                backgroundColor = .green
+                textColor = .white
+                circleColor = .white
+                ringColor = Color(hex: "#8de4b6")
+                
+                if previousBackgroundColor != .green && !hapticFeedbackPlayed {
+                    WKInterfaceDevice.current().play(.start)
+                    hapticFeedbackPlayed = true
+                }
+            } else {
+         
+                backgroundColor = .black
+                textColor = .black
+                circleColor = Color(hex: "#00ff81")
+                ringColor = .gray
+                hapticFeedbackPlayed = false
+            }
         }
-    }
 }
 
 struct PulsatingCircle: View {
