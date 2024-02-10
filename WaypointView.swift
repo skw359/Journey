@@ -1,6 +1,5 @@
 import SwiftUI
 import CoreLocation
-import UIKit
 
 struct WaypointView: View {
     @ObservedObject var locationManager: LocationManager
@@ -12,7 +11,6 @@ struct WaypointView: View {
     @State private var circleColor = Color(hex: "#00ff81")
     @State private var ringColor = Color.gray
     @State private var distanceInFeet: Double = 0
-    @State private var hapticFeedbackPlayed = false
     
     var bearingToWaypoint: Double {
         guard let currentLocation = locationManager.lastLocation,
@@ -88,27 +86,18 @@ struct WaypointView: View {
     }
     
     private func updateColors(for distance: Double) {
-            let previousBackgroundColor = backgroundColor
-
-            if distance < 10 {
-                backgroundColor = .green
-                textColor = .white
-                circleColor = .white
-                ringColor = Color(hex: "#8de4b6")
-                
-                if previousBackgroundColor != .green && !hapticFeedbackPlayed {
-                    WKInterfaceDevice.current().play(.start)
-                    hapticFeedbackPlayed = true
-                }
-            } else {
-         
-                backgroundColor = .black
-                textColor = .black
-                circleColor = Color(hex: "#00ff81")
-                ringColor = .gray
-                hapticFeedbackPlayed = false
-            }
+        if distance < 10 {
+            backgroundColor = .green
+            textColor = .white
+            circleColor = .white
+            ringColor = Color(hex: "#8de4b6")
+        } else {
+            backgroundColor = .black
+            textColor = .black
+            circleColor = Color(hex: "#00ff81")
+            ringColor = .gray
         }
+    }
 }
 
 struct PulsatingCircle: View {
