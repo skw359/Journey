@@ -32,13 +32,15 @@ struct WaypointView: View {
                 backgroundColor
                     .edgesIgnoringSafeArea(.all)
                 VStack {
-                    if locationManager.latestLocation != nil,
-                       locationManager.averagedWaypointLocation != nil {
-                        Text(distanceInFeet >= 528 ? String(format: "%.1f miles", distanceInFeet / 5280) : String(format: "%.0f feet", distanceInFeet))
-                            .font(.system(size: 45))
-                            .bold()
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, alignment: .center)
+                    if let _ = locationManager.latestLocation,
+                       let _ = locationManager.averagedWaypointLocation {
+                        Text(distanceInFeet >= 5280 ?
+                             "\(distanceInFeet / 5280 == floor(distanceInFeet / 5280) ? String(format: "%.0f", distanceInFeet / 5280) : String(format: "%.1f", distanceInFeet / 5280)) miles" :
+                                "\(Int(distanceInFeet)) feet")
+                        .font(.system(size: 45))
+                        .bold()
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .center)
                         
                         ZStack {
                             Image(systemName: "arrow.up")
@@ -74,8 +76,11 @@ struct WaypointView: View {
                     updateColors(for: newValue)
                 }
             }
+            
+            
         }
     }
+    
     
     private func updateDistance() {
         guard let currentLocation = locationManager.latestLocation,
