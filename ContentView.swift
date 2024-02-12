@@ -53,8 +53,7 @@ struct ContentView: View {
     @State private var isSignalFull = false
     @State private var showCounty = false
     @State private var countyName: String = ""
-
-    // Array of messages
+    
     private let messages = ["Creating Waypoint..."]
     private let specialMessage = "Please ensure clear sky view."
     
@@ -84,17 +83,17 @@ struct ContentView: View {
                     
                     if locationManager.isRecording {
                         TabView(selection: $selectedTab) {
-                            NowPlayingView() // Swipe right from recording view
+                            NowPlayingView()
                                 .tabItem { Text("Now Playing") }
                                 .tag(-2)
-                            //  WaypointView()
+
                             WaypointView(locationManager: locationManager)
                                 .tabItem { Text("Waypoint")}
                                 .tag(-1)
+                            
                             CompassView(viewModel: locationManager)
                                 .tabItem { Text("Waypoint")}
                                 .tag(0)
-                            
                             
                             recordingView // Main recording view
                                 .tabItem { Text("Recording") }
@@ -158,24 +157,30 @@ struct ContentView: View {
                     .font(.system(size: 17))
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
+                
                 Text("Journey helps you track your traveled distance and current speed. Not meant for indoor use.")
-                    .font(.system(size: 11)) 
+                    .font(.system(size: 11))
                     .multilineTextAlignment(.center)
                 
-                Text("Continue")
-                    .fontWeight(.bold)
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.white)
-                    .cornerRadius(10)
-                
-                    .buttonStyle(PlainButtonStyle())
+                Button(action: {
+                    // Add the action you want to perform when the button is pressed
+                    hasShownWelcomeScreen = true
+                    UserDefaults.standard.set(true, forKey: "hasShownWelcomeScreen")
+                    
+                }) {
+                    Text("Continue")
+                        .fontWeight(.bold)
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.white)
+                        .cornerRadius(10)
+                }
+                .buttonStyle(PlainButtonStyle()) 
             }
             .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(hex: "#0c3617").edgesIgnoringSafeArea(.all)) // Background color of dark green
-            //#0c3617
+            .background(Color(hex: "#0c3617").edgesIgnoringSafeArea(.all))
         }
     }
     
@@ -211,24 +216,24 @@ struct ContentView: View {
                     VStack(spacing: -10) {
                         
                         Text(userSettings.isMetric ?
-                            (userSettings.usePreciseUnits || locationManager.speed * 1.60934 <= 32.19 ? "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) " :
+                             (userSettings.usePreciseUnits || locationManager.speed * 1.60934 <= 32.19 ? "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) " :
                                 (locationManager.distance * 1.60934 > 16.09 ? String(format: "%.0f", locationManager.distance * 1.60934) : "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) ")) :
-                            (userSettings.usePreciseUnits || locationManager.speed <= 20 ? "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) " :
-                                (locationManager.distance > 10 ? String(format: "%.0f", locationManager.distance) : "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) ")))
+                                (userSettings.usePreciseUnits || locationManager.speed <= 20 ? "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) " :
+                                    (locationManager.distance > 10 ? String(format: "%.0f", locationManager.distance) : "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) ")))
                         .font(.system(size: 45))
                         .fontWeight(.bold)
                         .foregroundColor(userSettings.isDarkMode ? .black : .white) +
                         Text(userSettings.isMetric ? "KM" : "MILES")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color(UIColor(hex: "#05df73")))
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color(UIColor(hex: "#05df73")))
                         
                         Text(userSettings.isMetric ?
                              (userSettings.usePreciseUnits ? "\(formatDisplayValue(max(locationManager.speed * 1.60934, 0), usePreciseUnits: true)) " :
                                 (locationManager.speed * 1.60934 > 32.19 ? String(format: "%.0f", max(locationManager.speed * 1.60934, 0)) :
                                     "\(formatDisplayValue(max(locationManager.speed * 1.60934, 0), usePreciseUnits: false)) ")) :
                                 (userSettings.usePreciseUnits ? "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: true)) " :
-                                    (locationManager.speed > 7 ? String(format: "%.0f", max(locationManager.speed, 0)) :
+                                    (locationManager.speed > 20 ? String(format: "%.0f", max(locationManager.speed, 0)) :
                                         "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: false)) ")))
                         .font(.system(size: 45))
                         .fontWeight(.bold)
@@ -237,7 +242,7 @@ struct ContentView: View {
                             .font(.headline)
                             .foregroundColor(Color(UIColor(hex: "#05df73")))
                     }
-
+                    
                     
                     .offset(y: -15)
                     .onTapGesture {
@@ -255,7 +260,7 @@ struct ContentView: View {
                         VStack(alignment: .trailing) {
                             Text(locationManager.totalTimeTextTimer)
                                 .font(.system(size: 26))
-                          
+                            
                                 .foregroundColor(userSettings.isDarkMode ? .black : .white) // Conditional color
                                 .offset(y: -5)
                             Text("Total Time")
@@ -322,7 +327,7 @@ struct ContentView: View {
                                 Image(systemName: "exclamationmark.circle")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(.red)
-                               
+                                
                                 Text("Not meant for indoor use")
                                     .font(.system(size: 12))
                                     .foregroundColor(Color.white)
@@ -375,18 +380,18 @@ struct ContentView: View {
             // Displays current city, state
             if locationManager.isRecording {
                 Text(showCounty ? countyName : locationManager.currentLocationName)
-                        .onTapGesture {
-                            locationManager.fetchCountyName { county in
-                                if let unwrappedCounty = county {
-                                    self.countyName = unwrappedCounty
-                                    self.showCounty.toggle()
-                                } else {
-                                    // Use last known county name as a fallback
-                                    self.countyName = locationManager.lastSuccessfulCountyName
-                                    self.showCounty.toggle()
-                                }
+                    .onTapGesture {
+                        locationManager.fetchCountyName { county in
+                            if let unwrappedCounty = county {
+                                self.countyName = unwrappedCounty
+                                self.showCounty.toggle()
+                            } else {
+                                // Use last known county name as a fallback
+                                self.countyName = locationManager.lastSuccessfulCountyName
+                                self.showCounty.toggle()
                             }
                         }
+                    }
                     .padding(8)
                     .background(Color.black.opacity(0.0))
                     .cornerRadius(10)
@@ -688,7 +693,7 @@ struct ContentView: View {
                     print("isCreatingWaypoint changed to: \($isCreatingWaypoint)")
                 }
                 .background(Color.black.edgesIgnoringSafeArea(.all))
-           
+            
         )
     }
 }
@@ -837,7 +842,7 @@ struct SignalStrengthView: View {
         .onDisappear {
             timer?.invalidate()
         }
-
+        
         Image(systemName: "circle.fill")
             .foregroundColor(Color(UIColor(hex: "#00ff81")))
             .offset(x: 13, y: -35)
