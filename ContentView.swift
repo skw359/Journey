@@ -211,24 +211,24 @@ struct ContentView: View {
                     VStack(spacing: -10) {
                         
                         Text(userSettings.isMetric ?
-                             (userSettings.usePreciseUnits || locationManager.speed * 1.60934 <= 32.19 ? "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) " :
-                                String(format: "%.0f", locationManager.distance * 1.60934)) :
-                                (userSettings.usePreciseUnits || locationManager.speed <= 10 ? "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) " :
-                                    String(format: "%.0f", locationManager.distance)))
+                            (userSettings.usePreciseUnits || locationManager.speed * 1.60934 <= 32.19 ? "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) " :
+                                (locationManager.distance * 1.60934 > 16.09 ? String(format: "%.0f", locationManager.distance * 1.60934) : "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) ")) :
+                            (userSettings.usePreciseUnits || locationManager.speed <= 20 ? "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) " :
+                                (locationManager.distance > 10 ? String(format: "%.0f", locationManager.distance) : "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) ")))
                         .font(.system(size: 45))
                         .fontWeight(.bold)
                         .foregroundColor(userSettings.isDarkMode ? .black : .white) +
                         Text(userSettings.isMetric ? "KM" : "MILES")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(Color(UIColor(hex: "#05df73")))
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(Color(UIColor(hex: "#05df73")))
                         
                         Text(userSettings.isMetric ?
                              (userSettings.usePreciseUnits ? "\(formatDisplayValue(max(locationManager.speed * 1.60934, 0), usePreciseUnits: true)) " :
                                 (locationManager.speed * 1.60934 > 32.19 ? String(format: "%.0f", max(locationManager.speed * 1.60934, 0)) :
                                     "\(formatDisplayValue(max(locationManager.speed * 1.60934, 0), usePreciseUnits: false)) ")) :
                                 (userSettings.usePreciseUnits ? "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: true)) " :
-                                    (locationManager.speed > 10 ? String(format: "%.0f", max(locationManager.speed, 0)) :
+                                    (locationManager.speed > 7 ? String(format: "%.0f", max(locationManager.speed, 0)) :
                                         "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: false)) ")))
                         .font(.system(size: 45))
                         .fontWeight(.bold)
