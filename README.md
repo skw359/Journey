@@ -8,4 +8,3 @@ Coded in Swift.
 **Things to note:**
 • Currently, full support exists on Apple Watch Ultra and Ultra 2. 
 • Other watches models may not display information correctly. 
-• International cities may not display correctly (theoretically they should, but it hasn't been verified)
