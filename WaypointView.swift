@@ -35,38 +35,70 @@ struct WaypointView: View {
                     if locationManager.latestLocation != nil,
                        locationManager.averagedWaypointLocation != nil {
                         Text(distanceInFeet < 528 ? String(format: "%.0f feet", distanceInFeet) :
-                            (distanceInFeet < 5280 ? String(format: "%.1f miles", distanceInFeet / 5280) :
+                            (distanceInFeet < 52800 ? String(format: "%.1f miles", distanceInFeet / 5280) :
                             String(format: "%.0f miles", distanceInFeet / 5280)))
                             .font(.system(size: 45))
                             .bold()
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .center)
                         
+                        Text("Your Caption Here")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .offset(y:120)
+
                         ZStack {
                             Image(systemName: "arrow.up")
-                                .foregroundColor(circleColor)
-                                .font(Font.system(size: 60))
+                                .font(.system(size: 60))
                                 .bold()
+                                .foregroundColor(circleColor)
                                 .rotationEffect(.degrees(bearingToWaypoint))
-                                .scaleEffect(showCircle ? 0 : 1)
-                                .opacity(showCircle ? 0 : 1)
+                                .opacity(distanceInFeet > 20 ? 1 : 0)
+                                .scaleEffect(distanceInFeet > 10 ? 1 : 0.1)
+                                .animation(.easeInOut(duration: 0.5), value: distanceInFeet)
+                                .offset(y:-10)
+
+                            if distanceInFeet <= 20 {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.5))
+                                    .scaleEffect(distanceInFeet / 20)
+                                    .frame(width: 100, height: 100)
+                                    .offset(y: 16)
+                                    .animation(.easeInOut(duration: 0.5), value: distanceInFeet)
+
+                                Image(systemName: "mappin")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(.white)
+                                    .offset(y: -10)
+                                    .opacity(distanceInFeet <= 20 ? 1 : 0)
+                                    .scaleEffect(distanceInFeet <= 20 ? 1 : 0.1)
+                                    .animation(.easeInOut(duration: 0.5), value: distanceInFeet)
                             
-                            if showCircle {
-                                PulsatingCircle(circleColor: circleColor, ringColor: ringColor)
-                                    .frame(width: 30, height: 30)
-                                    .scaleEffect(showCircle ? 1 : 0)
                             }
                         }
                         .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
                         
                     } else {
                         Spacer()
-                        Text("No waypoint defined. Please create one.")
-                            .foregroundColor(Color(hex: "#00ff81"))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                        GeometryReader { geometry in
+                            VStack {
+                                Text("Waypoint Direction")
+                                    .font(.system(size: 20))
+                                    .bold()
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                // Calculate proportional offset
+                                    .offset(y: geometry.size.height / 396 * 20 - 15)
+                                
+                                Text("No waypoint defined. Please create one.")
+                                    .foregroundColor(Color(hex: "#00ff81"))
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            }
+                        }
                     }
                     Spacer()
                 }
+                
             }
             .onChange(of: locationManager.latestLocation) { _ in
                 updateDistance()
@@ -88,7 +120,7 @@ struct WaypointView: View {
     }
     
     private func updateColors(for distance: Double) {
-        if distance < 10 {
+        if distance < 20 {
             backgroundColor = .green
             textColor = .white
             circleColor = .white
@@ -98,28 +130,6 @@ struct WaypointView: View {
             textColor = .black
             circleColor = Color(hex: "#00ff81")
             ringColor = .gray
-        }
-    }
-}
-
-struct PulsatingCircle: View {
-    @State private var pulsate = false
-    var circleColor: Color
-    var ringColor: Color
-    
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(ringColor, lineWidth: 2)
-                .scaleEffect(pulsate ? 1.2 : 1.0)
-                .opacity(pulsate ? 0.0 : 1.0)
-                .animation(Animation.easeInOut(duration: 1).repeatForever(autoreverses: false), value: pulsate)
-            
-            Circle()
-                .fill(circleColor)
-        }
-        .onAppear {
-            self.pulsate.toggle()
         }
     }
 }
