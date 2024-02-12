@@ -1,24 +1,42 @@
 import SwiftUI
 import CoreLocation
 
-
 struct WaypointView: View {
     @ObservedObject var locationManager: LocationManager
-    @State private var distanceText = ""
+    @State private var showInstructions = true
+    @State private var pulsate = false
+    @State private var showCircle = false
     @State private var backgroundColor = Color.black
+    @State private var textColor = Color.white
     @State private var circleColor = Color(hex: "#00ff81")
     @State private var ringColor = Color.gray
-
+    @State private var distanceInFeet: Double = 0
+    
+    var bearingToWaypoint: Double {
+        guard let currentLocation = locationManager.lastLocation,
+              let waypointLocation = locationManager.averagedWaypointLocation else { return 0 }
+        
+        let bearingFromNorth = currentLocation.bearing(to: waypointLocation)
+        let userHeading = locationManager.userHeading
+        
+        let relativeBearing = bearingFromNorth - userHeading
+        let finalBearing = relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
+        
+        print("Current Location: \(currentLocation), Waypoint Location: \(waypointLocation), User Heading: \(userHeading), Bearing to Waypoint: \(finalBearing)") // debug message
+        return finalBearing
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 backgroundColor
                     .edgesIgnoringSafeArea(.all)
-                
                 VStack {
-                    if let latestLocation = locationManager.latestLocation,
-                       let waypointLocation = locationManager.averagedWaypointLocation {
-                        Text(distanceText)
+                    if locationManager.latestLocation != nil,
+                       locationManager.averagedWaypointLocation != nil {
+                        Text(distanceInFeet < 528 ? String(format: "%.0f feet", distanceInFeet) :
+                            (distanceInFeet < 52800 ? String(format: "%.1f miles", distanceInFeet / 5280) :
+                            String(format: "%.0f miles", distanceInFeet / 5280)))
                             .font(.system(size: 45))
                             .bold()
                             .foregroundColor(.white)
@@ -28,94 +46,91 @@ struct WaypointView: View {
                             .font(.caption)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .offset(y: 120)
-                        
-                        ArrowView(bearingToWaypoint: calculateBearing(latestLocation: latestLocation, waypointLocation: waypointLocation))
-                            .opacity(locationManager.distanceInFeet > 20 ? 1 : 0)
-                            .animation(.easeInOut(duration: 0.5))
-                            .offset(y: -10)
-                        
-                        if locationManager.distanceInFeet <= 20 {
-                            Circle()
-                                .fill(Color.gray.opacity(0.5))
-                                .scaleEffect(locationManager.distanceInFeet / 20)
-                                .frame(width: 100, height: 100)
-                                .offset(y: 16)
-                                .animation(.easeInOut(duration: 0.5))
-                            
-                            Image(systemName: "mappin")
+                            .offset(y:120)
+
+                        ZStack {
+                            Image(systemName: "arrow.up")
                                 .font(.system(size: 60))
-                                .foregroundColor(.white)
-                                .offset(y: -10)
-                                .opacity(locationManager.distanceInFeet <= 20 ? 1 : 0)
-                                .scaleEffect(locationManager.distanceInFeet <= 20 ? 1 : 0.1)
-                                .animation(.easeInOut(duration: 0.5))
+                                .bold()
+                                .foregroundColor(circleColor)
+                                .rotationEffect(.degrees(bearingToWaypoint))
+                                .opacity(distanceInFeet > 20 ? 1 : 0)
+                                .scaleEffect(distanceInFeet > 10 ? 1 : 0.1)
+                                .animation(.easeInOut(duration: 0.5), value: distanceInFeet)
+                                .offset(y:-10)
+
+                            if distanceInFeet <= 20 {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.5))
+                                    .scaleEffect(distanceInFeet / 20)
+                                    .frame(width: 100, height: 100)
+                                    .offset(y: 16)
+                                    .animation(.easeInOut(duration: 0.5), value: distanceInFeet)
+
+                                Image(systemName: "mappin")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(.white)
+                                    .offset(y: -10)
+                                    .opacity(distanceInFeet <= 20 ? 1 : 0)
+                                    .scaleEffect(distanceInFeet <= 20 ? 1 : 0.1)
+                                    .animation(.easeInOut(duration: 0.5), value: distanceInFeet)
+                            
+                            }
                         }
+                        .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
+                        
                     } else {
                         Spacer()
-                        VStack {
-                            Text("Waypoint Direction")
-                                .font(.system(size: 20))
-                                .bold()
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .offset(y: 5)
-                            
-                            Text("No waypoint defined. Please create one.")
-                                .foregroundColor(Color(hex: "#00ff81"))
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                        GeometryReader { geometry in
+                            VStack {
+                                Text("Waypoint Direction")
+                                    .font(.system(size: 20))
+                                    .bold()
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                // Calculate proportional offset
+                                    .offset(y: geometry.size.height / 396 * 20 - 15)
+                                
+                                Text("No waypoint defined. Please create one.")
+                                    .foregroundColor(Color(hex: "#00ff81"))
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            }
                         }
                     }
                     Spacer()
                 }
+                
+            }
+            .onChange(of: locationManager.latestLocation) { _ in
+                updateDistance()
+            }
+            .onChange(of: distanceInFeet) { newValue in
+                withAnimation {
+                    updateColors(for: newValue)
+                }
             }
         }
-        .onReceive(locationManager.$distanceInFeet) { distance in
-            updateColors(for: distance)
-        }
+    }
+    
+    private func updateDistance() {
+        guard let currentLocation = locationManager.latestLocation,
+              let waypointLocation = locationManager.averagedWaypointLocation else { return }
+        
+        let distanceInMeters = currentLocation.distance(from: waypointLocation)
+        distanceInFeet = distanceInMeters * 3.28084
     }
     
     private func updateColors(for distance: Double) {
         if distance < 20 {
             backgroundColor = .green
+            textColor = .white
             circleColor = .white
             ringColor = Color(hex: "#8de4b6")
         } else {
             backgroundColor = .black
+            textColor = .black
             circleColor = Color(hex: "#00ff81")
             ringColor = .gray
         }
-        updateDistanceText(distance)
-    }
-    
-    private func updateDistanceText(_ distance: Double) {
-        if distance < 528 {
-            distanceText = String(format: "%.0f feet", distance)
-        } else if distance < 52800 {
-            distanceText = String(format: "%.1f miles", distance / 5280)
-        } else {
-            distanceText = String(format: "%.0f miles", distance / 5280)
-        }
-    }
-    
-    private func calculateBearing(latestLocation: CLLocation, waypointLocation: CLLocation) -> Double {
-        let bearingFromNorth = latestLocation.bearing(to: waypointLocation)
-        let userHeading = locationManager.userHeading
-        
-        let relativeBearing = bearingFromNorth - userHeading
-        let finalBearing = relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
-        return finalBearing
-    }
-}
-
-struct ArrowView: View {
-    var bearingToWaypoint: Double
-    
-    var body: some View {
-        Image(systemName: "arrow.up")
-            .font(.system(size: 60))
-            .bold()
-            .foregroundColor(.white)
-            .rotationEffect(.degrees(bearingToWaypoint))
     }
 }
 
