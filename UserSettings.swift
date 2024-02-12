@@ -1,7 +1,6 @@
 import Foundation
 
 class UserSettings: ObservableObject {
-    // static let shared = UserSettings()
     
     @Published var isMetric: Bool {
         didSet {
