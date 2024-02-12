@@ -34,7 +34,9 @@ struct WaypointView: View {
                 VStack {
                     if locationManager.latestLocation != nil,
                        locationManager.averagedWaypointLocation != nil {
-                        Text(distanceInFeet >= 528 ? String(format: "%.1f miles", distanceInFeet / 5280) : String(format: "%.0f feet", distanceInFeet))
+                        Text(distanceInFeet < 528 ? String(format: "%.0f feet", distanceInFeet) :
+                            (distanceInFeet < 5280 ? String(format: "%.1f miles", distanceInFeet / 5280) :
+                            String(format: "%.0f miles", distanceInFeet / 5280)))
                             .font(.system(size: 45))
                             .bold()
                             .foregroundColor(.white)
