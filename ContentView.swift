@@ -24,16 +24,15 @@ struct ContentView: View {
     
     @State private var showSettings = false
     @StateObject private var locationManager = LocationManager()
-    // Separate animation states for miles and time elapsed
-    @State private var milesOffset = CGFloat(100) // Start below the view
-    @State private var milesOpacity = 0.0 // Start fully transparent
-    @State private var timeOffset = CGFloat(100) // Start below the view
-    @State private var timeOpacity = 0.0 // Start fully transparent
+    @State private var milesOffset = CGFloat(100)
+    @State private var milesOpacity = 0.0
+    @State private var timeOffset = CGFloat(100)
+    @State private var timeOpacity = 0.0
     @State private var selectedTab = 1
     @State private var isLocked = false
     @State private var shouldNavigate = false
     @State var isMetric = false
-    @State private var isPaused = false // New state variables for Lock and Pause functionality
+    @State private var isPaused = false
     @State private var isRecording = false
     @State private var navigateToRecordedView = false
     @State private var navigationPath = NavigationPath()
@@ -563,7 +562,7 @@ struct ContentView: View {
                     VStack {
                         Image(systemName: "xmark")
                             .font(.title2)
-                            .foregroundColor(Color(hex: "#FF2727")) // Red icon color
+                            .foregroundColor(Color(hex: "#FF2727"))
                             .padding(.bottom, 2)
                         
                         Text("End")
@@ -577,7 +576,7 @@ struct ContentView: View {
                 .padding([.bottom, .leading], 20)
                 .buttonStyle(PlainButtonStyle())
                 
-                Spacer() // Pushes the button to the side
+                Spacer()
                 
                 // Bottom Right - Pause Button
                 Button(action: {
@@ -898,7 +897,6 @@ struct SignalStrengthView: View {
                 currentBarIndex = 0
                 self.timer?.invalidate()
                 
-                // Restart the animation after a delay, if time allows
                 DispatchQueue.main.asyncAfter(deadline: .now() + self.cycleWaitTime) {
                     if elapsed + self.cycleWaitTime <= self.totalAnimationDuration {
                         self.activateBars()
