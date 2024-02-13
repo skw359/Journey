@@ -237,7 +237,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
     }
     
-    // Call this method when initializing the LocationManager
     func startObserving() {
         observeGPSAccuracy()
     }
@@ -248,12 +247,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard let newLocation = locations.last else { return }
         self.latestLocation = newLocation
         
-        let assateagueIslandLatRange = (minLat: 38.00, maxLat: 38.10)
-        let assateagueIslandLonRange = (minLon: -75.20, maxLon: -75.10)
-        
         print("Received location update")
         
-        if isRecording, let lastLocation = self.lastLocation {
+        if isRecording, let _ = self.lastLocation { // lastLocation
             let deltaDistance = newLocation.distance(from: self.lastLocation ?? newLocation)
             distance += deltaDistance * 0.00062137 // Convert meters to miles
             // Check for significant elevation change (e.g., more than 5 meters)
@@ -268,7 +264,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         debugPrint("Current Location: \(latestLocation.coordinate.latitude), \(latestLocation.coordinate.longitude)")
         if latestLocation.horizontalAccuracy <= 6.1 { // Accuracy of 2 meters or ~6 feet for actual best results ACCURACYINFEET
-            self.lastLocation = latestLocation // Update the instance variable
+            self.lastLocation = latestLocation
             self.waypointLocations.append(latestLocation)
             debugPrint("Accurate Location Reading: \(latestLocation.coordinate.latitude), \(latestLocation.coordinate.longitude)")
         } else {
@@ -477,9 +473,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             completion(nil)
         }
     }
-
-
-
 }
 
 
