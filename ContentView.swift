@@ -215,10 +215,10 @@ struct ContentView: View {
                     VStack(spacing: -10) {
                         
                         Text(userSettings.isMetric ?
-                             (userSettings.usePreciseUnits || locationManager.speed * 1.60934 <= 32.19 ? "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) " :
-                                (locationManager.distance * 1.60934 > 16.09 ? String(format: "%.0f", locationManager.distance * 1.60934) : "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) ")) :
-                                (userSettings.usePreciseUnits || locationManager.speed <= 20 ? "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) " :
-                                    (locationManager.distance > 10 ? String(format: "%.0f", locationManager.distance) : "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) ")))
+                            (userSettings.usePreciseUnits || locationManager.speed * 1.60934 <= 32.19 ? "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) " :
+                               (locationManager.distance * 1.60934 > 16.09 ? "\(Int(locationManager.distance * 1.60934))" : "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) ")) :
+                            (userSettings.usePreciseUnits || locationManager.speed <= 20 ? "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) " :
+                               (locationManager.distance > 10 ? "\(Int(locationManager.distance))" : "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) ")))
                         .font(.system(size: 45))
                         .fontWeight(.bold)
                         .foregroundColor(userSettings.isDarkMode ? .black : .white) +
