@@ -248,11 +248,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         self.latestLocation = newLocation
         
         if let lastLocation = locations.last {
-                   let elevation = lastLocation.altitude // Altitude in meters
-                   
-                   // Check elevation and send notification if needed
-                   checkElevationAndNotify(elevation: elevation)
-               }
+            let elevation = lastLocation.altitude // Altitude in meters
+                    let speed = lastLocation.speed // Speed in meters per second
+                    let speedThreshold = 100 * 0.44704
+                    if speed < speedThreshold {
+                        checkElevationAndNotify(elevation: elevation)
+                    }
+                }
           
         func checkElevationAndNotify(elevation: Double) {
             let moderateAltitude = 2438.0 // this is in meters
