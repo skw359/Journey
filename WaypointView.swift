@@ -11,6 +11,7 @@ struct WaypointView: View {
     @State private var circleColor = Color(hex: "#00ff81")
     @State private var ringColor = Color.gray
     @State private var distanceInFeet: Double = 0
+    @StateObject private var userSettings = UserSettings()
     
     var bearingToWaypoint: Double {
         guard let currentLocation = locationManager.lastLocation,
@@ -32,22 +33,26 @@ struct WaypointView: View {
                 backgroundColor
                     .edgesIgnoringSafeArea(.all)
                 VStack {
-                    if locationManager.latestLocation != nil,
-                       locationManager.averagedWaypointLocation != nil {
-                        Text(distanceInFeet < 528 ? String(format: "%.0f feet", distanceInFeet) :
-                            (distanceInFeet < 52800 ? String(format: "%.1f miles", distanceInFeet / 5280) :
-                            String(format: "%.0f miles", distanceInFeet / 5280)))
-                            .font(.system(size: 45))
-                            .bold()
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, alignment: .center)
+                    if locationManager.latestLocation != nil, locationManager.averagedWaypointLocation != nil {
+                        Text(userSettings.isMetric ?
+                             (distanceInFeet * 0.3048 < 100 ? String(format: "%.0f meters", distanceInFeet * 0.3048) :
+                                (distanceInFeet * 0.3048 < 10000 ? String(format: "%.1f km", distanceInFeet * 0.3048 / 1000) :
+                                    String(format: "%.0f km", distanceInFeet * 0.3048 / 1000))) :
+                                (distanceInFeet < 528 ? String(format: "%.0f feet", distanceInFeet) :
+                                    (distanceInFeet < 52800 ? String(format: "%.1f miles", distanceInFeet / 5280) :
+                                        String(format: "%.0f miles", distanceInFeet / 5280))))
+                        .font(.system(size: 45))
+                        .bold()
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .center)
                         
-                        Text("Your Caption Here")
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .offset(y:120)
-
+                        /* Text("Your Caption Here")
+                         .font(.caption)
+                         .foregroundColor(.white)
+                         .frame(maxWidth: .infinity)
+                         .offset(y:120)
+                         */
+                        
                         ZStack {
                             Image(systemName: "arrow.up")
                                 .font(.system(size: 60))
@@ -58,7 +63,7 @@ struct WaypointView: View {
                                 .scaleEffect(distanceInFeet > 10 ? 1 : 0.1)
                                 .animation(.easeInOut(duration: 0.5), value: distanceInFeet)
                                 .offset(y:-10)
-
+                            
                             if distanceInFeet <= 20 {
                                 Circle()
                                     .fill(Color.gray.opacity(0.5))
@@ -66,7 +71,7 @@ struct WaypointView: View {
                                     .frame(width: 100, height: 100)
                                     .offset(y: 16)
                                     .animation(.easeInOut(duration: 0.5), value: distanceInFeet)
-
+                                
                                 Image(systemName: "mappin")
                                     .font(.system(size: 60))
                                     .foregroundColor(.white)
@@ -74,7 +79,7 @@ struct WaypointView: View {
                                     .opacity(distanceInFeet <= 20 ? 1 : 0)
                                     .scaleEffect(distanceInFeet <= 20 ? 1 : 0.1)
                                     .animation(.easeInOut(duration: 0.5), value: distanceInFeet)
-                            
+                                
                             }
                         }
                         .frame(width: geometry.size.width, height: geometry.size.height / 2, alignment: .center)
