@@ -48,7 +48,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         DispatchQueue.main.async {
-            print("New heading: \(newHeading.trueHeading)")
+            // print("New heading: \(newHeading.trueHeading)")
                 self.userHeading = newHeading.trueHeading
                 self.heading = newHeading.trueHeading
             }
@@ -61,7 +61,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func averageWaypointLocation(completion: @escaping (CLLocation?) -> Void) {
-        // Only proceed if we are not already processing a waypoint
         guard waypointLocations.isEmpty else { return }
         print("Obtaining location for waypoint...")
         waypointLocations.removeAll()
@@ -286,8 +285,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
         
-        let currentSpeedMPS = latestLocation.speed // Speed in meters per second
-        let currentSpeedMPH = max(0, currentSpeedMPS) * 2.23694 // Convert to miles per hour
+        let currentSpeedMPS = latestLocation.speed
+        let currentSpeedMPH = max(0, currentSpeedMPS) * 2.23694
         if currentSpeedMPH > 0 {
             totalSpeedReadings += currentSpeedMPH
             numberOfSpeedReadings += 1
@@ -297,23 +296,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             self.currentElevation = lastLocation.altitude
         }
         
-        print("Current Speed (MPH): \(currentSpeedMPH)") // Debugging
+        // print("Current Speed (MPH): \(currentSpeedMPH)") // Debugging
         if currentSpeedMPH > topSpeed {
             topSpeed = currentSpeedMPH
         }
         
-        print("Top Speed (MPH): \(topSpeed)") // Debugging
-        // Average speed
+        // print("Top Speed (MPH): \(topSpeed)") // Debugging
+        
         let timeElapsed = Date().timeIntervalSince(startTime ?? Date())
         if numberOfSpeedReadings > 0 {
             averageSpeed = totalSpeedReadings / Double(numberOfSpeedReadings)
         }
         
-        print("Average Speed (MPH): \(averageSpeed)")
-        print("Distance: \(distance) meters")
-        print("Time Elapsed: \(timeElapsed) seconds")
-        print("Start Time: \(String(describing: startTime))")
-        print("Average Speed (MPH): \(averageSpeed)")
+        // print("Average Speed (MPH): \(averageSpeed)")
+        // print("Distance: \(distance) meters")
+        // print("Time Elapsed: \(timeElapsed) seconds")
+        // print("Start Time: \(String(describing: startTime))")
+        // print("Average Speed (MPH): \(averageSpeed)")
         
         lastLocation = latestLocation
         
