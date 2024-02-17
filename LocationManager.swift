@@ -4,6 +4,7 @@ import CoreLocation
 import Combine
 import os
 import CoreMotion
+import UserNotifications
 
 // For CMAltimeter code, it's commented out - only GPS is being used for determining elevation at the moment. This means "+ relativeAltitude" property is also commented out at the moment, only here.
 
@@ -246,13 +247,51 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard let newLocation = locations.last else { return }
         self.latestLocation = newLocation
         
-        print("Received location update")
+        if let lastLocation = locations.last {
+                   let elevation = lastLocation.altitude // Altitude in meters
+                   
+                   // Check elevation and send notification if needed
+                   checkElevationAndNotify(elevation: elevation)
+               }
+          
+        func checkElevationAndNotify(elevation: Double) {
+            let moderateAltitude = 2438.0 // this is in meters
+            let highAltitude = 3657.0
+                
+                var message = ""
+                
+                if elevation > moderateAltitude && elevation <= highAltitude {
+                    message = "You are at a high altitude. Oxygen levels may be lower than usual."
+                } else if elevation > highAltitude {
+                    message = "You are at a very high altitude. Please exercise cautious of lower oxygen levels and potential altitude sickness."
+                }
+                
+                if !message.isEmpty {
+                    sendNotificationWith(message: message)
+                }
+            }
+            
+            func sendNotificationWith(message: String) {
+                let content = UNMutableNotificationContent()
+                content.title = "Altitude Alert"
+                content.body = message
+                content.sound = .default
+                
+                let request = UNNotificationRequest(identifier: "altitudeAlert", content: content, trigger: nil)
+                UNUserNotificationCenter.current().add(request) { (error) in
+                    if let error = error {
+                        print("Error sending notification: \(error.localizedDescription)")
+                    }
+                }
+            }
+        
+        print("🛰️ Received location update")
         
         if isRecording, let _ = self.lastLocation { // lastLocation
             let deltaDistance = newLocation.distance(from: self.lastLocation ?? newLocation)
-            distance += deltaDistance * 0.00062137 // Convert meters to miles
+            distance += deltaDistance * 0.00062137
             // Check for significant elevation change (e.g., more than 5 meters)
-            let elevationChangeThreshold = 1.0 // Defines threshold @ 0 feet (every change is detected and graphed)
+            let elevationChangeThreshold = 1.0
             if let lastElevation = self.lastLocation?.altitude,
                abs(newLocation.altitude - lastElevation) > elevationChangeThreshold {
                 recordElevationReading(elevation: newLocation.altitude)
@@ -261,13 +300,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         self.lastLocation = newLocation
         
-        debugPrint("Current Location: \(latestLocation.coordinate.latitude), \(latestLocation.coordinate.longitude)")
+        debugPrint("ⓘ Current Location: (\(latestLocation.coordinate.latitude), \(latestLocation.coordinate.longitude))")
         if latestLocation.horizontalAccuracy <= 6.1 { // Accuracy of 2 meters or ~6 feet for actual best results ACCURACYINFEET
             self.lastLocation = latestLocation
             self.waypointLocations.append(latestLocation)
-            debugPrint("Accurate Location Reading: \(latestLocation.coordinate.latitude), \(latestLocation.coordinate.longitude)")
+            debugPrint("✓ Accurate Location Reading: \(latestLocation.coordinate.latitude), \(latestLocation.coordinate.longitude)")
         } else {
-            debugPrint("Inaccurate location - reading skipped")
+            debugPrint("✖ Inaccurate location - reading skipped")
         }
         
         if isCalculatingWaypoint {
@@ -278,7 +317,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 let averageLon = waypointLocations.map { $0.coordinate.longitude }.average()
                 let averagedLocation = CLLocation(latitude: averageLat, longitude: averageLon)
                 
-                debugPrint("Averaged Location: \(averagedLocation.coordinate.latitude), \(averagedLocation.coordinate.longitude)")
+                debugPrint("⟟ Averaged Location: \(averagedLocation.coordinate.latitude), \(averagedLocation.coordinate.longitude)")
                 waypointCompletion?(averagedLocation)
                 waypointLocations.removeAll()
                 isCalculatingWaypoint = false
@@ -322,13 +361,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                     if let locationName = locationName, !locationName.isEmpty {
                         // Check if location name is in the expected format (e.g., "City, State")
                         if locationName.contains(",") {
-                            print("Reverse Geocoding result: \(locationName)")
+                            print("✓ Reverse Geocoding result: \(locationName)")
                             self?.currentLocationName = locationName
                         } else {
                             // If the format is not as expected, extract only the state name
                             self?.extractState(from: location) { stateName in
                                 if let stateName = stateName {
-                                    print("State name extracted: \(stateName)")
+                                    print("✓ State name extracted: \(stateName)")
                                     self?.currentLocationName = stateName
                                 } else {
                                     print("Reverse Geocoding failed. Keeping the last known location.")
@@ -346,9 +385,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
             let accuracyInMeters = location.horizontalAccuracy
             let accuracyInFeet = accuracyInMeters * 3.28084 // Convert meters to feet
-            print("GPS Accuracy: \(accuracyInMeters) meters or \(accuracyInFeet) feet")
+            print("---- GPS Accuracy: \(String(format: "%.3f", accuracyInMeters)) meters or \(String(format: "%.3f", accuracyInFeet)) feet ----")
         } else {
-            // Handle the case where no location is available
+          
             print("No location available.")
         }
         
@@ -402,6 +441,23 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             isGPSConnected = false
             gpsAccuracy = nil
             
+            
+            func checkElevationAndNotify(elevation: Double) {
+                let moderateAltitude = 2500.0 // meters
+                let highAltitude = 3500.0 // meters
+                
+                var message = ""
+                
+                if elevation > moderateAltitude && elevation <= highAltitude {
+                    message = "You are at a moderate altitude. Oxygen levels may be lower than usual."
+                } else if elevation > highAltitude {
+                    message = "You are at a high altitude. Be cautious of lower oxygen levels and potential altitude sickness."
+                }
+                
+                if !message.isEmpty {
+                    sendNotificationWith(message: message)
+                }
+            }
             
         }
     }
@@ -524,7 +580,7 @@ extension CLLocation {
                 let cityName = placemark.locality ?? ""
                 let stateName = placemark.administrativeArea ?? ""
                 let fullLocation = "\(cityName), \(stateName)"
-                print("Geocoding successful: \(fullLocation)")
+                print("✓ Geocoding successful: \(fullLocation)")
                 completion(fullLocation)
             } else {
                 print("Geocoding failed: No placemarks found")
