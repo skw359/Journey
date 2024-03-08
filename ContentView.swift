@@ -141,8 +141,8 @@ struct ContentView: View {
             milesTraveled: locationManager.distance,
             topSpeed: locationManager.topSpeed,
             averageSpeed: locationManager.averageSpeed,
-            totalTime: elapsedTime,  // If totalTime is still relevant
-            elapsedTime: locationManager.totalTimeTextTimer // Directly assigning the string
+            totalTime: elapsedTime, 
+            elapsedTime: locationManager.totalTimeTextTimer
         )
     }
     
@@ -162,7 +162,6 @@ struct ContentView: View {
                     .multilineTextAlignment(.center)
                 
                 Button(action: {
-                    // Add the action you want to perform when the button is pressed
                     hasShownWelcomeScreen = true
                     UserDefaults.standard.set(true, forKey: "hasShownWelcomeScreen")
                     
@@ -608,7 +607,7 @@ struct ContentView: View {
                             isCreatingWaypoint = false
                         }) {
                             ZStack {
-                                Circle() // This creates the circular background
+                                Circle()
                                     .fill(Color.black.opacity(0.0))
                                     .frame(width: 44, height: 44)
                                 
