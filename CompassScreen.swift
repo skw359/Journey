@@ -137,7 +137,7 @@ struct CompassScreen: View {
     }
     
     private func recalibrateCompass() {
-        vibrate()
+        vibrate(.click)
         withAnimation(.easeInOut(duration: 0.5)) {
             overlayOpacity = 1
         }
@@ -145,20 +145,17 @@ struct CompassScreen: View {
     }
     
     private func endRecalibration() {
+        vibrate(.success)
         withAnimation(.easeInOut(duration: 0.5)) {
             overlayOpacity = 0
         }
-    }
-    
-    private func vibrate() {
-        WKInterfaceDevice.current().play(.click)
     }
     
     private func vibrate(_ type: WKHapticType) {
         WKInterfaceDevice.current().play(type)
     }
     
-    private func updateArrowColor() {
+    private func changeArrowColor() {
         withAnimation(.easeInOut(duration: 0.5)) {
             if viewModel.alignedWithCardinalDirection() {
                 arrowColor = .green
