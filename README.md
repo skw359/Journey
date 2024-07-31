@@ -55,15 +55,18 @@ To test Journey:
 
 **Screenshots:**
 <p align="left">
-  <img src="https://github.com/user-attachments/assets/2245798c-ad1c-4ff5-80f0-e69d1adcb69b" alt="screen1(1)" width="150">
+  <img src="https://github.com/user-attachments/assets/af56d325-6034-4116-ba6b-34ad72001f8c" width="150">
   <br>
-  <img src="https://github.com/user-attachments/assets/e213a918-db53-4103-995c-d81355ac3d88" alt="screen2" width="150">
+  <img src="https://github.com/user-attachments/assets/32eaf5b6-aac6-4053-b2fd-bfb1964c95ca" width="150">
   <br>
-  <img src="https://github.com/user-attachments/assets/494e4a3c-3b83-40a3-a466-bcc2f53d966a" alt="screen5" width="150">
+  <img src="https://github.com/user-attachments/assets/919e904a-e4cf-48b1-9e37-141a35303f47" alt="screen5" width="150">
   <br>
-  <img src="https://github.com/user-attachments/assets/dcf50680-048e-4ca0-a868-cafd561102f8" alt="screen3" width="150">
+  <img src="https://github.com/user-attachments/assets/441a27c9-206c-4371-ad3d-f99ac64e8c0a" alt="screen3" width="150">
   <br>
-  <img src="https://github.com/user-attachments/assets/e6cec4bf-1d91-4267-9e37-d88eb9cc5ca7" alt="screen4" width="150">
+  <img src="https://github.com/user-attachments/assets/f30e68c1-786b-4cec-9980-c3743347b529" alt="screen4" width="150">
   <br>
-  <img src="https://github.com/user-attachments/assets/eae105d5-d1e4-4254-b270-cc40eb8579b4" alt="screen6" width="150">
+  <img src="https://github.com/user-attachments/assets/62bb322d-6f8f-4a4a-b05f-626dada6c736" alt="screen6" width="150">
+  <br>
+  <img src="https://github.com/user-attachments/assets/896e7662-0848-4ae0-85f1-1d8f7663f8df" alt="screen7" width="150">
+  <br>
 </p>
