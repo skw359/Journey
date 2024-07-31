@@ -69,20 +69,21 @@ class LocationManager: NSObject, ObservableObject {
     
     // MARK: - Public Methods
     func startRecording() {
-        
         recording = true
         startTime = Date()
         totalTimeTimer = 0
         resetMetrics()
         locationManager.startUpdatingLocation()
         setupTimer()
+        if let initialLocation = locationManager.location {
+                recordElevationReading(elevation: initialLocation.altitude)
+            }
     }
     
     func stopRecording() {
         recording = false
         locationManager.stopUpdatingLocation()
         stopTimer()
-        resetMetrics()
     }
     
     func startWaypointCalculation() {
@@ -290,14 +291,17 @@ extension LocationManager: CLLocationManagerDelegate {
             numberOfSpeedReadings += 1
             averageSpeed = totalSpeedReadings / Double(numberOfSpeedReadings)
             
-            // Check for significant elevation change
-            let elevationChangeThreshold = 1.0
-            if abs(location.altitude - lastLocation.altitude) > elevationChangeThreshold {
+            if elevationReadings.isEmpty {
                 recordElevationReading(elevation: location.altitude)
+            } else {
+                let elevationChangeThreshold = 1.0
+                if abs(location.altitude - lastLocation.altitude) > elevationChangeThreshold {
+                    recordElevationReading(elevation: location.altitude)
+                }
             }
+            
+            currentElevation = location.altitude
         }
-        
-        currentElevation = location.altitude
     }
     
     private func handleWaypointCalculation(location: CLLocation) {
