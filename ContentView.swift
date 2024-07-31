@@ -24,7 +24,6 @@ struct ContentView: View {
     @State private var selectedTab = 1
     @State private var isLocked = false
     @State private var isPaused = false
-    @State private var recording = false
     @State private var navigationPath = NavigationPath()
     @State private var showWaypointScreen = false
     @State private var isCreatingWaypoint = false
@@ -86,7 +85,6 @@ struct ContentView: View {
             isCreatingWaypoint = false
             locationManager.moderateAltitudeNotificationSent = false
             locationManager.highAltitudeNotificationSent = false
-            self.recording.toggle()
         }
     }
     
