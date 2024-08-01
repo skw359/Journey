@@ -16,7 +16,7 @@ struct RecordingView: View {
                 RecordingIndicator()
                     .position(x: WKInterfaceDevice.current().screenBounds.width == 198.0 ?
                               (geometry.size.width * 0.12 + 29 + 50) :
-                              geometry.size.width / 2,
+                                geometry.size.width / 2,
                               y: geometry.size.height * 0.064)
                 
                 // LiveCoreStatistics (centered horizontally and vertically)
@@ -37,10 +37,37 @@ struct RecordingView: View {
                 TotalTimeElement(locationManager: locationManager)
                     .frame(width: geometry.size.width * 0.4)
                     .position(x: geometry.size.width * 0.80, y: geometry.size.height * 0.8)
+                pauseOverlay(size: geometry.size)
+                    .opacity(locationManager.isPaused ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.35), value: locationManager.isPaused)
+                    .allowsHitTesting(locationManager.isPaused)
             }
             
         }
         .edgesIgnoringSafeArea(.all)
+    }
+    
+    private func pauseOverlay(size: CGSize) -> some View {
+        ZStack {
+            Color.black.opacity(0.95)
+            
+            VStack(spacing: 20) {
+                Image(systemName: "pause.circle.fill")
+                    .font(.system(size: size.width * 0.2))
+                    .foregroundColor(.white)
+                
+                Text("Journey Paused")
+                    .font(.system(size: size.width * 0.08, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .position(x: size.width / 2, y: size.height / 2)
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                locationManager.togglePause()
+            }
+        }
     }
     
     private var signalStrengthElement: some View {

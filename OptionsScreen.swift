@@ -53,7 +53,7 @@ struct OptionsScreen: View {
                 .clipShape(Circle())
                 
                 Text("Lock")
-                    .font(.system(size: size.width * 0.06))
+                    .font(.system(size: size.width * 0.07))
                     .foregroundColor(.white)
             }
         }
@@ -87,7 +87,7 @@ struct OptionsScreen: View {
                     .background(Color(hex: "#292929"))
                     .clipShape(Circle())
                 Text("Waypoint")
-                    .font(.system(size: size.width * 0.06))
+                    .font(.system(size: size.width * 0.07))
                     .foregroundColor(.white)
             }
         }
@@ -108,7 +108,7 @@ struct OptionsScreen: View {
                     .foregroundColor(Color(hex: "#FF2727"))
                 
                 Text("End")
-                    .font(.system(size: size.width * 0.06))
+                    .font(.system(size: size.width * 0.07))
                     .foregroundColor(.white)
             }
             .frame(width: size.width * 0.40, height: size.width * 0.40)
@@ -119,23 +119,23 @@ struct OptionsScreen: View {
     }
 
     private func pauseButton(size: CGSize) -> some View {
-        Button(action: {
-            isPaused.toggle()
-        }) {
-            VStack(spacing: 2) {
-                Image(systemName: isPaused ? "play.fill" : "pause.fill")
-                    .font(.system(size: size.width * 0.15))
-                    .foregroundColor(isPaused ? Color(hex: "#ffd700") : Color(hex: "#ffd700"))
-                Text(isPaused ? "Resume" : "Pause")
-                    .font(.system(size: size.width * 0.06))
-                    .foregroundColor(.white)
+            Button(action: {
+                locationManager.togglePause()
+            }) {
+                VStack(spacing: 2) {
+                    Image(systemName: locationManager.isPaused ? "play.fill" : "pause.fill")
+                        .font(.system(size: size.width * 0.15))
+                        .foregroundColor(locationManager.isPaused ? Color(hex: "#ffd700") : Color(hex: "#ffd700"))
+                    Text(locationManager.isPaused ? "Resume" : "Pause")
+                        .font(.system(size: size.width * 0.07))
+                        .foregroundColor(.white)
+                }
+                .frame(width: size.width * 0.40, height: size.width * 0.40)
+                .background(Color(hex: "#2b2917"))
+                .cornerRadius(15)
             }
-            .frame(width: size.width * 0.40, height: size.width * 0.40)
-            .background(Color(hex: "#2b2917"))
-            .cornerRadius(15)
+            .buttonStyle(PlainButtonStyle())
         }
-        .buttonStyle(PlainButtonStyle())
-    }
     
     private func playHapticSuccessFeedback() {
         WKInterfaceDevice.current().play(.success)

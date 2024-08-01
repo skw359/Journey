@@ -1,3 +1,5 @@
+// This actually toggles the stuff
+
 import Foundation
 
 class UserSettings: ObservableObject {
