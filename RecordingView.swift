@@ -38,9 +38,9 @@ struct RecordingView: View {
                     .frame(width: geometry.size.width * 0.4)
                     .position(x: geometry.size.width * 0.80, y: geometry.size.height * 0.8)
                 pauseOverlay(size: geometry.size)
-                    .opacity(locationManager.isPaused ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.35), value: locationManager.isPaused)
-                    .allowsHitTesting(locationManager.isPaused)
+                    .opacity(locationManager.paused ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
+                    .allowsHitTesting(locationManager.paused)
             }
             
         }

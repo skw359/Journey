@@ -180,11 +180,6 @@ struct WaypointScreen: View {
         }
     }
     
-    private func playHapticSuccessFeedback() {
-        let device = WKInterfaceDevice.current()
-        device.play(.success)
-    }
-    
     private func createWaypoint() {
         isWaypointButtonDisabled = true
         locationManager.startWaypointCalculation()
@@ -198,7 +193,7 @@ struct WaypointScreen: View {
             }
             isCreatingWaypoint = false
             isWaypointButtonDisabled = false
-            playHapticSuccessFeedback()
+            Haptics.vibrate(.success)
         }
     }
 }

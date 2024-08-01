@@ -44,7 +44,7 @@ class LocationManager: NSObject, ObservableObject {
     private var calibrationReadings: [Double] = []
     private let calibrationDuration: TimeInterval = 20
     
-    @Published var isPaused: Bool = false
+    @Published var paused: Bool = false
         private var pauseStartTime: Date?
         private var totalPausedTime: TimeInterval = 0
     
@@ -168,8 +168,8 @@ class LocationManager: NSObject, ObservableObject {
     }
     
     func togglePause() {
-            isPaused.toggle()
-            if isPaused {
+            paused.toggle()
+            if paused {
                 pauseStartTime = Date()
                 stopTimer()
                 locationManager.stopUpdatingLocation()
@@ -187,7 +187,7 @@ class LocationManager: NSObject, ObservableObject {
         
         private func setupTimer() {
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                guard let self = self, !self.isPaused else { return }
+                guard let self = self, !self.paused else { return }
                 self.totalTimeTimer += 1
                 print("Elapsed Time: \(self.totalTimeTimer)")
             }
@@ -261,7 +261,7 @@ class LocationManager: NSObject, ObservableObject {
 // MARK: - CLLocationManagerDelegate
 extension LocationManager: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard !isPaused, let location = locations.last else { return }
+        guard !paused, let location = locations.last else { return }
         
         latestLocation = location
         gpsConnected = true
@@ -294,7 +294,7 @@ extension LocationManager: CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
-        guard !isPaused else { return }
+        guard !paused else { return }
         if isRecalibrating {
             calibrationReadings.append(newHeading.trueHeading)
         } else {
@@ -312,7 +312,7 @@ extension LocationManager: CLLocationManagerDelegate {
     }
     
     private func updateMetrics(with location: CLLocation) {
-        guard !isPaused else { return }
+        guard !paused else { return }
         if recording, let lastLocation = self.lastLocation {
             let newSpeed = location.speed * 2.23694 // Convert to mph
             speed = max(0, newSpeed)

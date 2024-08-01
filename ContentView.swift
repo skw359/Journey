@@ -23,7 +23,7 @@ struct ContentView: View {
     @StateObject private var locationManager = LocationManager()
     @State private var selectedTab = 1
     @State private var isLocked = false
-    @State private var isPaused = false
+    @State private var paused = false
     @State private var navigationPath = NavigationPath()
     @State private var showWaypointScreen = false
     @State private var isCreatingWaypoint = false
@@ -41,7 +41,7 @@ struct ContentView: View {
                     RecordingTabs(selectedTab: $selectedTab,
                                   locationManager: locationManager,
                                   isLocked: $isLocked,
-                                  isPaused: $isPaused,
+                                  paused: $paused,
                                   showWaypointScreen: $showWaypointScreen,
                                   isCreatingWaypoint: $isCreatingWaypoint,
                                   navigationPath: $navigationPath,
@@ -78,7 +78,7 @@ struct ContentView: View {
     private func startRecording() {
         withAnimation {
             locationManager.elevationReadings.removeAll()
-            playHapticFeedbackStart()
+            Haptics.vibrate(.start)
             elapsedTime = 0
             locationManager.startRecording()
             selectedTab = 1 // recordingViewTab
@@ -98,11 +98,6 @@ struct ContentView: View {
             elapsedTime: locationManager.totalTimeTextTimer
         )
     }
-    
-    // Provides haptic feedback when recording starts
-    private func playHapticFeedbackStart() {
-        WKInterfaceDevice.current().play(.start)
-    }
 }
 
 // Manages the tab view displayed during recording. Includes tabs for various features like Now Playing, Waypoint, Speed Target, etc.
@@ -110,7 +105,7 @@ struct RecordingTabs: View {
     @Binding var selectedTab: Int
     @ObservedObject var locationManager: LocationManager
     @Binding var isLocked: Bool
-    @Binding var isPaused: Bool
+    @Binding var paused: Bool
     @Binding var showWaypointScreen: Bool
     @Binding var isCreatingWaypoint: Bool
     @Binding var navigationPath: NavigationPath
@@ -139,7 +134,7 @@ struct RecordingTabs: View {
                 .tabItem { Text("Recording") }
                 .tag(1)
             
-            OptionsScreen(isLocked: $isLocked, isPaused: $isPaused, showWaypointScreen: $showWaypointScreen, isCreatingWaypoint: $isCreatingWaypoint, selectedTab: $selectedTab, locationManager: locationManager, navigationPath: $navigationPath, prepareTravelData: prepareTravelData, elapsedTime: elapsedTime)
+            OptionsScreen(isLocked: $isLocked, showWaypointScreen: $showWaypointScreen, isCreatingWaypoint: $isCreatingWaypoint, selectedTab: $selectedTab, locationManager: locationManager, navigationPath: $navigationPath, prepareTravelData: prepareTravelData, elapsedTime: elapsedTime)
                 .tabItem { Text("Stop Recording") }
                 .tag(3)
         }

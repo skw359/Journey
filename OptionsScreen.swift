@@ -3,7 +3,6 @@ import WatchKit
 
 struct OptionsScreen: View {
     @Binding var isLocked: Bool
-    @Binding var isPaused: Bool
     @Binding var showWaypointScreen: Bool
     @Binding var isCreatingWaypoint: Bool
     @Binding var selectedTab: Int
@@ -16,23 +15,29 @@ struct OptionsScreen: View {
     let stopRecordingViewTab = 3
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color.black.edgesIgnoringSafeArea(.all)
+            GeometryReader { geometry in
+                ZStack {
+                    Color.black.edgesIgnoringSafeArea(.all)
 
-                VStack(spacing: geometry.size.height * 0.05) {
-                    HStack(spacing: geometry.size.width * 0.05) {
-                        waterLockButton(size: geometry.size)
-                        waypointButton(size: geometry.size)
-                    }
-                    HStack(spacing: geometry.size.width * 0.05) {
-                        endButton(size: geometry.size)
-                        pauseButton(size: geometry.size)
+                    VStack(spacing: geometry.size.height * 0.05) {
+                        HStack(spacing: geometry.size.width * 0.05) {
+                            waterLockButton(size: geometry.size)
+                                .disabled(locationManager.paused)
+                                .opacity(locationManager.paused ? 0.5 : 1)
+                                .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
+                            waypointButton(size: geometry.size)
+                                .disabled(locationManager.paused)
+                                .opacity(locationManager.paused ? 0.5 : 1)
+                                .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
+                        }
+                        HStack(spacing: geometry.size.width * 0.05) {
+                            endButton(size: geometry.size)
+                            pauseButton(size: geometry.size)
+                        }
                     }
                 }
             }
         }
-    }
 
     private func waterLockButton(size: CGSize) -> some View {
         Button(action: {
@@ -73,7 +78,7 @@ struct OptionsScreen: View {
                 }
                 isCreatingWaypoint = false
                 showWaypointScreen = false
-                playHapticSuccessFeedback()
+                Haptics.vibrate(.success)
                 selectedTab = waypointTab
             }
         }) {
@@ -99,7 +104,7 @@ struct OptionsScreen: View {
             withAnimation {
                 navigationPath.append(NavigationItem.travelRecorded(prepareTravelData()))
                 locationManager.stopRecording()
-                playHapticFeedbackEnd()
+                Haptics.vibrate(.stop)
             }
         }) {
             VStack(spacing: 2) {
@@ -119,29 +124,23 @@ struct OptionsScreen: View {
     }
 
     private func pauseButton(size: CGSize) -> some View {
-            Button(action: {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.35)) {
                 locationManager.togglePause()
-            }) {
-                VStack(spacing: 2) {
-                    Image(systemName: locationManager.isPaused ? "play.fill" : "pause.fill")
-                        .font(.system(size: size.width * 0.15))
-                        .foregroundColor(locationManager.isPaused ? Color(hex: "#ffd700") : Color(hex: "#ffd700"))
-                    Text(locationManager.isPaused ? "Resume" : "Pause")
-                        .font(.system(size: size.width * 0.07))
-                        .foregroundColor(.white)
-                }
-                .frame(width: size.width * 0.40, height: size.width * 0.40)
-                .background(Color(hex: "#2b2917"))
-                .cornerRadius(15)
             }
-            .buttonStyle(PlainButtonStyle())
+        }) {
+            VStack(spacing: 2) {
+                Image(systemName: locationManager.paused ? "play.fill" : "pause.fill")
+                    .font(.system(size: size.width * 0.15))
+                    .foregroundColor(locationManager.paused ? Color(hex: "#46ff40") : Color(hex: "#ffd700"))
+                Text(locationManager.paused ? "Resume" : "Pause")
+                    .font(.system(size: size.width * 0.07))
+                    .foregroundColor(.white)
+            }
+            .frame(width: size.width * 0.40, height: size.width * 0.40)
+            .background(locationManager.paused ? Color(hex: "#0f360d") : Color(hex: "#2b2917"))
+            .cornerRadius(15)
         }
-    
-    private func playHapticSuccessFeedback() {
-        WKInterfaceDevice.current().play(.success)
-    }
-    
-    private func playHapticFeedbackEnd() {
-        WKInterfaceDevice.current().play(.stop)
+        .buttonStyle(PlainButtonStyle())
     }
 }
