@@ -45,8 +45,14 @@ struct CompassScreen: View {
                 .rotationEffect(.degrees(-viewModel.heading))
                 
                 Circle()
-                    .fill(Color.green)
-                    .frame(width: 10, height: 10)
+                        .fill(Color.green)
+                        .frame(width: 10, height: 10)
+                        .gesture(
+                            LongPressGesture(minimumDuration: 1.0)
+                                .onEnded { _ in
+                                    self.recalibrateCompass()
+                                }
+                        )
                 
                 Text(headingText())
                     .foregroundColor(.white)
@@ -126,12 +132,6 @@ struct CompassScreen: View {
             }
         }
         .edgesIgnoringSafeArea(.all)
-        .gesture(
-            LongPressGesture(minimumDuration: 1.0)
-                .onEnded { _ in
-                    self.recalibrateCompass()
-                }
-        )
     }
     
     private func recalibrateCompass() {
