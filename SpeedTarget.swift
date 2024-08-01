@@ -6,7 +6,7 @@ class SpeedTargetManager: ObservableObject {
     
     @Published var isSettingSpeed = false
     @Published var hitTargetSpeed = false
-    @Published var isReliableSpeed = false
+    @Published var reliableSpeed = false
     @Published var isWaitingForGPS = false
     @Published var setSpeed = false
     @Published var targetReachedTime: Date?
@@ -15,7 +15,7 @@ class SpeedTargetManager: ObservableObject {
         isWaitingForGPS = true
         isSettingSpeed = true
         hitTargetSpeed = false
-        isReliableSpeed = false
+        reliableSpeed = false
         
         // Check for strong GPS signal
         Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
@@ -31,12 +31,12 @@ class SpeedTargetManager: ObservableObject {
     func updateStatus(currentSpeed: Double) {
         if !hitTargetSpeed {
             if currentSpeed < 2 { //start mph
-                isReliableSpeed = false
-            } else if !isReliableSpeed {
-                isReliableSpeed = true
+                reliableSpeed = false
+            } else if !reliableSpeed {
+                reliableSpeed = true
             }
             
-            if isReliableSpeed {
+            if reliableSpeed {
                 if currentSpeed < Double(targetSpeed) {
                     // Not reached yet
                 } else {
@@ -50,7 +50,7 @@ class SpeedTargetManager: ObservableObject {
     
     func reset() {
         hitTargetSpeed = false
-        isReliableSpeed = false
+        reliableSpeed = false
     }
     
     func formatTime(_ timeInterval: TimeInterval) -> String {
@@ -165,7 +165,6 @@ struct SpeedTarget: View {
     @State private var timerStartDate: Date?
     @State private var isBlinking = false
     @State private var showSetSpeedFromInfo = false
-    @State private var timerRunning = false
     
     let variableColor = Color(hex: "#00ff81")
     let timer = Timer.publish(every: 0.01, on: .main, in: .common).autoconnect()
@@ -410,29 +409,26 @@ struct SpeedTarget: View {
             setSpeed = speedTargetManager.setSpeed
         }
         .onReceive(locationManager.$speed) { speed in
-                let nonNegativeSpeed = max(0, speed)
-                speedTargetManager.updateStatus(currentSpeed: nonNegativeSpeed)
-                
-                if !timerRunning && nonNegativeSpeed >= 2 {
-                    timerStartDate = Date()
-                    timerRunning = true
-                }
+            let nonNegativeSpeed = max(0, speed)
+            speedTargetManager.updateStatus(currentSpeed: nonNegativeSpeed)
+            
+            if timerStartDate == nil && nonNegativeSpeed >= 2 {
+                timerStartDate = Date()
             }
+        }
         .onReceive(timer) { _ in
-                if timerRunning {
-                    if let startDate = timerStartDate {
-                        let elapsed: TimeInterval
-                        if let reachedTime = speedTargetManager.targetReachedTime {
-                            elapsed = reachedTime.timeIntervalSince(startDate)
-                        } else {
-                            elapsed = Date().timeIntervalSince(startDate)
-                        }
-                        elapsedTimeString = speedTargetManager.formatTime(elapsed)
-                    }
+            if let startDate = timerStartDate {
+                let elapsed: TimeInterval
+                if let reachedTime = speedTargetManager.targetReachedTime {
+                    elapsed = reachedTime.timeIntervalSince(startDate)
                 } else {
-                    elapsedTimeString = "Awaiting activity..."
+                    elapsed = Date().timeIntervalSince(startDate)
                 }
+                elapsedTimeString = speedTargetManager.formatTime(elapsed)
+            } else {
+                elapsedTimeString = "Awaiting activity..."
             }
+        }
         
         
         .onReceive(blinkTimer) { _ in
