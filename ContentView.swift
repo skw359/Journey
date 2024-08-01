@@ -127,7 +127,7 @@ struct RecordingTabs: View {
                 .tabItem { Text("Waypoint")}
                 .tag(-2)
             
-            SpeedTarget(locationManager: locationManager)
+            SpeedGoalScreen(locationManager: locationManager)
                 .tabItem { Text("Target Speed") }
                 .tag(-1)
             

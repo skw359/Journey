@@ -11,7 +11,7 @@ struct WaypointScreen: View {
     @StateObject private var userSettings = UserSettings()
     @State private var showWaytracerInfo = false
     @State private var isWaypointButtonDisabled = false
-
+    
     @State private var isCreatingWaypoint = false
     
     var waypointExists: Bool {
@@ -19,17 +19,7 @@ struct WaypointScreen: View {
     }
     
     var bearingToWaypoint: Double {
-        guard let currentLocation = locationManager.lastLocation,
-              let waypointLocation = locationManager.averagedWaypointLocation else { return 0 }
-        
-        let bearingFromNorth = currentLocation.bearing(to: waypointLocation)
-        let userHeading = locationManager.userHeading
-        
-        let relativeBearing = bearingFromNorth - userHeading
-        let finalBearing = relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
-        
-        print("Current Location: \(currentLocation), Waypoint Location: \(waypointLocation), User Heading: \(userHeading), Bearing to Waypoint: \(finalBearing)") // debug message
-        return finalBearing
+        locationManager.bearingToWaypoint
     }
     
     var body: some View {
@@ -203,7 +193,7 @@ struct WaypointScreen: View {
         isWaypointButtonDisabled = true
         locationManager.startWaypointCalculation()
         locationManager.averagedWaypointLocation = nil
-
+        
         isCreatingWaypoint = true
         
         locationManager.averageWaypointLocation { averagedLocation in
@@ -215,28 +205,6 @@ struct WaypointScreen: View {
             playHapticSuccessFeedback()
         }
     }
-}
-
-extension CLLocation {
-    func bearing(to destination: CLLocation) -> Double {
-        let lat1 = self.coordinate.latitude.toRadians()
-        let lon1 = self.coordinate.longitude.toRadians()
-        
-        let lat2 = destination.coordinate.latitude.toRadians()
-        let lon2 = destination.coordinate.longitude.toRadians()
-        
-        let dLon = lon2 - lon1
-        let y = sin(dLon) * cos(lat2)
-        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        let bearing = atan2(y, x).toDegrees()
-        
-        return (bearing >= 0) ? bearing : (360 + bearing)
-    }
-}
-
-extension Double {
-    func toRadians() -> Double { self * .pi / 180 }
-    func toDegrees() -> Double { self * 180 / .pi }
 }
 
 extension View {

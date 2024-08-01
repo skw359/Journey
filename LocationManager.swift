@@ -40,8 +40,10 @@ class LocationManager: NSObject, ObservableObject {
     @Published var elevationReadings: [ElevationReading] = []
     @Published var moderateAltitudeNotificationSent = false
     @Published var highAltitudeNotificationSent = false
+    @Published var bearingToWaypoint: Double = 0
     private var calibrationReadings: [Double] = []
     private let calibrationDuration: TimeInterval = 20
+    
     
     // MARK: - Initialization
     override init() {
@@ -71,8 +73,8 @@ class LocationManager: NSObject, ObservableObject {
         locationManager.startUpdatingLocation()
         setupTimer()
         if let initialLocation = locationManager.location {
-                recordElevationReading(elevation: initialLocation.altitude)
-            }
+            recordElevationReading(elevation: initialLocation.altitude)
+        }
     }
     
     func stopRecording() {
@@ -88,30 +90,30 @@ class LocationManager: NSObject, ObservableObject {
     }
     
     func recalibrateCompass() {
-            guard CLLocationManager.headingAvailable() else { return }
-            
-            isRecalibrating = true
-            calibrationReadings.removeAll()
-            locationManager.stopUpdatingHeading()
-            locationManager.startUpdatingHeading()
-            NotificationCenter.default.post(name: Notification.Name("ShowCalibrationInstructions"), object: nil)
-            DispatchQueue.main.asyncAfter(deadline: .now() + calibrationDuration) { [weak self] in
-                self?.finalizeCalibration()
-            }
+        guard CLLocationManager.headingAvailable() else { return }
+        
+        isRecalibrating = true
+        calibrationReadings.removeAll()
+        locationManager.stopUpdatingHeading()
+        locationManager.startUpdatingHeading()
+        NotificationCenter.default.post(name: Notification.Name("ShowCalibrationInstructions"), object: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + calibrationDuration) { [weak self] in
+            self?.finalizeCalibration()
         }
+    }
     
-        // Calculate the average heading, then update the heading
-        private func finalizeCalibration() {
-            guard !calibrationReadings.isEmpty else {
-                isRecalibrating = false
-                return
-            }
-            let averageHeading = calibrationReadings.reduce(0, +) / Double(calibrationReadings.count)
-            heading = averageHeading
-            userHeading = averageHeading
+    // Calculate the average heading, then update the heading
+    private func finalizeCalibration() {
+        guard !calibrationReadings.isEmpty else {
             isRecalibrating = false
-            NotificationCenter.default.post(name: Notification.Name("CalibrationComplete"), object: nil)
+            return
         }
+        let averageHeading = calibrationReadings.reduce(0, +) / Double(calibrationReadings.count)
+        heading = averageHeading
+        userHeading = averageHeading
+        isRecalibrating = false
+        NotificationCenter.default.post(name: Notification.Name("CalibrationComplete"), object: nil)
+    }
     
     
     func refreshGPS() {
@@ -126,16 +128,16 @@ class LocationManager: NSObject, ObservableObject {
     }
     
     func averageWaypointLocation(completion: @escaping (CLLocation?) -> Void) {
-            guard waypointLocations.isEmpty else { return }
-            print("Obtaining location for waypoint...")
-            waypointLocations.removeAll()
-            waypointCompletion = completion
-            freshLocation()
-        }
+        guard waypointLocations.isEmpty else { return }
+        print("Obtaining location for waypoint...")
+        waypointLocations.removeAll()
+        waypointCompletion = completion
+        freshLocation()
+    }
     
     private func freshLocation() {
-            self.locationManager.requestLocation()
-        }
+        self.locationManager.requestLocation()
+    }
     
     // MARK: - Private Methods
     private func resetMetrics() {
@@ -150,16 +152,16 @@ class LocationManager: NSObject, ObservableObject {
     }
     
     var totalTimeTextTimer: String {
-            let hours = totalTimeTimer / 3600
-            let minutes = (totalTimeTimer % 3600) / 60
-            let seconds = totalTimeTimer % 60
-            
-            if hours > 0 {
-                return String(format: "%01d:%02d:%02d", hours, minutes, seconds)
-            } else {
-                return String(format: "%02d:%02d", minutes, seconds)
-            }
+        let hours = totalTimeTimer / 3600
+        let minutes = (totalTimeTimer % 3600) / 60
+        let seconds = totalTimeTimer % 60
+        
+        if hours > 0 {
+            return String(format: "%01d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%02d:%02d", minutes, seconds)
         }
+    }
     
     private func setupTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -189,6 +191,18 @@ class LocationManager: NSObject, ObservableObject {
                 self?.lastGeocodedLocation = location
             }
         }
+    }
+    
+    private func updateBearingToWaypoint() {
+        guard let currentLocation = lastLocation,
+              let waypointLocation = averagedWaypointLocation else {
+            bearingToWaypoint = 0
+            return
+        }
+        
+        let bearingFromNorth = currentLocation.bearing(to: waypointLocation)
+        let relativeBearing = bearingFromNorth - userHeading
+        bearingToWaypoint = relativeBearing >= 0 ? relativeBearing : 360 + relativeBearing
     }
     
     private func elevationSafetyNotification(elevation: Double) {
@@ -252,16 +266,20 @@ extension LocationManager: CLLocationManagerDelegate {
         }
         
         self.lastLocation = location
+        
+        // Update bearing after setting lastLocation
+        updateBearingToWaypoint()
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
-            if isRecalibrating {
-                calibrationReadings.append(newHeading.trueHeading)
-            } else {
-                userHeading = newHeading.trueHeading
-                heading = newHeading.trueHeading
-            }
+        if isRecalibrating {
+            calibrationReadings.append(newHeading.trueHeading)
+        } else {
+            userHeading = newHeading.trueHeading
+            heading = newHeading.trueHeading
+            updateBearingToWaypoint()
         }
+    }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         gpsConnected = false
@@ -310,6 +328,9 @@ extension LocationManager: CLLocationManagerDelegate {
             waypointCompletion?(averagedWaypointLocation)
             waypointLocations.removeAll()
             isCalculatingWaypoint = false
+            
+            // Update bearing after setting averagedWaypointLocation
+            updateBearingToWaypoint()
         }
     }
 }
@@ -332,6 +353,25 @@ extension CLLocation {
             }
         }
     }
+    func bearing(to destination: CLLocation) -> Double {
+        let lat1 = self.coordinate.latitude.toRadians()
+        let lon1 = self.coordinate.longitude.toRadians()
+        
+        let lat2 = destination.coordinate.latitude.toRadians()
+        let lon2 = destination.coordinate.longitude.toRadians()
+        
+        let dLon = lon2 - lon1
+        let y = sin(dLon) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+        let bearing = atan2(y, x).toDegrees()
+        
+        return (bearing >= 0) ? bearing : (360 + bearing)
+    }
+}
+
+extension Double {
+    func toRadians() -> Double { self * .pi / 180 }
+    func toDegrees() -> Double { self * 180 / .pi }
 }
 
 struct ElevationReading {
