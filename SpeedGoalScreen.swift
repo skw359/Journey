@@ -169,7 +169,7 @@ struct Needle: Shape {
     }
 }
 
-struct SpeedGoal: View {
+struct SpeedGoalScreen: View {
     @StateObject private var speedTargetManager = SpeedTargetManager()
     @ObservedObject var locationManager: LocationManager
     
