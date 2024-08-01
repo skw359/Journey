@@ -28,8 +28,8 @@ struct RecordingView: View {
                 CityNameElement(locationManager: locationManager)
                     .position(x: geometry.size.width / 2, y: geometry.size.height * 0.2)
                 
-                // ElevationView (bottom left)
-                ElevationView(locationManager: locationManager)
+                // ElevationElement (bottom left)
+                ElevationElement(locationManager: locationManager)
                     .frame(width: geometry.size.width * 0.4)
                     .position(x: geometry.size.width * 0.20, y: geometry.size.height * 0.8)
                 

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ElevationView: View {
+struct ElevationElement: View {
     @ObservedObject var locationManager: LocationManager
     @EnvironmentObject var userSettings: UserSettings
     
