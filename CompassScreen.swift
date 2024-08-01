@@ -2,10 +2,8 @@ import SwiftUI
 import WatchKit
 
 struct CompassScreen: View {
-    @StateObject var locationManager = LocationManager()
     @ObservedObject var viewModel: LocationManager
     @State private var arrowColor: Color = .red
-    @State private var triangleColor: Color = .red
     @State private var showRecalibratingMessage = false
     @State private var showCalibrationInstructions = false
     let compassSize: CGFloat = 125

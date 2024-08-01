@@ -10,14 +10,9 @@ class LocationManager: NSObject, ObservableObject {
     private var timer: Timer?
     private var waypointLocations: [CLLocation] = []
     private var waypointCompletion: ((CLLocation?) -> Void)?
-    private let maxRetryCount = 3
-    private var currentRetryCount = 0
-    private let retryDelaySeconds = 5.0
-    private var recalibrationTimer: Timer?
     var lastLocation: CLLocation?
     private var totalSpeedReadings: Double = 0.0
     private var numberOfSpeedReadings: Int = 0
-    
     private var lastGeocodedLocation: CLLocation?
     private let minimumDistanceForGeocoding: CLLocationDistance = 1000 // 1 km
     

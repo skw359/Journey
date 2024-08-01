@@ -3,9 +3,6 @@ import CoreLocation
 
 struct WaypointScreen: View {
     @ObservedObject var locationManager: LocationManager
-    @State private var showInstructions = true
-    @State private var pulsate = false
-    @State private var showCircle = false
     @State private var backgroundColor = Color.black
     @State private var textColor = Color.white
     @State private var circleColor = Color(hex: "#00ff81")
@@ -14,7 +11,7 @@ struct WaypointScreen: View {
     @StateObject private var userSettings = UserSettings()
     @State private var showWaytracerInfo = false
     @State private var isWaypointButtonDisabled = false
-    @State private var elapsedTime = 0
+
     @State private var isCreatingWaypoint = false
     
     var waypointExists: Bool {
@@ -206,7 +203,7 @@ struct WaypointScreen: View {
         isWaypointButtonDisabled = true
         locationManager.startWaypointCalculation()
         locationManager.averagedWaypointLocation = nil
-        elapsedTime = 0
+
         isCreatingWaypoint = true
         
         locationManager.averageWaypointLocation { averagedLocation in

@@ -5,7 +5,7 @@ class SpeedTargetManager: ObservableObject {
     @Published var targetSpeed: Int = 60
     
     @Published var isSettingSpeed = false
-    @Published var hasReachedTarget = false
+    @Published var hitTargetSpeed = false
     @Published var isReliableSpeed = false
     @Published var isWaitingForGPS = false
     @Published var setSpeed = false
@@ -14,7 +14,7 @@ class SpeedTargetManager: ObservableObject {
     func setTargetSpeed(locationManager: LocationManager) {
         isWaitingForGPS = true
         isSettingSpeed = true
-        hasReachedTarget = false
+        hitTargetSpeed = false
         isReliableSpeed = false
         
         // Check for strong GPS signal
@@ -29,7 +29,7 @@ class SpeedTargetManager: ObservableObject {
     }
     
     func updateStatus(currentSpeed: Double) {
-        if !hasReachedTarget {
+        if !hitTargetSpeed {
             if currentSpeed < 2 { //start mph
                 isReliableSpeed = false
             } else if !isReliableSpeed {
@@ -40,7 +40,7 @@ class SpeedTargetManager: ObservableObject {
                 if currentSpeed < Double(targetSpeed) {
                     // Not reached yet
                 } else {
-                    hasReachedTarget = true
+                    hitTargetSpeed = true
                     targetReachedTime = Date()
                     WKInterfaceDevice.current().play(.success)
                 }
@@ -49,7 +49,7 @@ class SpeedTargetManager: ObservableObject {
     }
     
     func reset() {
-        hasReachedTarget = false
+        hitTargetSpeed = false
         isReliableSpeed = false
     }
     
@@ -155,20 +155,13 @@ struct SpeedTarget: View {
     @ObservedObject var locationManager: LocationManager
     
     @State private var backgroundColor = Color.black
-    @State private var textColor = Color.white
-    @State private var circleColor = Color(hex: "#00ff81")
     @State private var showTargetSpeedInfo = false
     @State private var showSetTargetSpeed = false
     @State private var setSpeed = false
     @State private var elapsedTimeString = "Awaiting activity..."
     @State private var timerStartDate: Date?
-    
-    @State private var targetReached = false
-    
     @State private var isBlinking = false
-    
     @State private var showSetSpeedFromInfo = false
-    
     @State private var timerRunning = false
     
     let variableColor = Color(hex: "#00ff81")
@@ -231,7 +224,7 @@ struct SpeedTarget: View {
                                     targetSpeed: speedTargetManager.targetSpeed,
                                     arcColor: .white,
                                     needleColor: variableColor,
-                                    targetReached: speedTargetManager.hasReachedTarget)
+                                    targetReached: speedTargetManager.hitTargetSpeed)
                     .frame(height: 200)
                     .padding(.vertical, 20)
                     
@@ -268,7 +261,7 @@ struct SpeedTarget: View {
                             .font(.headline)
                             .foregroundColor(Color(hex: "#00ff81"))
                             .padding(.bottom, 40)
-                            .opacity(speedTargetManager.hasReachedTarget ? (isBlinking ? 1 : 0.3) : 1)
+                            .opacity(speedTargetManager.hitTargetSpeed ? (isBlinking ? 1 : 0.3) : 1)
                             .animation(.easeInOut(duration: 0.25), value: isBlinking)
                     }
                 }
@@ -440,12 +433,12 @@ struct SpeedTarget: View {
         
         
         .onReceive(blinkTimer) { _ in
-            if speedTargetManager.hasReachedTarget {
+            if speedTargetManager.hitTargetSpeed {
                 isBlinking.toggle()
             }
         }
-        .onChange(of: speedTargetManager.hasReachedTarget) {
-            if !speedTargetManager.hasReachedTarget {
+        .onChange(of: speedTargetManager.hitTargetSpeed) {
+            if !speedTargetManager.hitTargetSpeed {
                 isBlinking = false
             }
         }
