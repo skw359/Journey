@@ -22,6 +22,11 @@ struct WaypointScreen: View {
         locationManager.bearingToWaypoint
     }
     
+    var distanceText: String {
+        DistanceFormatter.shared.formatDistance(distanceInFeet,
+                                                isMetric: userSettings.isMetric)
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -31,17 +36,11 @@ struct WaypointScreen: View {
                 VStack(spacing: 0) {
                     VStack {
                         if locationManager.latestLocation != nil, locationManager.averagedWaypointLocation != nil {
-                            Text(userSettings.isMetric ?
-                                 (distanceInFeet * 0.3048 < 100 ? String(format: "%.0f meters", distanceInFeet * 0.3048) :
-                                    (distanceInFeet * 0.3048 < 10000 ? String(format: "%.1f km", distanceInFeet * 0.3048 / 1000) :
-                                        String(format: "%.0f km", distanceInFeet * 0.3048 / 1000))) :
-                                    (distanceInFeet < 528 ? String(format: "%.0f feet", distanceInFeet) :
-                                        (distanceInFeet < 52800 ? String(format: "%.1f miles", distanceInFeet / 5280) :
-                                            String(format: "%.0f miles", distanceInFeet / 5280))))
-                            .font(.system(size: 45))
-                            .bold()
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, alignment: .center)
+                            Text(distanceText)
+                                .font(.system(size: 45))
+                                .bold()
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity, alignment: .center)
                             
                             ZStack {
                                 Image(systemName: "arrow.up")

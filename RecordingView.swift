@@ -15,7 +15,7 @@ struct RecordingView: View {
                 
                 RecordingIndicator()
                     .position(x: WKInterfaceDevice.current().screenBounds.width == 198.0 ?
-                              (geometry.size.width * 0.12 + 29 + 50) : // Adjusting for 45mm screen
+                              (geometry.size.width * 0.12 + 29 + 50) :
                               geometry.size.width / 2,
                               y: geometry.size.height * 0.064)
                 
