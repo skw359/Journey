@@ -14,6 +14,7 @@ struct Journey_Watch_AppApp: App {
                 print("Notification authorization error: \(error.localizedDescription)")
             }
         }
+        
     }
     
     var body: some Scene {

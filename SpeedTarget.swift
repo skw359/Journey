@@ -54,17 +54,20 @@ class SpeedTargetManager: ObservableObject {
     }
     
     func formatTime(_ timeInterval: TimeInterval) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.minute, .second]
+        formatter.unitsStyle = .positional
+        formatter.zeroFormattingBehavior = .pad
+
         let hours = Int(timeInterval) / 3600
-        let minutes = (Int(timeInterval) % 3600) / 60
-        let seconds = Int(timeInterval) % 60
+        let remainingTime = timeInterval.truncatingRemainder(dividingBy: 3600)
+        let baseString = formatter.string(from: remainingTime) ?? "00:00"
         let milliseconds = Int((timeInterval.truncatingRemainder(dividingBy: 1)) * 100)
         
         if hours > 0 {
-            return String(format: "%02d:%02d:%02d.%02d", hours, minutes, seconds, milliseconds)
-        } else if minutes > 0 {
-            return String(format: "%02d:%02d.%02d", minutes, seconds, milliseconds)
+            return String(format: "%02d:%@.%02d", hours, baseString, milliseconds)
         } else {
-            return String(format: "%02d.%02d", seconds, milliseconds)
+            return String(format: "%@.%02d", baseString, milliseconds)
         }
     }
 }

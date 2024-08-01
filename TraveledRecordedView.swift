@@ -84,11 +84,45 @@ struct TravelRecordedView: View {
         }
     }
     
+    private var maxElevation: String {
+        let maxElev = locationManager.elevationReadings.map { $0.elevation }.max() ?? 0
+        return formatElevation(maxElev)
+    }
+
+    private var minElevation: String {
+        let minElev = locationManager.elevationReadings.map { $0.elevation }.min() ?? 0
+        return formatElevation(minElev)
+    }
+
+    private func formatElevation(_ elevation: Double) -> String {
+        let elevationInFeet = elevation * 3.281
+        return "\(String(format: "%.0f", elevationInFeet)) ft"
+    }
+    
     // computed property creates the elevation graph section of the view
     private var elevationSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Elevation")
                 .font(.headline)
+            
+            HStack(alignment: .center, spacing: 20) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "triangle.fill")
+                            .foregroundColor(Color(hex: "#00ff81"))
+                        Text(maxElevation)
+                    }
+                    HStack(spacing: 5) {
+                        Image(systemName: "triangle.fill")
+                            .foregroundColor(Color(hex: "#00ff81"))
+                            .rotationEffect(.degrees(180))
+                        Text(minElevation)
+                    }
+                }
+                .font(.subheadline)
+                
+                Spacer()
+            }
             
             ElevationGraphView(readings: locationManager.elevationReadings)
                 .frame(height: 75)
