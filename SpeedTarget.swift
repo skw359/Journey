@@ -78,11 +78,8 @@ struct SpeedometerView: View {
     let arcColor: Color
     let needleColor: Color
     let targetReached: Bool
-    @State private var smoothingFactor: Double = 0.2
     
-    @State private var animatedAngle: Double = -Double.pi / 2
-    
-    let timer = Timer.publish(every: 0.016, on: .main, in: .common).autoconnect() // ~60 FPS
+    @State private var animatedSpeed: Double = 0
     
     var body: some View {
         GeometryReader { geometry in
@@ -97,15 +94,11 @@ struct SpeedometerView: View {
                 }
                 .stroke(arcColor, lineWidth: 5)
                 
-                // Needle
-                Path { path in
-                    let needleBase = CGPoint(x: geometry.size.width / 2, y: geometry.size.height)
-                    let needleTip = CGPoint(x: geometry.size.width / 2 + CGFloat(sin(animatedAngle)) * geometry.size.width * 0.4,
-                                            y: geometry.size.height - CGFloat(cos(animatedAngle)) * geometry.size.width * 0.4)
-                    path.move(to: needleBase)
-                    path.addLine(to: needleTip)
-                }
-                .stroke(needleColor, lineWidth: 3)
+                // THE SPEED needle
+                Needle(speed: animatedSpeed, maxSpeed: Double(targetSpeed))
+                    .stroke(needleColor, lineWidth: 3)
+                    .frame(width: geometry.size.width * 0.8, height: geometry.size.width * 0.4)
+                    .offset(y: geometry.size.height * 0.1)
                 
                 // Current speed text
                 Text("\(max(0, Int(currentSpeed)))")
@@ -126,30 +119,38 @@ struct SpeedometerView: View {
                     .position(x: geometry.size.width * 0.9, y: geometry.size.height + 10)
             }
             .frame(width: geometry.size.width, height: geometry.size.width * 0.5)
-            .onReceive(timer) { _ in
-                updateAnimatedAngle()
-            }
         }
         .aspectRatio(2, contentMode: .fit)
+        .onChange(of: currentSpeed) { _, newSpeed in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                animatedSpeed = newSpeed
+            }
+        }
+    }
+}
+
+struct Needle: Shape {
+    var speed: Double
+    var maxSpeed: Double
+    
+    var animatableData: Double {
+        get { speed }
+        set { speed = newValue }
     }
     
-    private func updateAnimatedAngle() {
-        let targetAngle = calculateNeedleAngle(for: currentSpeed)
-        let _ = targetAngle - animatedAngle
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.maxY)
+        let radius = min(rect.width, rect.height)
+        let angle = Double.pi - Double.pi * (speed / maxSpeed)
+        let needlePoint = CGPoint(
+            x: center.x + CGFloat(cos(angle)) * radius,
+            y: center.y - CGFloat(sin(angle)) * radius
+        )
         
-        let smoothedAngle = smoothingFactor * targetAngle + (1 - smoothingFactor) * animatedAngle
-        
-        let maxChangePerFrame = 5.0 * .pi / 180.0
-        let limitedChange = max(-maxChangePerFrame, min(maxChangePerFrame, smoothedAngle - animatedAngle))
-        
-        animatedAngle += limitedChange
-    }
-    
-    private func calculateNeedleAngle(for speed: Double) -> Double {
-        let angleOffset = -Double.pi / 2
-        let nonNegativeSpeed = max(0, speed)
-        let proportion = min(nonNegativeSpeed / Double(targetSpeed), 1.0)
-        return angleOffset + (Double.pi * proportion)
+        path.move(to: center)
+        path.addLine(to: needlePoint)
+        return path
     }
 }
 
