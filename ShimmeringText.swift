@@ -3,18 +3,16 @@ import SwiftUI
 
 struct ShimmeringText: View {
     var text: String
-    var baseColor: Color
-    var shimmerColor: Color = .white
     @State private var gradientPosition: CGFloat = -1
     
     var body: some View {
         ZStack {
             Text(text)
-                .foregroundColor(baseColor)
-                .overlay(
+                .foregroundColor(.white)
+                .background(
                     GeometryReader { geometry in
                         LinearGradient(
-                            gradient: Gradient(colors: [shimmerColor.opacity(0), shimmerColor, shimmerColor.opacity(0)]),
+                            gradient: Gradient(colors: [Color.white.opacity(0), Color.white, Color.white.opacity(0)]),
                             startPoint: .leading,
                             endPoint: .trailing
                         )
