@@ -3,15 +3,15 @@ import CoreLocation
 
 struct WaypointScreen: View {
     @ObservedObject var locationManager: LocationManager
+    @StateObject private var userSettings = UserSettings()
+    
     @State private var backgroundColor = Color.black
     @State private var textColor = Color.white
     @State private var circleColor = Color(hex: "#00ff81")
     @State private var ringColor = Color.gray
     @State private var distanceInFeet: Double = 0
-    @StateObject private var userSettings = UserSettings()
     @State private var showWaytracerInfo = false
     @State private var isWaypointButtonDisabled = false
-    
     @State private var isCreatingWaypoint = false
     
     var waypointExists: Bool {
@@ -149,37 +149,34 @@ struct WaypointScreen: View {
                         Spacer()
                     }
                 }
-                .onChange(of: locationManager.latestLocation) { _, newValue in
-                    updateDistance()
-                }
-                .onChange(of: distanceInFeet) { _, newValue in
-                    withAnimation {
-                        updateColors(for: newValue)
-                    }
+                .onChange(of: locationManager.latestLocation) { _, _ in
+                    updateWaypointInfo()
                 }
             }
         }
     }
     
-    private func updateDistance() {
+    private func updateWaypointInfo() {
         guard let currentLocation = locationManager.latestLocation,
               let waypointLocation = locationManager.averagedWaypointLocation else { return }
         
+        // Update distance
         let distanceInMeters = currentLocation.distance(from: waypointLocation)
         distanceInFeet = distanceInMeters * 3.28084
-    }
-    
-    private func updateColors(for distance: Double) {
-        if distance < 20 {
-            backgroundColor = .green
-            textColor = .white
-            circleColor = .white
-            ringColor = Color(hex: "#8de4b6")
-        } else {
-            backgroundColor = .black
-            textColor = .black
-            circleColor = Color(hex: "#00ff81")
-            ringColor = .gray
+        
+        // Update colors
+        withAnimation {
+            if distanceInFeet < 20 {
+                backgroundColor = .green
+                textColor = .white
+                circleColor = .white
+                ringColor = Color(hex: "#8de4b6")
+            } else {
+                backgroundColor = .black
+                textColor = .black
+                circleColor = Color(hex: "#00ff81")
+                ringColor = .gray
+            }
         }
     }
     
