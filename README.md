@@ -36,7 +36,6 @@ Journey is currently in active development. While it's functional, there are sti
 - Implement travel history
 - Add support for multiple modes of travel (on foot, driving, on water, etc.)
 - Develop a more robust reverse geocoding system
-- Improve compass recalibration
 - Optimize battery usage
 - Add support for multiple waypoints
 - Refine speed goal implementation
