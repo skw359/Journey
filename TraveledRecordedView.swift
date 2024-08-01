@@ -7,21 +7,9 @@ struct TravelRecordedView: View {
     @Binding var navigationPath: NavigationPath
     @ObservedObject var locationManager: LocationManager
     
-    func formatTime(totalSeconds: Int) -> String {
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        } else {
-            return "\(minutes)m"
-        }
-    }
-    
     var temporaryFontSizeFix: CGFloat {
         if locationManager.totalTime >= 36000 {
             return 15
-            // Check if the total time exceeds 3600 seconds (1 hour)
         } else if locationManager.totalTime >= 3600 {
             return 20
         } else {
@@ -31,124 +19,103 @@ struct TravelRecordedView: View {
     
     var body: some View {
         ScrollView {
-            VStack {
-                Text(String(format: "%.0f", travelData.milesTraveled))
-                    .font(.system(size: 55))
-                    .bold()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                
-                Text("Miles Traveled")
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .foregroundColor(Color(hex: "#00ff81"))
-                
-                Spacer()
-                Spacer()
-                
-                // Top Speed Display
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(String(format: "%.0f", travelData.topSpeed))
-                            .font(.system(size: 30))  
-                            .bold()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                        
-                        Text("Top Speed")
-                            .font(.caption)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundColor(Color(hex: "#00ff81"))
-                        
-                        Spacer()
-                        
-                        Text(locationManager.totalTimeTextTimer)
-                            .font(.system(size:  temporaryFontSizeFix))
-                            .frame(maxWidth: .infinity, alignment: .center)
-                        
-                        Text("Total Time")
-                            .font(.caption)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundColor(Color(hex: "#00ff81"))
-                    }
-                    
-                    Spacer()
-                    Spacer()
-                    Spacer()
-                    Spacer()
-                    Spacer()
-                    Spacer()
-                    Spacer()
-                    
-                    // VStack for Average Speed
-                    VStack(alignment: .leading) {
-                        Text(String(format: "%.0f", travelData.averageSpeed))
-                            .font(.system(size: 30))  
-                            .bold()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                        
-                        Text("AVG Speed")
-                            .font(.caption)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundColor(Color(hex: "#00ff81"))
-                        
-                        Spacer()
-                        
-                        Text("--")
-                            .font(.system(size: temporaryFontSizeFix))
-                        // .bold()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                        
-                        Text("--")
-                            .font(.caption)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundColor(Color(hex: "#00ff81"))
-                    }
-                }
-                
-                Spacer()
-                
-                Text("Elevation")
-                    .font(.headline)
-                ElevationGraphView(readings: locationManager.elevationReadings)
-                    .frame(height: 75) // Set a fixed height for testing purposes
-                    .border(Color.clear)
-                
-                // Done button
-                Button(action: {
-                    withAnimation {
-                        self.presentationMode.wrappedValue.dismiss()
-                    }
-                }) {
-                    HStack(alignment: .center, spacing: 10) {
-                        Text("Done")
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color(hex: "#0c3617"))
-                    .cornerRadius(15)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding()
-                .padding()
-                .padding()
+            VStack(spacing: 20) {
+                milesTraveled
+                speedAndTimeSection
+                elevationSection
+                doneButton
             }
             .padding()
-            .navigationTitle("Travel Recorded")
-            .onAppear {
-                print("TravelRecordedView appeared with \(locationManager.elevationReadings.count) readings")
-            }
-            
         }
-        .onAppear {
-            print("Elevation Readings: \(locationManager.elevationReadings)")
-            print("TravelRecordedView appeared with \(locationManager.elevationReadings.count) readings")
-            print("Total Time: \(locationManager.totalTimeTimer)")
-                print("Formatted Time: \(locationManager.totalTimeTextTimer)")
-        }
-        
+        .navigationTitle("Travel Recorded")
+        .onAppear(perform: debugInfo)
     }
     
+    private var milesTraveled: some View {
+        VStack(spacing: 5) {
+            Text(String(format: "%.0f", travelData.milesTraveled))
+                .font(.system(size: 55))
+                .bold()
+            
+            Text("Miles Traveled")
+                .font(.caption)
+                .foregroundColor(Color(hex: "#00ff81"))
+        }
+    }
+    
+    // Top speed, avg speed, total time
+    private var speedAndTimeSection: some View {
+        HStack {
+            dataDisplay(topValue: String(format: "%.0f", travelData.topSpeed),
+                        topLabel: "Top Speed",
+                        bottomValue: locationManager.totalTimeTextTimer,
+                        bottomLabel: "Total Time")
+            
+            Spacer()
+            
+            dataDisplay(topValue: String(format: "%.0f", travelData.averageSpeed),
+                        topLabel: "AVG Speed",
+                        bottomValue: "--",
+                        bottomLabel: "--")
+        }
+    }
+    
+    // Creates a vertical display of two data points, each with a value and label. Used for displaying the speed and time information
+    private func dataDisplay(topValue: String, topLabel: String, bottomValue: String, bottomLabel: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(topValue)
+                    .font(.system(size: 30))
+                    .bold()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Text(topLabel)
+                    .font(.caption)
+                    .foregroundColor(Color(hex: "#00ff81"))
+            }
+            
+            VStack(alignment: .leading, spacing: 5) {
+                Text(bottomValue)
+                    .font(.system(size: temporaryFontSizeFix))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Text(bottomLabel)
+                    .font(.caption)
+                    .foregroundColor(Color(hex: "#00ff81"))
+            }
+        }
+    }
+    
+    // computed property creates the elevation graph section of the view
+    private var elevationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Elevation")
+                .font(.headline)
+            
+            ElevationGraphView(readings: locationManager.elevationReadings)
+                .frame(height: 75)
+                .border(Color.clear)
+        }
+    }
+    
+    private var doneButton: some View {
+        Button(action: { withAnimation { self.presentationMode.wrappedValue.dismiss() } }) {
+            Text("Done")
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(hex: "#0c3617"))
+                .cornerRadius(15)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.vertical, 40)
+    }
+    
+    private func debugInfo() {
+        print("Elevation Readings: \(locationManager.elevationReadings)")
+        print("TravelRecordedView appeared with \(locationManager.elevationReadings.count) readings")
+        print("Total Time: \(locationManager.totalTimeTimer)")
+        print("Formatted Time: \(locationManager.totalTimeTextTimer)")
+    }
 }
 
 struct ElevationGraphView: View {
