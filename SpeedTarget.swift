@@ -11,6 +11,10 @@ class SpeedTargetManager: ObservableObject {
     @Published var setSpeed = false
     @Published var targetReachedTime: Date?
     
+    @Published var elapsedTime: TimeInterval = 0
+    var startTime: Date?
+    private var timer: Timer?
+    
     func setTargetSpeed(locationManager: LocationManager) {
         isWaitingForGPS = true
         isSettingSpeed = true
@@ -42,15 +46,32 @@ class SpeedTargetManager: ObservableObject {
                 } else {
                     hitTargetSpeed = true
                     targetReachedTime = Date()
+                    stopTiming()
                     WKInterfaceDevice.current().play(.success)
                 }
             }
         }
     }
     
+    func startTiming() {
+        startTime = Date()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { [weak self] _ in
+            guard let self = self, let startTime = self.startTime else { return }
+            self.elapsedTime = Date().timeIntervalSince(startTime)
+        }
+    }
+    
+    func stopTiming() {
+        timer?.invalidate()
+        timer = nil
+    }
+    
     func reset() {
         hitTargetSpeed = false
         reliableSpeed = false
+        elapsedTime = 0
+        startTime = nil
+        stopTiming()
     }
     
     func formatTime(_ timeInterval: TimeInterval) -> String {
@@ -162,13 +183,10 @@ struct SpeedTarget: View {
     @State private var showTargetSpeedInfo = false
     @State private var showSetTargetSpeed = false
     @State private var setSpeed = false
-    @State private var elapsedTimeString = "Awaiting activity..."
-    @State private var timerStartDate: Date?
     @State private var isBlinking = false
     @State private var showSetSpeedFromInfo = false
     
     let variableColor = Color(hex: "#00ff81")
-    let timer = Timer.publish(every: 0.01, on: .main, in: .common).autoconnect()
     let blinkTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     
     var body: some View {
@@ -223,23 +241,22 @@ struct SpeedTarget: View {
                     
                     Spacer()
                 } else {
-                    SpeedometerView(currentSpeed: locationManager.speed,
-                                    targetSpeed: speedTargetManager.targetSpeed,
-                                    arcColor: .white,
-                                    needleColor: variableColor,
-                                    targetReached: speedTargetManager.hitTargetSpeed)
-                    .frame(height: 200)
-                    .padding(.vertical, 20)
-                    
-                    Spacer()
-                }
-                
-            }
-            .padding()
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .overlay(
+                                    SpeedometerView(currentSpeed: locationManager.speed,
+                                                    targetSpeed: speedTargetManager.targetSpeed,
+                                                    arcColor: .white,
+                                                    needleColor: variableColor,
+                                                    targetReached: speedTargetManager.hitTargetSpeed)
+                                    .frame(height: 200)
+                                    .padding(.vertical, 20)
+                                    
+                                    Spacer()
+                                }
+                            }
+                            .padding()
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                        .overlay(
             VStack {
                 HStack {
                     Image(systemName: "gauge.high")
@@ -255,21 +272,21 @@ struct SpeedTarget: View {
                 Spacer()
             }
         )
-        .overlay(
-            Group {
-                if setSpeed {
-                    VStack {
-                        Spacer()
-                        Text(elapsedTimeString)
-                            .font(.headline)
-                            .foregroundColor(Color(hex: "#00ff81"))
-                            .padding(.bottom, 40)
-                            .opacity(speedTargetManager.hitTargetSpeed ? (isBlinking ? 1 : 0.3) : 1)
-                            .animation(.easeInOut(duration: 0.25), value: isBlinking)
-                    }
-                }
-            }
-        )
+                        .overlay(
+                                    Group {
+                                        if setSpeed {
+                                            VStack {
+                                                Spacer()
+                                                Text(speedTargetManager.formatTime(speedTargetManager.elapsedTime))
+                                                    .font(.headline)
+                                                    .foregroundColor(Color(hex: "#00ff81"))
+                                                    .padding(.bottom, 40)
+                                                    .opacity(speedTargetManager.hitTargetSpeed ? (isBlinking ? 1 : 0.3) : 1)
+                                                    .animation(.easeInOut(duration: 0.25), value: isBlinking)
+                                            }
+                                        }
+                                    }
+                                )
         .sheet(isPresented: $showSetTargetSpeed) {
             ScrollView {
                 VStack {
@@ -406,41 +423,26 @@ struct SpeedTarget: View {
             }
         }
         .onChange(of: speedTargetManager.setSpeed) {
-            showSetTargetSpeed = !speedTargetManager.setSpeed
-            setSpeed = speedTargetManager.setSpeed
-        }
-        .onReceive(locationManager.$speed) { speed in
-            let nonNegativeSpeed = max(0, speed)
-            speedTargetManager.updateStatus(currentSpeed: nonNegativeSpeed)
-            
-            if timerStartDate == nil && nonNegativeSpeed >= 2 {
-                timerStartDate = Date()
-            }
-        }
-        .onReceive(timer) { _ in
-            if let startDate = timerStartDate {
-                let elapsed: TimeInterval
-                if let reachedTime = speedTargetManager.targetReachedTime {
-                    elapsed = reachedTime.timeIntervalSince(startDate)
-                } else {
-                    elapsed = Date().timeIntervalSince(startDate)
+                    showSetTargetSpeed = !speedTargetManager.setSpeed
+                    setSpeed = speedTargetManager.setSpeed
                 }
-                elapsedTimeString = speedTargetManager.formatTime(elapsed)
-            } else {
-                elapsedTimeString = "Awaiting activity..."
+                .onReceive(locationManager.$speed) { speed in
+                    let nonNegativeSpeed = max(0, speed)
+                    speedTargetManager.updateStatus(currentSpeed: nonNegativeSpeed)
+                    
+                    if speedTargetManager.startTime == nil && nonNegativeSpeed >= 2 {
+                        speedTargetManager.startTiming()
+                    }
+                }
+                .onReceive(blinkTimer) { _ in
+                    if speedTargetManager.hitTargetSpeed {
+                        isBlinking.toggle()
+                    }
+                }
+                .onChange(of: speedTargetManager.hitTargetSpeed) {
+                    if !speedTargetManager.hitTargetSpeed {
+                        isBlinking = false
+                    }
+                }
             }
         }
-        
-        
-        .onReceive(blinkTimer) { _ in
-            if speedTargetManager.hitTargetSpeed {
-                isBlinking.toggle()
-            }
-        }
-        .onChange(of: speedTargetManager.hitTargetSpeed) {
-            if !speedTargetManager.hitTargetSpeed {
-                isBlinking = false
-            }
-        }
-    }
-}
