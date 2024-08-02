@@ -316,29 +316,27 @@ extension LocationManager: CLLocationManagerDelegate {
         if let lastLocation = self.lastLocation {
             let timeInterval = location.timestamp.timeIntervalSince(lastLocation.timestamp)
             
-            // Update speed
             speed = max(0, location.speed * 2.23694)
-            
-            // Update distance more accurately
-            let newDistance = location.distance(from: lastLocation)
-            distance += newDistance * 0.00062137
-            
-            // Update top speed
-            topSpeed = max(topSpeed, speed)
-            
-            // Update average speed using total distance and time
-            totalTime += timeInterval
-            averageSpeed = (distance / totalTime) * 3600
-            
-            // Update elevation more granularly
-            let elevationChange = location.altitude - lastLocation.altitude
-            currentElevation = location.altitude
-            recordElevationReading(elevation: currentElevation)
-            
-            // Record acceleration
-            let speedChange = location.speed - lastLocation.speed
-            let acceleration = speedChange / timeInterval
-            accelerationReadings.append(acceleration)
+
+            if speed > 0.9 {
+                // Update distance more accurately
+                let newDistance = location.distance(from: lastLocation)
+                distance += newDistance * 0.00062137
+                
+                topSpeed = max(topSpeed, speed)
+
+                totalTime += timeInterval
+                averageSpeed = (distance / totalTime) * 3600
+                
+                // Update elevation more granularly
+                currentElevation = location.altitude
+                recordElevationReading(elevation: currentElevation)
+                
+                // Record acceleration
+                let speedChange = location.speed - lastLocation.speed
+                let acceleration = speedChange / timeInterval
+                accelerationReadings.append(acceleration)
+            }
         }
         
         self.lastLocation = location
