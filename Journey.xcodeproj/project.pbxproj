@@ -1,0 +1,798 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1B0D8BB92C5BEF2100EE9FD3 /* SpeedGoalScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0D8BB82C5BEF2100EE9FD3 /* SpeedGoalScreen.swift */; };
+		1B0D8BBB2C5BF6C700EE9FD3 /* DistanceFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0D8BBA2C5BF6C700EE9FD3 /* DistanceFormatter.swift */; };
+		1B13D54E2C5C2B6F00D9A571 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B13D54D2C5C2B6F00D9A571 /* Haptics.swift */; };
+		1B351ABB2B23DEB90089390A /* TraveledRecordedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B351ABA2B23DEB90089390A /* TraveledRecordedView.swift */; };
+		1B3E462E2C5B11CA002E2338 /* ElevationElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E462D2C5B11CA002E2338 /* ElevationElement.swift */; };
+		1B44E5992C54AF40008D33FA /* ShimmeringText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B44E5982C54AF40008D33FA /* ShimmeringText.swift */; };
+		1B44E59B2C54B04D008D33FA /* WaypointScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B44E59A2C54B04D008D33FA /* WaypointScreen.swift */; };
+		1B4F1F132C1CA83E000A2AF0 /* AnimatedGradientText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B4F1F122C1CA83E000A2AF0 /* AnimatedGradientText.swift */; };
+		1B5285992C5194B5000B8E3D /* RecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5285982C5194B5000B8E3D /* RecordingView.swift */; };
+		1B52859B2C5194C4000B8E3D /* StartScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B52859A2C5194C4000B8E3D /* StartScreen.swift */; };
+		1B52859D2C5194D5000B8E3D /* OptionsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B52859C2C5194D5000B8E3D /* OptionsScreen.swift */; };
+		1B57E52D2B1D52AE00675411 /* Journey Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 1B57E52C2B1D52AE00675411 /* Journey Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		1B57E5322B1D52AE00675411 /* JourneyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B57E5312B1D52AE00675411 /* JourneyApp.swift */; };
+		1B57E5342B1D52AE00675411 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B57E5332B1D52AE00675411 /* ContentView.swift */; };
+		1B57E5362B1D52AF00675411 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1B57E5352B1D52AF00675411 /* Assets.xcassets */; };
+		1B57E5392B1D52AF00675411 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1B57E5382B1D52AF00675411 /* Preview Assets.xcassets */; };
+		1B57E5432B1D52AF00675411 /* Journey_Watch_AppTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B57E5422B1D52AF00675411 /* Journey_Watch_AppTests.swift */; };
+		1B57E54D2B1D52AF00675411 /* Journey_Watch_AppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B57E54C2B1D52AF00675411 /* Journey_Watch_AppUITests.swift */; };
+		1B57E54F2B1D52AF00675411 /* Journey_Watch_AppUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B57E54E2B1D52AF00675411 /* Journey_Watch_AppUITestsLaunchTests.swift */; };
+		1B57E5602B1D548A00675411 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B57E55F2B1D548A00675411 /* LocationManager.swift */; };
+		1B5FB0322C51E62600F84218 /* CityNameElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5FB0312C51E62600F84218 /* CityNameElement.swift */; };
+		1B5FB0342C51E70500F84218 /* SignalStrengthElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5FB0332C51E70500F84218 /* SignalStrengthElement.swift */; };
+		1B5FB0362C51E7A700F84218 /* TotalTimeElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5FB0352C51E7A700F84218 /* TotalTimeElement.swift */; };
+		1B5FB0382C51E81D00F84218 /* LiveCoreStatistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5FB0372C51E81D00F84218 /* LiveCoreStatistics.swift */; };
+		1B5FB03A2C51E86B00F84218 /* CompassScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5FB0392C51E86B00F84218 /* CompassScreen.swift */; };
+		1B5FB03E2C52AD8700F84218 /* WelcomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5FB03D2C52AD8700F84218 /* WelcomeScreen.swift */; };
+		1B65BB7D2B3401ED00F1026C /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B65BB7C2B3401ED00F1026C /* UserSettings.swift */; };
+		1B84353B2C546EDF002D31C7 /* RecordingIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B84353A2C546EDF002D31C7 /* RecordingIndicator.swift */; };
+		1B9570F02B33E95400E7A454 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B9570EF2B33E95400E7A454 /* SettingsView.swift */; };
+		1BBFE6782B80798800CE978E /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BBFE6772B80798800CE978E /* NotificationManager.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1B57E52E2B1D52AE00675411 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1B57E5202B1D52AE00675411 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1B57E52B2B1D52AE00675411;
+			remoteInfo = "Journey Watch App";
+		};
+		1B57E53F2B1D52AF00675411 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1B57E5202B1D52AE00675411 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1B57E52B2B1D52AE00675411;
+			remoteInfo = "Journey Watch App";
+		};
+		1B57E5492B1D52AF00675411 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1B57E5202B1D52AE00675411 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1B57E52B2B1D52AE00675411;
+			remoteInfo = "Journey Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1B57E5552B1D52AF00675411 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				1B57E52D2B1D52AE00675411 /* Journey Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		1B0D8BB82C5BEF2100EE9FD3 /* SpeedGoalScreen.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SpeedGoalScreen.swift; sourceTree = "<group>"; };
+		1B0D8BBA2C5BF6C700EE9FD3 /* DistanceFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DistanceFormatter.swift; sourceTree = "<group>"; };
+		1B13D54D2C5C2B6F00D9A571 /* Haptics.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
+		1B351ABA2B23DEB90089390A /* TraveledRecordedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraveledRecordedView.swift; sourceTree = "<group>"; };
+		1B36091B2B1DC906000E6EC2 /* Journey-Watch-App-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Journey-Watch-App-Info.plist"; sourceTree = SOURCE_ROOT; };
+		1B3E462D2C5B11CA002E2338 /* ElevationElement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevationElement.swift; sourceTree = "<group>"; };
+		1B44E5982C54AF40008D33FA /* ShimmeringText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShimmeringText.swift; sourceTree = "<group>"; };
+		1B44E59A2C54B04D008D33FA /* WaypointScreen.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WaypointScreen.swift; sourceTree = "<group>"; };
+		1B4F1F122C1CA83E000A2AF0 /* AnimatedGradientText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedGradientText.swift; sourceTree = "<group>"; };
+		1B5285982C5194B5000B8E3D /* RecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingView.swift; sourceTree = "<group>"; };
+		1B52859A2C5194C4000B8E3D /* StartScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartScreen.swift; sourceTree = "<group>"; };
+		1B52859C2C5194D5000B8E3D /* OptionsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionsScreen.swift; sourceTree = "<group>"; };
+		1B57E5262B1D52AE00675411 /* Journey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Journey.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B57E52C2B1D52AE00675411 /* Journey Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Journey Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B57E5312B1D52AE00675411 /* JourneyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JourneyApp.swift; sourceTree = "<group>"; };
+		1B57E5332B1D52AE00675411 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1B57E5352B1D52AF00675411 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1B57E5382B1D52AF00675411 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		1B57E53E2B1D52AF00675411 /* Journey Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Journey Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B57E5422B1D52AF00675411 /* Journey_Watch_AppTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Journey_Watch_AppTests.swift; sourceTree = "<group>"; };
+		1B57E5482B1D52AF00675411 /* Journey Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Journey Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B57E54C2B1D52AF00675411 /* Journey_Watch_AppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Journey_Watch_AppUITests.swift; sourceTree = "<group>"; };
+		1B57E54E2B1D52AF00675411 /* Journey_Watch_AppUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Journey_Watch_AppUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		1B57E55F2B1D548A00675411 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		1B5FB0312C51E62600F84218 /* CityNameElement.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CityNameElement.swift; sourceTree = "<group>"; };
+		1B5FB0332C51E70500F84218 /* SignalStrengthElement.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SignalStrengthElement.swift; sourceTree = "<group>"; };
+		1B5FB0352C51E7A700F84218 /* TotalTimeElement.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TotalTimeElement.swift; sourceTree = "<group>"; };
+		1B5FB0372C51E81D00F84218 /* LiveCoreStatistics.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LiveCoreStatistics.swift; sourceTree = "<group>"; };
+		1B5FB0392C51E86B00F84218 /* CompassScreen.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CompassScreen.swift; sourceTree = "<group>"; };
+		1B5FB03D2C52AD8700F84218 /* WelcomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeScreen.swift; sourceTree = "<group>"; };
+		1B65BB7C2B3401ED00F1026C /* UserSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
+		1B84353A2C546EDF002D31C7 /* RecordingIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingIndicator.swift; sourceTree = "<group>"; };
+		1B9570EF2B33E95400E7A454 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		1BBFE6772B80798800CE978E /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1B57E5292B1D52AE00675411 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B57E53B2B1D52AF00675411 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B57E5452B1D52AF00675411 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1B57E51F2B1D52AE00675411 = {
+			isa = PBXGroup;
+			children = (
+				1B57E5302B1D52AE00675411 /* Journey Watch App */,
+				1B57E5412B1D52AF00675411 /* Journey Watch AppTests */,
+				1B57E54B2B1D52AF00675411 /* Journey Watch AppUITests */,
+				1B57E5272B1D52AE00675411 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1B57E5272B1D52AE00675411 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1B57E5262B1D52AE00675411 /* Journey.app */,
+				1B57E52C2B1D52AE00675411 /* Journey Watch App.app */,
+				1B57E53E2B1D52AF00675411 /* Journey Watch AppTests.xctest */,
+				1B57E5482B1D52AF00675411 /* Journey Watch AppUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1B57E5302B1D52AE00675411 /* Journey Watch App */ = {
+			isa = PBXGroup;
+			children = (
+				1B36091B2B1DC906000E6EC2 /* Journey-Watch-App-Info.plist */,
+				1B5FB03D2C52AD8700F84218 /* WelcomeScreen.swift */,
+				1B4F1F122C1CA83E000A2AF0 /* AnimatedGradientText.swift */,
+				1BBFE6772B80798800CE978E /* NotificationManager.swift */,
+				1B3E462D2C5B11CA002E2338 /* ElevationElement.swift */,
+				1B57E5312B1D52AE00675411 /* JourneyApp.swift */,
+				1B57E55F2B1D548A00675411 /* LocationManager.swift */,
+				1B57E5332B1D52AE00675411 /* ContentView.swift */,
+				1B44E59A2C54B04D008D33FA /* WaypointScreen.swift */,
+				1B351ABA2B23DEB90089390A /* TraveledRecordedView.swift */,
+				1B5FB0392C51E86B00F84218 /* CompassScreen.swift */,
+				1B9570EF2B33E95400E7A454 /* SettingsView.swift */,
+				1B5FB0332C51E70500F84218 /* SignalStrengthElement.swift */,
+				1B65BB7C2B3401ED00F1026C /* UserSettings.swift */,
+				1B5FB0312C51E62600F84218 /* CityNameElement.swift */,
+				1B5FB0372C51E81D00F84218 /* LiveCoreStatistics.swift */,
+				1B5FB0352C51E7A700F84218 /* TotalTimeElement.swift */,
+				1B5285982C5194B5000B8E3D /* RecordingView.swift */,
+				1B52859A2C5194C4000B8E3D /* StartScreen.swift */,
+				1B0D8BB82C5BEF2100EE9FD3 /* SpeedGoalScreen.swift */,
+				1B52859C2C5194D5000B8E3D /* OptionsScreen.swift */,
+				1B84353A2C546EDF002D31C7 /* RecordingIndicator.swift */,
+				1B44E5982C54AF40008D33FA /* ShimmeringText.swift */,
+				1B0D8BBA2C5BF6C700EE9FD3 /* DistanceFormatter.swift */,
+				1B13D54D2C5C2B6F00D9A571 /* Haptics.swift */,
+				1B57E5352B1D52AF00675411 /* Assets.xcassets */,
+				1B57E5372B1D52AF00675411 /* Preview Content */,
+			);
+			path = "Journey Watch App";
+			sourceTree = "<group>";
+		};
+		1B57E5372B1D52AF00675411 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				1B57E5382B1D52AF00675411 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		1B57E5412B1D52AF00675411 /* Journey Watch AppTests */ = {
+			isa = PBXGroup;
+			children = (
+				1B57E5422B1D52AF00675411 /* Journey_Watch_AppTests.swift */,
+			);
+			path = "Journey Watch AppTests";
+			sourceTree = "<group>";
+		};
+		1B57E54B2B1D52AF00675411 /* Journey Watch AppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				1B57E54C2B1D52AF00675411 /* Journey_Watch_AppUITests.swift */,
+				1B57E54E2B1D52AF00675411 /* Journey_Watch_AppUITestsLaunchTests.swift */,
+			);
+			path = "Journey Watch AppUITests";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1B57E5252B1D52AE00675411 /* Journey */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B57E5562B1D52AF00675411 /* Build configuration list for PBXNativeTarget "Journey" */;
+			buildPhases = (
+				1B57E5242B1D52AE00675411 /* Resources */,
+				1B57E5552B1D52AF00675411 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1B57E52F2B1D52AE00675411 /* PBXTargetDependency */,
+			);
+			name = Journey;
+			productName = Journey;
+			productReference = 1B57E5262B1D52AE00675411 /* Journey.app */;
+			productType = "com.apple.product-type.application.watchapp2-container";
+		};
+		1B57E52B2B1D52AE00675411 /* Journey Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B57E5522B1D52AF00675411 /* Build configuration list for PBXNativeTarget "Journey Watch App" */;
+			buildPhases = (
+				1B57E5282B1D52AE00675411 /* Sources */,
+				1B57E5292B1D52AE00675411 /* Frameworks */,
+				1B57E52A2B1D52AE00675411 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Journey Watch App";
+			productName = "Journey Watch App";
+			productReference = 1B57E52C2B1D52AE00675411 /* Journey Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		1B57E53D2B1D52AF00675411 /* Journey Watch AppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B57E5592B1D52AF00675411 /* Build configuration list for PBXNativeTarget "Journey Watch AppTests" */;
+			buildPhases = (
+				1B57E53A2B1D52AF00675411 /* Sources */,
+				1B57E53B2B1D52AF00675411 /* Frameworks */,
+				1B57E53C2B1D52AF00675411 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1B57E5402B1D52AF00675411 /* PBXTargetDependency */,
+			);
+			name = "Journey Watch AppTests";
+			productName = "Journey Watch AppTests";
+			productReference = 1B57E53E2B1D52AF00675411 /* Journey Watch AppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		1B57E5472B1D52AF00675411 /* Journey Watch AppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B57E55C2B1D52AF00675411 /* Build configuration list for PBXNativeTarget "Journey Watch AppUITests" */;
+			buildPhases = (
+				1B57E5442B1D52AF00675411 /* Sources */,
+				1B57E5452B1D52AF00675411 /* Frameworks */,
+				1B57E5462B1D52AF00675411 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1B57E54A2B1D52AF00675411 /* PBXTargetDependency */,
+			);
+			name = "Journey Watch AppUITests";
+			productName = "Journey Watch AppUITests";
+			productReference = 1B57E5482B1D52AF00675411 /* Journey Watch AppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1B57E5202B1D52AE00675411 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1530;
+				TargetAttributes = {
+					1B57E5252B1D52AE00675411 = {
+						CreatedOnToolsVersion = 15.0.1;
+					};
+					1B57E52B2B1D52AE00675411 = {
+						CreatedOnToolsVersion = 15.0.1;
+					};
+					1B57E53D2B1D52AF00675411 = {
+						CreatedOnToolsVersion = 15.0.1;
+						TestTargetID = 1B57E52B2B1D52AE00675411;
+					};
+					1B57E5472B1D52AF00675411 = {
+						CreatedOnToolsVersion = 15.0.1;
+						TestTargetID = 1B57E52B2B1D52AE00675411;
+					};
+				};
+			};
+			buildConfigurationList = 1B57E5232B1D52AE00675411 /* Build configuration list for PBXProject "Journey" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1B57E51F2B1D52AE00675411;
+			productRefGroup = 1B57E5272B1D52AE00675411 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1B57E5252B1D52AE00675411 /* Journey */,
+				1B57E52B2B1D52AE00675411 /* Journey Watch App */,
+				1B57E53D2B1D52AF00675411 /* Journey Watch AppTests */,
+				1B57E5472B1D52AF00675411 /* Journey Watch AppUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1B57E5242B1D52AE00675411 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B57E52A2B1D52AE00675411 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1B57E5392B1D52AF00675411 /* Preview Assets.xcassets in Resources */,
+				1B57E5362B1D52AF00675411 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B57E53C2B1D52AF00675411 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B57E5462B1D52AF00675411 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1B57E5282B1D52AE00675411 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1B9570F02B33E95400E7A454 /* SettingsView.swift in Sources */,
+				1B4F1F132C1CA83E000A2AF0 /* AnimatedGradientText.swift in Sources */,
+				1B5FB03A2C51E86B00F84218 /* CompassScreen.swift in Sources */,
+				1B57E5342B1D52AE00675411 /* ContentView.swift in Sources */,
+				1B0D8BB92C5BEF2100EE9FD3 /* SpeedGoalScreen.swift in Sources */,
+				1B44E59B2C54B04D008D33FA /* WaypointScreen.swift in Sources */,
+				1B57E5322B1D52AE00675411 /* JourneyApp.swift in Sources */,
+				1B3E462E2C5B11CA002E2338 /* ElevationElement.swift in Sources */,
+				1B5285992C5194B5000B8E3D /* RecordingView.swift in Sources */,
+				1B5FB0342C51E70500F84218 /* SignalStrengthElement.swift in Sources */,
+				1B52859D2C5194D5000B8E3D /* OptionsScreen.swift in Sources */,
+				1BBFE6782B80798800CE978E /* NotificationManager.swift in Sources */,
+				1B13D54E2C5C2B6F00D9A571 /* Haptics.swift in Sources */,
+				1B65BB7D2B3401ED00F1026C /* UserSettings.swift in Sources */,
+				1B5FB0362C51E7A700F84218 /* TotalTimeElement.swift in Sources */,
+				1B5FB0382C51E81D00F84218 /* LiveCoreStatistics.swift in Sources */,
+				1B5FB03E2C52AD8700F84218 /* WelcomeScreen.swift in Sources */,
+				1B0D8BBB2C5BF6C700EE9FD3 /* DistanceFormatter.swift in Sources */,
+				1B57E5602B1D548A00675411 /* LocationManager.swift in Sources */,
+				1B5FB0322C51E62600F84218 /* CityNameElement.swift in Sources */,
+				1B52859B2C5194C4000B8E3D /* StartScreen.swift in Sources */,
+				1B84353B2C546EDF002D31C7 /* RecordingIndicator.swift in Sources */,
+				1B351ABB2B23DEB90089390A /* TraveledRecordedView.swift in Sources */,
+				1B44E5992C54AF40008D33FA /* ShimmeringText.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B57E53A2B1D52AF00675411 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1B57E5432B1D52AF00675411 /* Journey_Watch_AppTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B57E5442B1D52AF00675411 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1B57E54D2B1D52AF00675411 /* Journey_Watch_AppUITests.swift in Sources */,
+				1B57E54F2B1D52AF00675411 /* Journey_Watch_AppUITestsLaunchTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1B57E52F2B1D52AE00675411 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1B57E52B2B1D52AE00675411 /* Journey Watch App */;
+			targetProxy = 1B57E52E2B1D52AE00675411 /* PBXContainerItemProxy */;
+		};
+		1B57E5402B1D52AF00675411 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1B57E52B2B1D52AE00675411 /* Journey Watch App */;
+			targetProxy = 1B57E53F2B1D52AF00675411 /* PBXContainerItemProxy */;
+		};
+		1B57E54A2B1D52AF00675411 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1B57E52B2B1D52AE00675411 /* Journey Watch App */;
+			targetProxy = 1B57E5492B1D52AF00675411 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1B57E5502B1D52AF00675411 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		1B57E5512B1D52AF00675411 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		1B57E5532B1D52AF00675411 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Journey Watch App/Preview Content\"";
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Journey-Watch-App-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Journey;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Your location is used to track the distance traveled during your journeys and provide accurate end user statistics. All data is stored and processed locally on your device.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Your location is used to track the distance traveled during your journeys and provide accurate end user statistics. All data is stored and processed locally on your device.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Your location is used to track the distance traveled during your journeys and provide accurate end user statistics. All data is stored and processed locally on your device.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKWatchOnly = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "The-Fireside-Team.Journey.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		1B57E5542B1D52AF00675411 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Journey Watch App/Preview Content\"";
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Journey-Watch-App-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Journey;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Your location is used to track the distance traveled during your journeys and provide accurate end user statistics. All data is stored and processed locally on your device.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Your location is used to track the distance traveled during your journeys and provide accurate end user statistics. All data is stored and processed locally on your device.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Your location is used to track the distance traveled during your journeys and provide accurate end user statistics. All data is stored and processed locally on your device.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKWatchOnly = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "The-Fireside-Team.Journey.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		1B57E5572B1D52AF00675411 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				INFOPLIST_KEY_CFBundleDisplayName = Journey;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "The-Fireside-Team.Journey";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		1B57E5582B1D52AF00675411 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				INFOPLIST_KEY_CFBundleDisplayName = Journey;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "The-Fireside-Team.Journey";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		1B57E55A2B1D52AF00675411 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "The-Fireside-Team.Journey-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Journey Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Journey Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		1B57E55B2B1D52AF00675411 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "The-Fireside-Team.Journey-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Journey Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Journey Watch App";
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		1B57E55D2B1D52AF00675411 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "The-Fireside-Team.Journey-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "Journey Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		1B57E55E2B1D52AF00675411 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "The-Fireside-Team.Journey-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "Journey Watch App";
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1B57E5232B1D52AE00675411 /* Build configuration list for PBXProject "Journey" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B57E5502B1D52AF00675411 /* Debug */,
+				1B57E5512B1D52AF00675411 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1B57E5522B1D52AF00675411 /* Build configuration list for PBXNativeTarget "Journey Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B57E5532B1D52AF00675411 /* Debug */,
+				1B57E5542B1D52AF00675411 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1B57E5562B1D52AF00675411 /* Build configuration list for PBXNativeTarget "Journey" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B57E5572B1D52AF00675411 /* Debug */,
+				1B57E5582B1D52AF00675411 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1B57E5592B1D52AF00675411 /* Build configuration list for PBXNativeTarget "Journey Watch AppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B57E55A2B1D52AF00675411 /* Debug */,
+				1B57E55B2B1D52AF00675411 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1B57E55C2B1D52AF00675411 /* Build configuration list for PBXNativeTarget "Journey Watch AppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B57E55D2B1D52AF00675411 /* Debug */,
+				1B57E55E2B1D52AF00675411 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1B57E5202B1D52AE00675411 /* Project object */;
+}
