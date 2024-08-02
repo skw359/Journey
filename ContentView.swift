@@ -138,6 +138,7 @@ struct RecordingTabs: View {
                 .tabItem { Text("Stop Recording") }
                 .tag(3)
         }
+        .animation(.easeInOut(duration: 0.3), value: selectedTab)
         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .edgesIgnoringSafeArea(.all)

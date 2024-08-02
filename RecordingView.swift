@@ -36,7 +36,7 @@ struct RecordingView: View {
                 // TotalTimeElement (bottom right)
                 TotalTimeElement(locationManager: locationManager)
                     .frame(width: geometry.size.width * 0.4)
-                    .position(x: geometry.size.width * 0.80, y: geometry.size.height * 0.8)
+                    .position(x: geometry.size.width * 0.75, y: geometry.size.height * 0.8)
                 pauseOverlay(size: geometry.size)
                     .opacity(locationManager.paused ? 1 : 0)
                     .animation(.easeInOut(duration: 0.35), value: locationManager.paused)

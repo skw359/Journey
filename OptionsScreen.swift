@@ -23,11 +23,11 @@ struct OptionsScreen: View {
                         HStack(spacing: geometry.size.width * 0.05) {
                             waterLockButton(size: geometry.size)
                                 .disabled(locationManager.paused)
-                                .opacity(locationManager.paused ? 0.5 : 1)
+                                .opacity(locationManager.paused ? 0.2 : 1)
                                 .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
                             waypointButton(size: geometry.size)
                                 .disabled(locationManager.paused)
-                                .opacity(locationManager.paused ? 0.5 : 1)
+                                .opacity(locationManager.paused ? 0.2 : 1)
                                 .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
                         }
                         HStack(spacing: geometry.size.width * 0.05) {
@@ -44,7 +44,9 @@ struct OptionsScreen: View {
             isLocked.toggle()
             if isLocked {
                 WKInterfaceDevice.current().enableWaterLock()
-                selectedTab = stopRecordingViewTab
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    selectedTab = 1
+                }
             }
         }) {
             VStack(spacing: 2) {
@@ -79,7 +81,11 @@ struct OptionsScreen: View {
                 isCreatingWaypoint = false
                 showWaypointScreen = false
                 Haptics.vibrate(.success)
-                selectedTab = waypointTab
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        selectedTab = waypointTab
+                    }
+                }
             }
         }) {
             VStack(spacing: 2) {
