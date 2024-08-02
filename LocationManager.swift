@@ -189,7 +189,6 @@ class LocationManager: NSObject, ObservableObject {
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
                 guard let self = self, !self.paused else { return }
                 self.totalTimeTimer += 1
-                print("Elapsed Time: \(self.totalTimeTimer)")
             }
         }
     
@@ -232,9 +231,9 @@ class LocationManager: NSObject, ObservableObject {
         let highAltitude = 3657.0
         
         if elevation > moderateAltitude && elevation <= highAltitude {
-            sendNotification(title: "Altitude Alert", message: "You are at a high altitude. Oxygen levels may be lower than usual.")
+            sendNotification(title: "Altitude Alert", message: "You're at a high altitude. Oxygen levels may be lower than usual.")
         } else if elevation > highAltitude {
-            sendNotification(title: "Altitude Alert", message: "You are at a very high altitude. Please be cautious of lower oxygen levels and potential altitude sickness.")
+            sendNotification(title: "Altitude Alert", message: "You're at a very high altitude. Please be cautious of lower oxygen levels and potential altitude sickness.")
         }
     }
     
@@ -312,33 +311,37 @@ extension LocationManager: CLLocationManagerDelegate {
     }
     
     private func updateMetrics(with location: CLLocation) {
-        guard !paused else { return }
-        if recording, let lastLocation = self.lastLocation {
-            let newSpeed = location.speed * 2.23694 // Convert to mph
-            speed = max(0, newSpeed)
+        guard !paused, recording else { return }
+        
+        if let lastLocation = self.lastLocation {
+            let timeInterval = location.timestamp.timeIntervalSince(lastLocation.timestamp)
             
-            if speed > 0.5 {
-                let newDistance = location.distance(from: lastLocation)
-                distance += newDistance * 0.00062137 // Convert to miles
-            }
+            // Update speed
+            speed = max(0, location.speed * 2.23694)
             
+            // Update distance more accurately
+            let newDistance = location.distance(from: lastLocation)
+            distance += newDistance * 0.00062137
+            
+            // Update top speed
             topSpeed = max(topSpeed, speed)
             
-            totalSpeedReadings += speed
-            numberOfSpeedReadings += 1
-            averageSpeed = totalSpeedReadings / Double(numberOfSpeedReadings)
+            // Update average speed using total distance and time
+            totalTime += timeInterval
+            averageSpeed = (distance / totalTime) * 3600
             
-            if elevationReadings.isEmpty {
-                recordElevationReading(elevation: location.altitude)
-            } else {
-                let elevationChangeThreshold = 1.0
-                if abs(location.altitude - lastLocation.altitude) > elevationChangeThreshold {
-                    recordElevationReading(elevation: location.altitude)
-                }
-            }
-            
+            // Update elevation more granularly
+            let elevationChange = location.altitude - lastLocation.altitude
             currentElevation = location.altitude
+            recordElevationReading(elevation: currentElevation)
+            
+            // Record acceleration
+            let speedChange = location.speed - lastLocation.speed
+            let acceleration = speedChange / timeInterval
+            accelerationReadings.append(acceleration)
         }
+        
+        self.lastLocation = location
     }
     
     private func handleWaypointCalculation(location: CLLocation) {

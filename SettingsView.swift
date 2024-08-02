@@ -22,4 +22,3 @@ struct SettingsView: View {
         }
     }
 }
-
