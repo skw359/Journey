@@ -7,9 +7,23 @@ struct CompassScreen: View {
     @State private var arrowColor: Color = .red
     @State private var showRecalibratingMessage = false
     @State private var showCalibrationInstructions = false
+    @State private var motionManager = CMMotionManager()
+    @State private var performingFigure8 = false
+    @State private var calibrationMessage: String
+    @State private var gracePeriod: TimeInterval = 3.5 // grace period
     let compassSize: CGFloat = 125
     let dialRadius: CGFloat = 62.5
     @State private var overlayOpacity: Double = 0
+    @State private var lastRotationDirection: RotationDirection = .none
+    @State private var directionChangeCount = 0
+    @State private var lastSignificantMotionTime: Date? = nil
+    
+    private let calibrationInstructions = "Move your device in a figure-8 pattern to calibrate the compass."
+    
+    init(viewModel: LocationManager) {
+        self.viewModel = viewModel
+        _calibrationMessage = State(initialValue: calibrationInstructions)
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -46,14 +60,14 @@ struct CompassScreen: View {
                 .rotationEffect(.degrees(-viewModel.heading))
                 
                 Circle()
-                        .fill(Color.green)
-                        .frame(width: 10, height: 10)
-                        .gesture(
-                            LongPressGesture(minimumDuration: 1.0)
-                                .onEnded { _ in
-                                    self.recalibrateCompass()
-                                }
-                        )
+                    .fill(Color.green)
+                    .frame(width: 10, height: 10)
+                    .gesture(
+                        LongPressGesture(minimumDuration: 1.0)
+                            .onEnded { _ in
+                                self.recalibrateCompass()
+                            }
+                    )
                 
                 Text(headingText())
                     .foregroundColor(.white)
@@ -69,7 +83,6 @@ struct CompassScreen: View {
             )
             .frame(width: geometry.size.width, height: geometry.size.height)
             
-            
             // Calibration instructions overlay
             if showCalibrationInstructions || showRecalibratingMessage {
                 ZStack {
@@ -83,10 +96,10 @@ struct CompassScreen: View {
                             VStack {
                                 Text("Calibrate Compass")
                                     .font(.headline)
-                                Text("Move your device in a figure-8 pattern to calibrate the compass.")
+                                Text(calibrationMessage)
                                     .multilineTextAlignment(.center)
-                                Image(systemName: "figure.8")
-                                    .font(.largeTitle)
+                                    .foregroundColor(performingFigure8 ? .green : .white)
+                                    .animation(.easeInOut, value: performingFigure8)
                             }
                             .padding()
                             .foregroundColor(.white)
@@ -104,11 +117,18 @@ struct CompassScreen: View {
                         Spacer().frame(height: 30)
                             .transition(.opacity)
                     }
-                    
                 }
                 .opacity(overlayOpacity)
                 .animation(.easeInOut(duration: 0.5), value: overlayOpacity)
                 .frame(width: geometry.size.width, height: geometry.size.height)
+            }
+        }
+        .onChange(of: showCalibrationInstructions) { oldValue, newValue in
+            if newValue {
+                figure8()
+            } else {
+                motionManager.stopDeviceMotionUpdates()
+                performingFigure8 = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowCalibrationInstructions"))) { _ in
@@ -116,6 +136,9 @@ struct CompassScreen: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("CalibrationComplete"))) { _ in
             self.showCalibrationInstructions = false
+            self.calibrationMessage = calibrationInstructions
+            self.performingFigure8 = false
+            motionManager.stopDeviceMotionUpdates()
         }
         .onChange(of: viewModel.isRecalibrating) { oldValue, newValue in
             if newValue {
@@ -135,19 +158,78 @@ struct CompassScreen: View {
         .edgesIgnoringSafeArea(.all)
     }
     
+    private enum RotationDirection {
+        case clockwise, counterClockwise, none
+    }
+    
+    private func figure8() {
+        motionManager.deviceMotionUpdateInterval = 0.1
+        motionManager.startDeviceMotionUpdates(to: .main) { (motion, error) in
+            guard let motion = motion else { return }
+            
+            let rotationRate = motion.rotationRate
+            let acceleration = motion.userAcceleration
+            
+            // more lenient thresholds for significant motion
+            let isSignificantMotion = (abs(rotationRate.x) > 1.0 || abs(rotationRate.y) > 1.0 || abs(rotationRate.z) > 1.0) &&
+            (abs(acceleration.x) > 0.2 || abs(acceleration.y) > 0.2 || abs(acceleration.z) > 0.2)
+            
+            let currentTime = Date()
+            
+            if isSignificantMotion {
+                self.lastSignificantMotionTime = currentTime
+                
+                // determine rotation direction based on the dominant rotation axis
+                let dominantRotation = max(abs(rotationRate.x), abs(rotationRate.y), abs(rotationRate.z))
+                let currentDirection: RotationDirection
+                if dominantRotation == abs(rotationRate.z) {
+                    currentDirection = rotationRate.z > 0 ? .clockwise : .counterClockwise
+                } else if dominantRotation == abs(rotationRate.x) {
+                    currentDirection = rotationRate.x > 0 ? .clockwise : .counterClockwise
+                } else {
+                    currentDirection = rotationRate.y > 0 ? .clockwise : .counterClockwise
+                }
+                
+                // detect direction changes
+                if currentDirection != self.lastRotationDirection && self.lastRotationDirection != .none {
+                    self.directionChangeCount += 1
+                }
+                
+                self.lastRotationDirection = currentDirection
+                
+                // check if we've detected enough direction changes for a figure-8
+                if self.directionChangeCount >= 3 {
+                    self.performingFigure8 = true
+                    withAnimation {
+                        self.calibrationMessage = "That's correct, keep going..."
+                    }
+                }
+            } else if let lastMotionTime = self.lastSignificantMotionTime {
+                // ccheck if we're still within the grace period
+                if currentTime.timeIntervalSince(lastMotionTime) > self.gracePeriod {
+                    self.resetFigure8Detection()
+                }
+            }
+        }
+    }
+    
+    private func resetFigure8Detection() {
+        performingFigure8 = false
+        lastRotationDirection = .none
+        directionChangeCount = 0
+        lastSignificantMotionTime = nil
+        withAnimation {
+            calibrationMessage = calibrationInstructions
+        }
+    }
+    
     private func recalibrateCompass() {
         Haptics.vibrate(.click)
         withAnimation(.easeInOut(duration: 0.5)) {
             overlayOpacity = 1
         }
+        resetFigure8Detection()
         viewModel.recalibrateCompass()
-    }
-    
-    private func endRecalibration() {
-        Haptics.vibrate(.success)
-        withAnimation(.easeInOut(duration: 0.5)) {
-            overlayOpacity = 0
-        }
     }
     
     private func changeArrowColor() {
@@ -175,11 +257,13 @@ struct CompassScreen: View {
         let direction = self.directionFromBearing(heading)
         return String(format: "%.0f° %@", heading, direction)
     }
+    
     private func directionFromBearing(_ bearing: Double) -> String {
         let directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
         let index = Int((bearing / 45).rounded()) % 8
         return directions[index]
     }
+    
     private func lineAngle(for index: Int) -> Double {
         switch index {
         case 6: return 270.0  // West
@@ -206,7 +290,6 @@ struct CompassScreen: View {
             return Color.gray
         }
     }
-    
 }
 
 struct Triangle: Shape {
