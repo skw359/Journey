@@ -81,7 +81,7 @@ struct OptionsScreen: View {
                 isCreatingWaypoint = false
                 showWaypointScreen = false
                 Haptics.vibrate(.success)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         selectedTab = waypointTab
                     }

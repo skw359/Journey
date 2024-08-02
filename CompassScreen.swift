@@ -1,5 +1,6 @@
 import SwiftUI
 import WatchKit
+import CoreMotion
 
 struct CompassScreen: View {
     @ObservedObject var viewModel: LocationManager
