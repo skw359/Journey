@@ -23,8 +23,7 @@ struct WaypointScreen: View {
     }
     
     var distanceText: String {
-        DistanceFormatter.shared.formatDistance(distanceInFeet,
-                                                isMetric: userSettings.isMetric)
+        DistanceFormatter.shared.formatDistance(distanceInFeet, isMetric: userSettings.isMetric)
     }
     
     var body: some View {

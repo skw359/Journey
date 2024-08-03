@@ -11,34 +11,41 @@ struct OptionsScreen: View {
     var prepareTravelData: () -> TravelData
     var elapsedTime: Int
     
+    @State private var displayProcessingSheet = false
+    
     let waypointTab = -2
     let stopRecordingViewTab = 3
-
+    
     var body: some View {
-            GeometryReader { geometry in
-                ZStack {
-                    Color.black.edgesIgnoringSafeArea(.all)
-
-                    VStack(spacing: geometry.size.height * 0.05) {
-                        HStack(spacing: geometry.size.width * 0.05) {
-                            waterLockButton(size: geometry.size)
-                                .disabled(locationManager.paused)
-                                .opacity(locationManager.paused ? 0.2 : 1)
-                                .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
-                            waypointButton(size: geometry.size)
-                                .disabled(locationManager.paused)
-                                .opacity(locationManager.paused ? 0.2 : 1)
-                                .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
-                        }
-                        HStack(spacing: geometry.size.width * 0.05) {
-                            endButton(size: geometry.size)
-                            pauseButton(size: geometry.size)
-                        }
+        GeometryReader { geometry in
+            ZStack {
+                Color.black.edgesIgnoringSafeArea(.all)
+                
+                VStack(spacing: geometry.size.height * 0.05) {
+                    HStack(spacing: geometry.size.width * 0.05) {
+                        waterLockButton(size: geometry.size)
+                            .disabled(locationManager.paused)
+                            .opacity(locationManager.paused ? 0.2 : 1)
+                            .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
+                        waypointButton(size: geometry.size)
+                            .disabled(locationManager.paused)
+                            .opacity(locationManager.paused ? 0.2 : 1)
+                            .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
+                    }
+                    HStack(spacing: geometry.size.width * 0.05) {
+                        endButton(size: geometry.size)
+                        pauseButton(size: geometry.size)
                     }
                 }
+                
             }
         }
-
+        .sheet(isPresented: $displayProcessingSheet) {
+            ProcessingSheet()
+                .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+    
     private func waterLockButton(size: CGSize) -> some View {
         Button(action: {
             isLocked.toggle()
@@ -66,7 +73,7 @@ struct OptionsScreen: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-
+    
     private func waypointButton(size: CGSize) -> some View {
         Button(action: {
             locationManager.startWaypointCalculation()
@@ -104,13 +111,23 @@ struct OptionsScreen: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-
+    
     private func endButton(size: CGSize) -> some View {
         Button(action: {
-            withAnimation {
-                navigationPath.append(NavigationItem.travelRecorded(prepareTravelData()))
-                locationManager.stopRecording()
-                Haptics.vibrate(.stop)
+            displayProcessingSheet = true
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let travelData = prepareTravelData()
+                    DispatchQueue.main.async {
+                        withAnimation {
+                            navigationPath.append(NavigationItem.travelRecorded(travelData))
+                            locationManager.stopRecording()
+                            displayProcessingSheet = false
+                            Haptics.vibrate(.stop)
+                        }
+                    }
+                }
             }
         }) {
             VStack(spacing: 2) {
@@ -128,7 +145,7 @@ struct OptionsScreen: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-
+    
     private func pauseButton(size: CGSize) -> some View {
         Button(action: {
             withAnimation(.easeInOut(duration: 0.35)) {

@@ -5,36 +5,40 @@ class DistanceFormatter {
     
     private init() {}
     
-    func formatDistance(_ distanceInFeet: Double, isMetric: Bool, usePreciseUnits: Bool? = nil) -> String {
-        let value: Double
-        let unit: String
-        
+    func formatDistance(_ distanceInFeet: Double, isMetric: Bool) -> String {
         if isMetric {
-            let meters = distanceInFeet * 0.3048
-            if meters < 1000 {
-                value = meters
-                unit = "meters"
-            } else {
-                value = meters / 1000
-                unit = "km"
-            }
+            return formatMetricDistance(distanceInFeet)
         } else {
-            if distanceInFeet < 5280 {
-                value = distanceInFeet
-                unit = "feet"
+            return formatImperialDistance(distanceInFeet)
+        }
+    }
+    
+    private func formatMetricDistance(_ distanceInFeet: Double) -> String {
+        let meters = distanceInFeet * 0.3048
+        if meters < 1000 {
+            return "\(Int(round(meters))) m"
+        } else {
+            let kilometers = meters / 1000
+            if kilometers < 10 {
+                return String(format: "%.1f km", kilometers)
             } else {
-                value = distanceInFeet / 5280
-                unit = "miles"
+                return "\(Int(round(kilometers))) km"
             }
         }
-        
-        let format: String
-        if let usePreciseUnits = usePreciseUnits, usePreciseUnits {
-            format = "%.2f"
+    }
+    
+    private func formatImperialDistance(_ distanceInFeet: Double) -> String {
+        if distanceInFeet < 528 {
+            return "\(Int(round(distanceInFeet))) ft"
         } else {
-            format = value < 100 ? "%.0f" : "%.1f"
+            let miles = distanceInFeet / 5280
+            if miles < 1 {
+                return String(format: "%.1f mi", miles)
+            } else if miles < 10 {
+                return String(format: "%.1f mi", miles)
+            } else {
+                return "\(Int(round(miles))) mi"
+            }
         }
-        
-        return String(format: "\(format) \(unit)", value)
     }
 }

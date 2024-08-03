@@ -45,8 +45,8 @@ class LocationManager: NSObject, ObservableObject {
     private let calibrationDuration: TimeInterval = 20
     
     @Published var paused: Bool = false
-        private var pauseStartTime: Date?
-        private var totalPausedTime: TimeInterval = 0
+    private var pauseStartTime: Date?
+    private var totalPausedTime: TimeInterval = 0
     
     
     // MARK: - Initialization
@@ -168,29 +168,29 @@ class LocationManager: NSObject, ObservableObject {
     }
     
     func togglePause() {
-            paused.toggle()
-            if paused {
-                pauseStartTime = Date()
-                stopTimer()
-                locationManager.stopUpdatingLocation()
-                locationManager.stopUpdatingHeading()
-            } else {
-                if let pauseStart = pauseStartTime {
-                    totalPausedTime += Date().timeIntervalSince(pauseStart)
-                }
-                pauseStartTime = nil
-                setupTimer()
-                locationManager.startUpdatingLocation()
-                locationManager.startUpdatingHeading()
+        paused.toggle()
+        if paused {
+            pauseStartTime = Date()
+            stopTimer()
+            locationManager.stopUpdatingLocation()
+            locationManager.stopUpdatingHeading()
+        } else {
+            if let pauseStart = pauseStartTime {
+                totalPausedTime += Date().timeIntervalSince(pauseStart)
             }
+            pauseStartTime = nil
+            setupTimer()
+            locationManager.startUpdatingLocation()
+            locationManager.startUpdatingHeading()
         }
-        
-        private func setupTimer() {
-            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                guard let self = self, !self.paused else { return }
-                self.totalTimeTimer += 1
-            }
+    }
+    
+    private func setupTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self = self, !self.paused else { return }
+            self.totalTimeTimer += 1
         }
+    }
     
     private func stopTimer() {
         timer?.invalidate()
@@ -315,31 +315,26 @@ extension LocationManager: CLLocationManagerDelegate {
         
         if let lastLocation = self.lastLocation {
             let timeInterval = location.timestamp.timeIntervalSince(lastLocation.timestamp)
-            
             speed = max(0, location.speed * 2.23694)
-
+            
             if speed > 0.9 {
-                // Update distance more accurately
                 let newDistance = location.distance(from: lastLocation)
                 distance += newDistance * 0.00062137
-                
                 topSpeed = max(topSpeed, speed)
-
                 totalTime += timeInterval
                 averageSpeed = (distance / totalTime) * 3600
-                
-                // Update elevation more granularly
-                currentElevation = location.altitude
-                recordElevationReading(elevation: currentElevation)
-                
-                // Record acceleration
-                let speedChange = location.speed - lastLocation.speed
-                let acceleration = speedChange / timeInterval
-                accelerationReadings.append(acceleration)
             }
+            
+            currentElevation = location.altitude
+            recordElevationReading(elevation: currentElevation)
+            
+            let speedChange = location.speed - lastLocation.speed
+            let acceleration = speedChange / timeInterval
+            accelerationReadings.append(acceleration)
         }
         
         self.lastLocation = location
+
     }
     
     private func handleWaypointCalculation(location: CLLocation) {
@@ -349,7 +344,6 @@ extension LocationManager: CLLocationManagerDelegate {
             let averageLat = waypointLocations.map { $0.coordinate.latitude }.reduce(0, +) / Double(waypointLocations.count)
             let averageLon = waypointLocations.map { $0.coordinate.longitude }.reduce(0, +) / Double(waypointLocations.count)
             averagedWaypointLocation = CLLocation(latitude: averageLat, longitude: averageLon)
-            
             waypointCompletion?(averagedWaypointLocation)
             waypointLocations.removeAll()
             isCalculatingWaypoint = false
