@@ -325,16 +325,20 @@ extension LocationManager: CLLocationManagerDelegate {
                 averageSpeed = (distance / totalTime) * 3600
             }
             
-            currentElevation = location.altitude
-            recordElevationReading(elevation: currentElevation)
+            let newElevation = location.altitude
+            let elevationChange = abs(newElevation - currentElevation)
             
-            let speedChange = location.speed - lastLocation.speed
-            let acceleration = speedChange / timeInterval
-            accelerationReadings.append(acceleration)
+            if elevationChange >= 0.3048 {
+                currentElevation = newElevation
+                recordElevationReading(elevation: currentElevation)
+                
+                let speedChange = location.speed - lastLocation.speed
+                let acceleration = speedChange / timeInterval
+                accelerationReadings.append(acceleration)
+            }
         }
         
         self.lastLocation = location
-
     }
     
     private func handleWaypointCalculation(location: CLLocation) {

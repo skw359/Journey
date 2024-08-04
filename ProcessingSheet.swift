@@ -7,7 +7,7 @@ struct ProcessingSheet: View {
             
             HStack(spacing: 10) {
 
-                ShimmeringText(text: "Synthesizing", baseColor: Color(hex: "#545454"))
+                ShimmeringText(text: "Processing", baseColor: Color(hex: "#545454"))
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(Color(hex:"#222223"))
             }
