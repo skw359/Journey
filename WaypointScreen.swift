@@ -104,6 +104,35 @@ struct WaypointScreen: View {
                                     }
                                     .buttonStyle(PlainButtonStyle())
                                     
+                                    Button(action: {
+                                        createWaypoint()
+                                    }) {
+                                        HStack(alignment: .center, spacing: 10) {
+                                            if isCreatingWaypoint {
+                                                Shine2(
+                                                    iconName: "mappin.and.ellipse",
+                                                    text: "Creating",
+                                                    baseColor: Color(hex: "#545454")
+                                                )
+                                            } else {
+                                                Image(systemName: "mappin.and.ellipse")
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fit)
+                                                    .frame(width: 20, height: 20)
+                                                    .foregroundColor(.white)
+                                                
+                                                Text("Create Waypoint")
+                                                    .foregroundColor(.white)
+                                            }
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(Color(hex: "#222223"))
+                                        .cornerRadius(15)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    .disabled(isCreatingWaypoint)
+                                    
                                     Spacer()
                                 }
                                 .sheet(isPresented: $showWaytracerInfo) {
@@ -127,7 +156,7 @@ struct WaypointScreen: View {
                                                         .foregroundColor(.white)
                                                     
                                                     if isWaypointButtonDisabled {
-                                                        ShimmeringText(text: "Creating...", baseColor: .white)
+                                                        ShimmeringText(text: "Creating", baseColor: .white)
                                                     } else {
                                                         Text("Create Waypoint")
                                                             .foregroundColor(.white)

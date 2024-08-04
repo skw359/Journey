@@ -343,10 +343,24 @@ extension LocationManager: CLLocationManagerDelegate {
     
     private func handleWaypointCalculation(location: CLLocation) {
         if waypointLocations.count < 3 {
-            waypointLocations.append(location)
+            if location.horizontalAccuracy <= 5.0 {
+                waypointLocations.append(location)
+            }
         } else {
-            let averageLat = waypointLocations.map { $0.coordinate.latitude }.reduce(0, +) / Double(waypointLocations.count)
-            let averageLon = waypointLocations.map { $0.coordinate.longitude }.reduce(0, +) / Double(waypointLocations.count)
+            var totalWeight: Double = 0
+            var weightedSumLat: Double = 0
+            var weightedSumLon: Double = 0
+            
+            for waypoint in waypointLocations {
+                let weight = 1.0 / max(waypoint.horizontalAccuracy, 1.0)
+                totalWeight += weight
+                weightedSumLat += waypoint.coordinate.latitude * weight
+                weightedSumLon += waypoint.coordinate.longitude * weight
+            }
+            
+            let averageLat = weightedSumLat / totalWeight
+            let averageLon = weightedSumLon / totalWeight
+            
             averagedWaypointLocation = CLLocation(latitude: averageLat, longitude: averageLon)
             waypointCompletion?(averagedWaypointLocation)
             waypointLocations.removeAll()

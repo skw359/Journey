@@ -1,92 +1,6 @@
 import SwiftUI
 import WatchKit
 
-class SpeedTargetManager: ObservableObject {
-    @Published var targetSpeed: Int = 60
-    
-    @Published var isSettingSpeed = false
-    @Published var hitTargetSpeed = false
-    @Published var waitingForGPS = false
-    @Published var setSpeed = false
-    @Published var targetReachedTime: Date?
-    
-    @Published var elapsedTime: TimeInterval = 0
-    var startTime: Date?
-    private var timer: Timer?
-    
-    func setTargetSpeed(locationManager: LocationManager, completion: @escaping () -> Void) {
-        waitingForGPS = true
-        isSettingSpeed = true
-        hitTargetSpeed = false
-        
-        // Check for strong GPS signal
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            if let location = locationManager.latestLocation, location.horizontalAccuracy <= 5 {
-                timer.invalidate()
-                self?.waitingForGPS = false
-                self?.isSettingSpeed = false
-                self?.setSpeed = true
-                completion()
-            }
-        }
-    }
-    
-    func updateStatus(currentSpeed: Double) {
-        if hitTargetSpeed {
-            return  // Exit early if target speed has already been hit
-        }
-        
-        if currentSpeed >= Double(targetSpeed) {
-            hitTargetSpeed = true
-            targetReachedTime = Date()
-            stopTiming()
-            WKInterfaceDevice.current().play(.success)
-        }
-    }
-    
-    func startTiming() {
-        // Only start if not already timing
-        if startTime == nil {
-            startTime = Date()
-            timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { [weak self] _ in
-                guard let self = self, let startTime = self.startTime else { return }
-                self.elapsedTime = Date().timeIntervalSince(startTime)
-            }
-        }
-    }
-    
-    func stopTiming() {
-        timer?.invalidate()
-        timer = nil
-    }
-    
-    func reset() {
-        hitTargetSpeed = false
-        elapsedTime = 0
-        setSpeed = false
-        startTime = nil
-        stopTiming()
-    }
-    
-    func formatTime(_ timeInterval: TimeInterval) -> String {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.minute, .second]
-        formatter.unitsStyle = .positional
-        formatter.zeroFormattingBehavior = .pad
-        
-        let hours = Int(timeInterval) / 3600
-        let remainingTime = timeInterval.truncatingRemainder(dividingBy: 3600)
-        let baseString = formatter.string(from: remainingTime) ?? "00:00"
-        let milliseconds = Int((timeInterval.truncatingRemainder(dividingBy: 1)) * 100)
-        
-        if hours > 0 {
-            return String(format: "%02d:%@.%02d", hours, baseString, milliseconds)
-        } else {
-            return String(format: "%@.%02d", baseString, milliseconds)
-        }
-    }
-}
-
 struct SpeedometerView: View {
     let currentSpeed: Double
     let targetSpeed: Int
@@ -189,51 +103,68 @@ struct SpeedGoalScreen: View {
             
             VStack {
                 if !speedTargetManager.setSpeed {
-                    Spacer()
-                    
-                    Button(action: { showTargetSpeedInfo.toggle() }) {
-                        HStack(alignment: .center, spacing: 10) {
-                            Image(systemName: "questionmark.circle")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 20, height: 20)
-                                .foregroundColor(.white)
+                    GeometryReader { geometry in
+                        VStack {
+                            Spacer()
                             
-                            Text("What's this?")
-                                .foregroundColor(.white)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(hex: "#222223"))
-                        .cornerRadius(15)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    Button(action: { showSetTargetSpeed.toggle() }) {
-                        HStack(alignment: .center, spacing: 10) {
-                            Image(systemName: "speedometer")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 20, height: 20)
-                                .foregroundColor(Color(hex: "#00ff81"))
-                            
-                            if speedTargetManager.waitingForGPS {
-                                ShimmeringText(text: "Setting Speed...", baseColor: .white)
-                            } else {
-                                Text("Set Speed")
+                            HStack {
+                                Image(systemName: "gauge.high")
+                                    .foregroundColor(variableColor)
+                                    .font(.title3)
+                                Text("Speedgoal")
                                     .foregroundColor(.white)
+                                    .font(.title3)
+                                    .bold()
                             }
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .offset(y: geometry.size.height / 396 * 20 - 15)
+                            
+                            Button(action: { showTargetSpeedInfo.toggle() }) {
+                                HStack(alignment: .center, spacing: 10) {
+                                    Image(systemName: "questionmark.circle")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 20, height: 20)
+                                        .foregroundColor(.white)
+                                    
+                                    Text("What's this?")
+                                        .foregroundColor(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color(hex: "#222223"))
+                                .cornerRadius(15)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Button(action: { showSetTargetSpeed.toggle() }) {
+                                HStack(alignment: .center, spacing: 10) {
+                                    Image(systemName: "speedometer")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 20, height: 20)
+                                        .foregroundColor(variableColor)
+                                    
+                                    if speedTargetManager.waitingForGPS {
+                                        ShimmeringText(text: "Setting Speed...", baseColor: .white)
+                                    } else {
+                                        Text("Set Speed")
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(speedTargetManager.waitingForGPS ? Color(hex: "#222223") : Color(hex: "#0c3617"))
+                                .cornerRadius(15)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .disabled(speedTargetManager.waitingForGPS)
+                            
+                            Spacer()
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(speedTargetManager.waitingForGPS ? Color(hex: "#222223") : Color(hex: "#0c3617"))
-                        .cornerRadius(15)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .disabled(speedTargetManager.waitingForGPS)
-                    
-                    Spacer()
                 } else {
+                    // Existing code for when speed is set
                     SpeedometerView(currentSpeed: locationManager.speed,
                                     targetSpeed: speedTargetManager.targetSpeed,
                                     arcColor: .white,
@@ -250,19 +181,23 @@ struct SpeedGoalScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .overlay(
-            VStack {
-                HStack {
-                    Image(systemName: "gauge.high")
-                        .foregroundColor(variableColor)
-                        .font(.title3)
-                    Text("Speedgoal")
-                        .foregroundColor(.white)
-                        .font(.title3)
-                        .bold()
+            Group {
+                if speedTargetManager.setSpeed {
+                    VStack {
+                        HStack {
+                            Image(systemName: "gauge.high")
+                                .foregroundColor(variableColor)
+                                .font(.title3)
+                            Text("Speedgoal")
+                                .foregroundColor(.white)
+                                .font(.title3)
+                                .bold()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 55)
+                        Spacer()
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, speedTargetManager.setSpeed ? 55 : 0)
-                Spacer()
             }
         )
         .overlay(
@@ -343,90 +278,3 @@ struct SpeedGoalScreen: View {
     }
 }
 
-struct SpeedGoalInfoSheet: View {
-    var onSetSpeed: () -> Void
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("What's this?")
-                .font(.headline)
-                .bold()
-            
-            Text("Target Speed allows you to set a desired speed and then automatically starts timing your acceleration.")
-            Text("For example, if you want to measure how long it takes to go from 0 to 60 mph, you would set 60 mph as the target. Once movement is detected, the timer automatically starts and continues until you reach 60 mph. This can be useful for users who want to quantify acceleration times, athletes tracking sprint starts, or evaluating efficiency of different propulsion systems.")
-            
-            Spacer()
-            
-            Button(action: onSetSpeed) {
-                HStack(alignment: .center, spacing: 10) {
-                    Image(systemName: "speedometer")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
-                        .foregroundColor(Color(hex: "#00ff81"))
-                    
-                    Text("Set Speed")
-                        .foregroundColor(.white)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color(hex: "#0c3617"))
-                .cornerRadius(15)
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
-        .padding()
-    }
-}
-
-struct SetTargetSpeedSheet: View {
-    @Binding var targetSpeed: Int
-    @Binding var waitingForGPS: Bool
-    var onSetSpeed: () -> Void
-    
-    var body: some View {
-        VStack {
-            Text("Target Speed")
-                .font(.title2)
-                .padding()
-                .bold()
-            
-            Text("Tap and scroll to set your desired target speed.")
-                .foregroundColor(.gray)
-                .padding(.bottom)
-            
-            Picker("Target Speed", selection: $targetSpeed) {
-                ForEach(3...1150, id: \.self) { speed in
-                    Text("\(speed) mph")
-                }
-            }
-            .pickerStyle(WheelPickerStyle())
-            .frame(height: 55)
-            
-            Button(action: onSetSpeed) {
-                HStack {
-                    Image(systemName: "checkmark.circle")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
-                        .foregroundColor(.white)
-                    
-                    if waitingForGPS {
-                        ShimmeringText(text: "Setting Speed...", baseColor: .white)
-                    } else {
-                        Text("Set Speed")
-                            .foregroundColor(.white)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(waitingForGPS ? Color(hex: "#222223") : Color(hex: "#222223"))
-                .cornerRadius(15)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal)
-            .disabled(waitingForGPS)
-        }
-        .padding(.bottom, 20)
-    }
-}

@@ -6,12 +6,13 @@ struct ProcessingSheet: View {
             Color.black.edgesIgnoringSafeArea(.all)
             
             HStack(spacing: 10) {
-
-                ShimmeringText(text: "Processing", baseColor: Color(hex: "#545454"))
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(Color(hex:"#222223"))
+                Image(systemName: "cpu.fill")
+                    .foregroundColor(.white)
+                
+                Text("Processing")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
             }
-            .foregroundColor(.white)
         }
         .interactiveDismissDisabled()
     }

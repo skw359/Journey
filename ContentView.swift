@@ -152,22 +152,17 @@ struct WaypointCreationView: View {
     var body: some View {
         VStack {
             Spacer()
-            HStack {
-                Image(systemName: "mappin.and.ellipse")
-                    .foregroundColor(.white)
-                    .font(.headline)
-                Text("Creating waypoint")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(Color(hex: "#FFFFFF"))
-            }
+            Shine(
+                iconName: "mappin.and.ellipse",
+                text: "Creating waypoint",
+                baseColor: Color(hex: "#545454")
+            )
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black.edgesIgnoringSafeArea(.all))
     }
 }
-
 
 extension Color {
     init(hex: String) {
