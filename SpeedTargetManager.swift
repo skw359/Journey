@@ -18,6 +18,10 @@ class SpeedTargetManager: ObservableObject {
         isSettingSpeed = true
         hitTargetSpeed = false
         
+        elapsedTime = 0
+        startTime = nil
+        stopTiming()
+        
         // Check for strong GPS signal
         Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
             if let location = locationManager.latestLocation, location.horizontalAccuracy <= 5 {
@@ -44,8 +48,7 @@ class SpeedTargetManager: ObservableObject {
     }
     
     func startTiming() {
-        // Only start if not already timing
-        if startTime == nil {
+        if startTime == nil && setSpeed {
             startTime = Date()
             timer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { [weak self] _ in
                 guard let self = self, let startTime = self.startTime else { return }

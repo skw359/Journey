@@ -260,8 +260,7 @@ struct SpeedGoalScreen: View {
             let nonNegativeSpeed = max(0, speed)
             speedTargetManager.updateStatus(currentSpeed: nonNegativeSpeed)
             
-            // Start timing if speed is 2+ mph and timer hasn't started yet
-            if nonNegativeSpeed >= 2 {
+            if nonNegativeSpeed >= 2 && speedTargetManager.setSpeed {
                 speedTargetManager.startTiming()
             }
         }
