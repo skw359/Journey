@@ -77,7 +77,14 @@ struct Needle: Shape {
             y: center.y - CGFloat(sin(angle)) * radius
         )
         
-        path.move(to: center)
+        // Calculate the midpoint of the needle
+        let midpoint = CGPoint(
+            x: center.x + CGFloat(cos(angle)) * (radius / 2),
+            y: center.y - CGFloat(sin(angle)) * (radius / 2)
+        )
+        
+        // Draw only the top half of the needle
+        path.move(to: midpoint)
         path.addLine(to: needlePoint)
         return path
     }
@@ -86,7 +93,6 @@ struct Needle: Shape {
 struct SpeedGoalScreen: View {
     @StateObject private var speedTargetManager = SpeedTargetManager()
     @ObservedObject var locationManager: LocationManager
-    
     @State private var backgroundColor = Color.black
     @State private var showTargetSpeedInfo = false
     @State private var showSetTargetSpeed = false
@@ -163,8 +169,8 @@ struct SpeedGoalScreen: View {
                             Spacer()
                         }
                     }
-                } else {
-                    // Existing code for when speed is set
+                } else if !speedTargetManager.hitTargetSpeed {
+                    // Speedometer view when target not yet reached
                     SpeedometerView(currentSpeed: locationManager.speed,
                                     targetSpeed: speedTargetManager.targetSpeed,
                                     arcColor: .white,
@@ -174,67 +180,109 @@ struct SpeedGoalScreen: View {
                     .padding(.vertical, 20)
                     
                     Spacer()
+                } else {
+                    
+                    // View when target speed is reached
+                    VStack {
+                        Spacer()
+                        
+                        Button(action: {
+                            showSetTargetSpeed = true
+                        }) {
+                            HStack(alignment: .center, spacing: 10) {
+                                Image(systemName: "flag.checkered")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 20, height: 20)
+                                    .foregroundColor(.white)
+                                
+                                Text("New SpeedGoal")
+                                    .foregroundColor(.white)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(hex: "#0c3617"))
+                            .cornerRadius(15)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.bottom, 40)
+                    }
                 }
             }
             .padding()
             .foregroundColor(.white)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .overlay(
-            Group {
-                if speedTargetManager.setSpeed {
-                    VStack {
-                        HStack {
-                            Image(systemName: "gauge.high")
-                                .foregroundColor(variableColor)
-                                .font(.title3)
-                            Text("Speedgoal")
-                                .foregroundColor(.white)
-                                .font(.title3)
-                                .bold()
-                        }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 55)
-                        Spacer()
-                    }
+            
+            // Overlay the timer when target speed is reached
+            if speedTargetManager.setSpeed && speedTargetManager.hitTargetSpeed {
+                GeometryReader { geometry in
+                    Text(speedTargetManager.formatTime(speedTargetManager.elapsedTime))
+                        .font(.system(size: calculateFontSize(for: geometry.size, text: speedTargetManager.formatTime(speedTargetManager.elapsedTime)), weight: .bold))
+                        .foregroundColor(variableColor)
+                        .opacity(isBlinking ? 1 : 0.3)
+                        .animation(.easeInOut(duration: 0.25), value: isBlinking)
+                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
+                        .minimumScaleFactor(0.5)
                 }
-            }
-        )
-        .overlay(
-            Group {
-                if speedTargetManager.setSpeed {
-                    VStack {
-                        Spacer()
-                        if speedTargetManager.startTime != nil {
-                            Text(speedTargetManager.formatTime(speedTargetManager.elapsedTime))
-                                .font(.headline)
-                                .foregroundColor(Color(hex: "#00ff81"))
-                                .padding(.bottom, 40)
-                                .opacity(speedTargetManager.hitTargetSpeed ? (isBlinking ? 1 : 0.3) : 1)
-                                .animation(.easeInOut(duration: 0.25), value: isBlinking)
-                        } else {
-                            Text("Waiting...")
-                                .font(.headline)
-                                .foregroundColor(Color(hex: "#00ff81"))
-                                .padding(.bottom, 40)
-                        }
-                    }
-                }
-            }
-        )
-        .sheet(isPresented: $showSetTargetSpeed) {
-            ScrollView {
-                SetTargetSpeedSheet(
-                    targetSpeed: $speedTargetManager.targetSpeed,
-                    waitingForGPS: $speedTargetManager.waitingForGPS
-                ) {
-                    speedTargetManager.setTargetSpeed(locationManager: locationManager) {
-                        showSetTargetSpeed = false
-                        speedTargetManager.setSpeed = true
-                    }
-                }
+                .padding()
             }
         }
+        
+                        .overlay(
+                            Group {
+                                if speedTargetManager.setSpeed {
+                                    VStack {
+                                        HStack {
+                                            Image(systemName: "gauge.high")
+                                                .foregroundColor(variableColor)
+                                                .font(.title3)
+                                            Text("Speedgoal")
+                                                .foregroundColor(.white)
+                                                .font(.title3)
+                                                .bold()
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .center)
+                                        .padding(.top, 55)
+                                        Spacer()
+                                    }
+                                }
+                            }
+                        )
+                        .overlay(
+                            Group {
+                                if speedTargetManager.setSpeed && !speedTargetManager.hitTargetSpeed {
+                                    VStack {
+                                        Spacer()
+                                        if speedTargetManager.startTime != nil {
+                                            Text(speedTargetManager.formatTime(speedTargetManager.elapsedTime))
+                                                .font(.headline)
+                                                .foregroundColor(variableColor)
+                                                .padding(.bottom, 40)
+                                        } else {
+                                            Text("Waiting...")
+                                                .font(.headline)
+                                                .foregroundColor(variableColor)
+                                                .padding(.bottom, 40)
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        .sheet(isPresented: $showSetTargetSpeed) {
+                            ScrollView {
+                                SetTargetSpeedSheet(
+                                    targetSpeed: $speedTargetManager.targetSpeed,
+                                    waitingForGPS: $speedTargetManager.waitingForGPS
+                                ) {
+                                    speedTargetManager.setTargetSpeed(locationManager: locationManager) {
+                                        showSetTargetSpeed = false
+                                        speedTargetManager.setSpeed = true
+                                        speedTargetManager.hitTargetSpeed = false
+                                    }
+                                }
+                            }
+                        }
+        
         .sheet(isPresented: $showTargetSpeedInfo) {
             ScrollView {
                 SpeedGoalInfoSheet {
@@ -256,24 +304,30 @@ struct SpeedGoalScreen: View {
                 }
             }
         }
-        .onReceive(locationManager.$speed) { speed in
-            let nonNegativeSpeed = max(0, speed)
-            speedTargetManager.updateStatus(currentSpeed: nonNegativeSpeed)
-            
-            if nonNegativeSpeed >= 2 && speedTargetManager.setSpeed {
-                speedTargetManager.startTiming()
+        .onReceive(locationManager.$speed) { speed in //minimum speed check 2mph, 2+ mph
+                    let nonNegativeSpeed = max(2, speed)
+                    speedTargetManager.updateStatus(currentSpeed: nonNegativeSpeed)
+                    
+                    if nonNegativeSpeed >= 0 && speedTargetManager.setSpeed && !speedTargetManager.hitTargetSpeed {
+                        speedTargetManager.startTiming()
+                    }
+                }
+                .onReceive(blinkTimer) { _ in
+                    if speedTargetManager.hitTargetSpeed {
+                        isBlinking.toggle()
+                    }
+                }
+                .onChange(of: speedTargetManager.hitTargetSpeed) { oldValue, newValue in
+                    if !newValue {
+                        isBlinking = false
+                    }
+                }
             }
+    private func calculateFontSize(for size: CGSize, text: String) -> CGFloat {
+            let widthConstraint = size.width * 0.95
+            let heightConstraint = size.height * 0.65
+            let constrainingSize = min(widthConstraint, heightConstraint)
+            return constrainingSize / CGFloat(text.count) * 2.2
         }
-        .onReceive(blinkTimer) { _ in
-            if speedTargetManager.hitTargetSpeed {
-                isBlinking.toggle()
-            }
         }
-        .onChange(of: speedTargetManager.hitTargetSpeed) {
-            if !speedTargetManager.hitTargetSpeed {
-                isBlinking = false
-            }
-        }
-    }
-}
 

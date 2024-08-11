@@ -63,11 +63,12 @@ struct RecordingView: View {
         }
         .frame(width: size.width, height: size.height)
         .position(x: size.width / 2, y: size.height / 2)
-        .onTapGesture {
+      /*  .onTapGesture {
             withAnimation(.easeInOut(duration: 0.25)) {
                 locationManager.togglePause()
             }
         }
+       */
     }
     
     private var signalStrengthElement: some View {

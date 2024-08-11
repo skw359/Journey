@@ -29,6 +29,7 @@ struct TravelRecordedView: View {
         }
         .navigationTitle("Travel Recorded")
         .onAppear(perform: debugInfo)
+        .toolbar(.hidden, for: .navigationBar)
     }
     
     private var milesTraveled: some View {
@@ -66,7 +67,7 @@ struct TravelRecordedView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(topValue)
                     .font(.system(size: 30))
-                    .bold()
+                   
                     .frame(maxWidth: .infinity, alignment: .center)
                 Text(topLabel)
                     .font(.caption)
@@ -155,6 +156,7 @@ struct TravelRecordedView: View {
 struct ElevationGraphView: View {
     var readings: [ElevationReading]
     
+    
     // Calculate max, min, and starting elevations, and format times
     private var maxElevation: String {
         let maxElev = readings.map { $0.elevation }.max() ?? 0
@@ -188,79 +190,88 @@ struct ElevationGraphView: View {
         return "\(String(format: "%.0f", elevationInFeet))"
     }
     
-    private func scaleReading(_ reading: ElevationReading, in size: CGSize) -> CGPoint {
-        let initialElevation = readings.first?.elevation ?? 0
-        let maxElevationChange = readings.map { abs($0.elevation - initialElevation) }.max() ?? 1
+    private let leftPadding: CGFloat = 20
+        private let bottomPadding: CGFloat = 20 // Added for time labels
         
-        let totalTime = readings.last?.time.timeIntervalSince(readings.first?.time ?? Date()) ?? 1
-        let timeElapsed = reading.time.timeIntervalSince(readings.first?.time ?? Date())
-        
-        let elevationDelta = reading.elevation - initialElevation
-        
-        let xScale = size.width / CGFloat(totalTime)
-        let yMidPoint = size.height / 2
-        let yScale = yMidPoint / maxElevationChange
-        
-        let x = xScale * CGFloat(timeElapsed)
-        let y = yMidPoint - (CGFloat(elevationDelta) * yScale)
-        
-        return CGPoint(x: x, y: y)
-    }
-    
-    var body: some View {
-        GeometryReader { geometry in
+        private func scaleReading(_ reading: ElevationReading, in size: CGSize) -> CGPoint {
+            let initialElevation = readings.first?.elevation ?? 0
+            let maxElevationChange = readings.map { abs($0.elevation - initialElevation) }.max() ?? 1
             
-            Path { path in
-                let points = readings.map { scaleReading($0, in: geometry.size) }
-                print("Points for graph: \(points)") // Debug: print the points
-                guard let firstPoint = points.first else { return }
-                
-                path.move(to: firstPoint)
-                for point in points.dropFirst() {
-                    path.addLine(to: point)
+            let totalTime = readings.last?.time.timeIntervalSince(readings.first?.time ?? Date()) ?? 1
+            let timeElapsed = reading.time.timeIntervalSince(readings.first?.time ?? Date())
+            
+            let elevationDelta = reading.elevation - initialElevation
+            
+            let xScale = (size.width - leftPadding) / CGFloat(totalTime)
+            let yMidPoint = (size.height - bottomPadding) / 2
+            let yScale = yMidPoint / maxElevationChange
+            
+            let x = xScale * CGFloat(timeElapsed) + leftPadding
+            let y = yMidPoint - (CGFloat(elevationDelta) * yScale)
+            
+            return CGPoint(x: x, y: y)
+        }
+        
+        var body: some View {
+            GeometryReader { geometry in
+                ZStack {
+                    // Y-Axis (Elevation) labels
+                    VStack {
+                        Text(maxElevation).foregroundColor(.gray).font(.footnote)
+                        Spacer()
+                        Text(minElevation).foregroundColor(.gray).font(.footnote)
+                    }
+                    .frame(height: geometry.size.height - bottomPadding)
+                    .position(x: leftPadding / 2 - 5, y: (geometry.size.height - bottomPadding) / 2)
+                    
+                    // Graph and axis lines
+                    Path { path in
+                        let points = readings.map { scaleReading($0, in: geometry.size) }
+                        guard let firstPoint = points.first else { return }
+                        
+                        path.move(to: firstPoint)
+                        for point in points.dropFirst() {
+                            path.addLine(to: point)
+                        }
+                    }
+                    .stroke(Color.green, lineWidth: 2)
+                    
+                    // Draw horizontal line at top elevation
+                    Path { path in
+                        path.move(to: CGPoint(x: leftPadding, y: 0))
+                        path.addLine(to: CGPoint(x: geometry.size.width, y: 0))
+                    }
+                    .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+
+                    // Draw horizontal line at middle elevation
+                    Path { path in
+                        path.move(to: CGPoint(x: leftPadding, y: (geometry.size.height - bottomPadding) / 2))
+                        path.addLine(to: CGPoint(x: geometry.size.width, y: (geometry.size.height - bottomPadding) / 2))
+                    }
+                    .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                    
+                    // X-Axis (Time) labels
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Text(startTime).foregroundColor(.gray).font(.footnote)
+                            Spacer()
+                            Text(endTime).foregroundColor(.gray).font(.footnote)
+                        }
+                        .frame(width: geometry.size.width - leftPadding)
+                        .offset(x: leftPadding / 2, y: bottomPadding / 2)
+                    }
+                    
+                    // Draw the X-axis line
+                    Path { path in
+                        path.move(to: CGPoint(x: leftPadding, y: geometry.size.height - bottomPadding))
+                        path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height - bottomPadding))
+                    }
+                    .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
                 }
+                
             }
-            .stroke(Color.green, lineWidth: 2)
-            
-            // Y-Axis (Elevation) labels and line
-            VStack {
-                Text(maxElevation).foregroundColor(.gray)
-                Spacer()
-                Text(startElevation).foregroundColor(.gray)
-                Spacer()
-                Text(minElevation).foregroundColor(.gray)
-            }
-            .frame(height: geometry.size.height)
-            .padding(.leading)
-            
-            // Draw the Y-axis line
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: 0))
-                path.addLine(to: CGPoint(x: 0, y: geometry.size.height))
-            }
-            .stroke(Color.gray, lineWidth: 1)
-            
-            // X-Axis (Time) labels and line
-            HStack {
-                Text(startTime).foregroundColor(.gray)
-                Spacer()
-                Text(endTime).foregroundColor(.gray)
-            }
-            .frame(width: geometry.size.width)
-            .padding(.top, geometry.size.height)
-            
-            // Draw the X-axis line
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: geometry.size.height))
-                path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height))
-            }
-            .stroke(Color.gray, lineWidth: 1)
             
         }
+    
     }
-}
-
-
-
-
-
