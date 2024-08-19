@@ -22,6 +22,24 @@ struct SpeedometerView: View {
                     .stroke(arcColor.opacity(0.3), lineWidth: size * 0.03)
                     .rotationEffect(.degrees(135))
                 
+                GradientTrail(progress: 1)
+                    .fill(
+                        AngularGradient(
+                            gradient: Gradient(stops: [
+                                .init(color: needleColor.opacity(0), location: 0),
+                                .init(color: needleColor.opacity(0.85), location: 1)
+                            ]),
+                            center: .center,
+                            startAngle: .degrees(135),
+                            endAngle: .degrees(405)
+                        )
+                    )
+                    .mask(
+                        GradientTrail(progress: animatedSpeed / Double(targetSpeed))
+                            .fill(Color.white)
+                    )
+                    .frame(width: size, height: size)
+                
                 // Colored arc from 7 o'clock to current position
                 Circle()
                     .trim(from: 0, to: CGFloat(min(animatedSpeed / Double(targetSpeed), 1)) * 0.75)
@@ -31,6 +49,7 @@ struct SpeedometerView: View {
                 // Extended needle
                 ExtendedNeedle(speed: animatedSpeed, maxSpeed: Double(targetSpeed))
                     .fill(needleColor)
+                    .frame(width: size, height: size)
                     .rotationEffect(.degrees(135))
                 
                 // Speed display
@@ -59,6 +78,31 @@ struct SpeedometerView: View {
                 animatedSpeed = newSpeed
             }
         }
+    }
+}
+
+struct GradientTrail: Shape {
+    var progress: Double
+    
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        let startAngle: Angle = .degrees(135)
+        let endAngle: Angle = .degrees(135 + 270 * progress)
+        
+        path.move(to: center)
+        path.addArc(center: center, radius: radius * 0.1, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+        path.addLine(to: CGPoint(x: center.x + radius * cos(endAngle.radians), y: center.y + radius * sin(endAngle.radians)))
+        path.addArc(center: center, radius: radius, startAngle: endAngle, endAngle: startAngle, clockwise: true)
+        path.closeSubpath()
+        
+        return path
     }
 }
 
