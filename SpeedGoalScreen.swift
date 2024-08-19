@@ -84,9 +84,7 @@ struct SpeedGoalScreen: View {
                     // Speedometer view
                     SpeedometerView(
                         currentSpeed: locationManager.speed,
-                        targetSpeed: speedTargetManager.targetSpeed,
-                        elapsedTime: speedTargetManager.elapsedTime,
-                        formatTime: speedTargetManager.formatTime
+                        targetSpeed: speedTargetManager.targetSpeed
                     )
                     .frame(height: 200)
                     .padding(.vertical, 20)
