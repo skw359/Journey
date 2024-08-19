@@ -4,7 +4,7 @@ import WatchKit
 struct OptionsScreen: View {
     @Binding var isLocked: Bool
     @Binding var showWaypointScreen: Bool
-    @Binding var isCreatingWaypoint: Bool
+    @Binding var creatingWaypoint: Bool
     @Binding var selectedTab: Int
     @ObservedObject var locationManager: LocationManager
     @Binding var navigationPath: NavigationPath
@@ -26,11 +26,11 @@ struct OptionsScreen: View {
                         waterLockButton(size: geometry.size)
                             .disabled(locationManager.paused)
                             .opacity(locationManager.paused ? 0.2 : 1)
-                            .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
+                            .animation(.easeInOut(duration: 0.15), value: locationManager.paused)
                         waypointButton(size: geometry.size)
                             .disabled(locationManager.paused)
                             .opacity(locationManager.paused ? 0.2 : 1)
-                            .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
+                            .animation(.easeInOut(duration: 0.15), value: locationManager.paused)
                     }
                     HStack(spacing: geometry.size.width * 0.05) {
                         endButton(size: geometry.size)
@@ -78,14 +78,14 @@ struct OptionsScreen: View {
         Button(action: {
             locationManager.startWaypointCalculation()
             locationManager.averagedWaypointLocation = nil
-            isCreatingWaypoint = true
+            creatingWaypoint = true
             showWaypointScreen = true
             
             locationManager.averageWaypointLocation { averagedLocation in
                 if let averagedLocation = averagedLocation {
                     locationManager.averagedWaypointLocation = averagedLocation
                 }
-                isCreatingWaypoint = false
+                creatingWaypoint = false
                 showWaypointScreen = false
                 Haptics.vibrate(.success)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -148,7 +148,7 @@ struct OptionsScreen: View {
     
     private func pauseButton(size: CGSize) -> some View {
         Button(action: {
-            withAnimation(.easeInOut(duration: 0.35)) {
+            withAnimation(.easeInOut(duration: 0.15)) {
                 locationManager.togglePause()
             }
         }) {

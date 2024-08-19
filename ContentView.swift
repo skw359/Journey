@@ -26,7 +26,7 @@ struct ContentView: View {
     @State private var paused = false
     @State private var navigationPath = NavigationPath()
     @State private var showWaypointScreen = false
-    @State private var isCreatingWaypoint = false
+    @State private var creatingWaypoint = false
     @State private var elapsedTime = 0
     @StateObject private var userSettings = UserSettings()
     @State private var obtainedGPS = false
@@ -43,7 +43,7 @@ struct ContentView: View {
                                   isLocked: $isLocked,
                                   paused: $paused,
                                   showWaypointScreen: $showWaypointScreen,
-                                  isCreatingWaypoint: $isCreatingWaypoint,
+                                  creatingWaypoint: $creatingWaypoint,
                                   navigationPath: $navigationPath,
                                   prepareTravelData: prepareTravelData,
                                   elapsedTime: elapsedTime)
@@ -62,7 +62,7 @@ struct ContentView: View {
             }
             .background(userSettings.isDarkMode ? Color.white.opacity(1.0) : Color.black.opacity(1.0))
             .fullScreenCover(isPresented: $showWaypointScreen) {
-                WaypointCreationView(isCreatingWaypoint: $isCreatingWaypoint)
+                WaypointCreationView(creatingWaypoint: $creatingWaypoint)
             }
         }
         .onChange(of: locationManager.obtainedGPS) {
@@ -82,7 +82,7 @@ struct ContentView: View {
             elapsedTime = 0
             locationManager.startRecording()
             selectedTab = 1 // recordingViewTab
-            isCreatingWaypoint = false
+            creatingWaypoint = false
             locationManager.moderateAltitudeNotificationSent = false
             locationManager.highAltitudeNotificationSent = false
         }
@@ -107,7 +107,7 @@ struct RecordingTabs: View {
     @Binding var isLocked: Bool
     @Binding var paused: Bool
     @Binding var showWaypointScreen: Bool
-    @Binding var isCreatingWaypoint: Bool
+    @Binding var creatingWaypoint: Bool
     @Binding var navigationPath: NavigationPath
     let prepareTravelData: () -> TravelData
     let elapsedTime: Int
@@ -134,7 +134,7 @@ struct RecordingTabs: View {
                 .tabItem { Text("Recording") }
                 .tag(1)
             
-            OptionsScreen(isLocked: $isLocked, showWaypointScreen: $showWaypointScreen, isCreatingWaypoint: $isCreatingWaypoint, selectedTab: $selectedTab, locationManager: locationManager, navigationPath: $navigationPath, prepareTravelData: prepareTravelData, elapsedTime: elapsedTime)
+            OptionsScreen(isLocked: $isLocked, showWaypointScreen: $showWaypointScreen, creatingWaypoint: $creatingWaypoint, selectedTab: $selectedTab, locationManager: locationManager, navigationPath: $navigationPath, prepareTravelData: prepareTravelData, elapsedTime: elapsedTime)
                 .tabItem { Text("Stop Recording") }
                 .tag(3)
         }
@@ -147,7 +147,7 @@ struct RecordingTabs: View {
 
 // Shows a simple view when creating a new waypoint
 struct WaypointCreationView: View {
-    @Binding var isCreatingWaypoint: Bool
+    @Binding var creatingWaypoint: Bool
     
     var body: some View {
         VStack {

@@ -7,7 +7,7 @@ struct CityNameElement: View {
     @State private var countyName: String = "Fetching..."
     @State private var lastFetchedCountyName: String? = nil  // Store the last successfully fetched county name
     @State private var showCounty: Bool = false  // Initially show the city name first
-
+    
     var body: some View {
         Text(showCounty ? countyName : locationManager.currentLocationName)
             .padding(8)
@@ -26,8 +26,10 @@ struct CityNameElement: View {
                 self.showCounty.toggle()  // Toggle between city and county name on tap
             }
     }
-
-    // Obtains the county name
+    
+    // Check for a valid city or county name.
+    // If both locality and subAdministrativeArea are empty, only show the state. So like ", MD" or ", NC", only show the state
+    // Otherwise, update both the current and last fetched county names on successful fetch
     private func getCountyName() {
         guard let location = locationManager.latestLocation else {
             self.countyName = "Location not available"
@@ -38,16 +40,27 @@ struct CityNameElement: View {
         geocoder.reverseGeocodeLocation(location) { placemarks, error in
             if let error = error {
                 print("Geocoding failed with error: \(error.localizedDescription)")
-                if let lastSuccessfulCounty = self.lastFetchedCountyName {
-                    self.countyName = lastSuccessfulCounty  // Use the last successful fetch as a fallback
+                if let lastSuccessfulCountyName = self.lastFetchedCountyName {
+                    self.countyName = lastSuccessfulCountyName
                 } else {
                     self.countyName = "Error fetching county"
                 }
             } else if let placemark = placemarks?.first {
-                // Update both the current and last fetched county names on successful fetch
-                let fetchedCounty = placemark.subAdministrativeArea ?? "Data not available"
-                self.countyName = fetchedCounty
-                self.lastFetchedCountyName = fetchedCounty
+                let locality = placemark.locality ?? ""
+                let subAdministrativeArea = placemark.subAdministrativeArea ?? ""
+                let state = placemark.administrativeArea ?? ""
+                
+                if locality.isEmpty && subAdministrativeArea.isEmpty {
+                    
+                    self.countyName = state
+                } else if subAdministrativeArea == ", \(state)" || locality == ", \(state)" {
+                    self.countyName = state
+                } else {
+                    
+                    let fetchedCounty = subAdministrativeArea.isEmpty ? locality : subAdministrativeArea
+                    self.countyName = fetchedCounty
+                    self.lastFetchedCountyName = fetchedCounty
+                }
             } else {
                 self.countyName = "No placemark data available"
             }

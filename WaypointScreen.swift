@@ -12,7 +12,7 @@ struct WaypointScreen: View {
     @State private var distanceInFeet: Double = 0
     @State private var showWaytracerInfo = false
     @State private var isWaypointButtonDisabled = false
-    @State private var isCreatingWaypoint = false
+    @State private var creatingWaypoint = false
     
     var waypointExists: Bool {
         locationManager.averagedWaypointLocation != nil
@@ -108,7 +108,7 @@ struct WaypointScreen: View {
                                         createWaypoint()
                                     }) {
                                         HStack(alignment: .center, spacing: 10) {
-                                            if isCreatingWaypoint {
+                                            if creatingWaypoint {
                                                 Shine2(
                                                     iconName: "mappin.and.ellipse",
                                                     text: "Creating",
@@ -131,7 +131,7 @@ struct WaypointScreen: View {
                                         .cornerRadius(15)
                                     }
                                     .buttonStyle(PlainButtonStyle())
-                                    .disabled(isCreatingWaypoint)
+                                    .disabled(creatingWaypoint)
                                     
                                     Spacer()
                                 }
@@ -213,13 +213,13 @@ struct WaypointScreen: View {
         locationManager.startWaypointCalculation()
         locationManager.averagedWaypointLocation = nil
         
-        isCreatingWaypoint = true
+        creatingWaypoint = true
         
         locationManager.averageWaypointLocation { averagedLocation in
             if let averagedLocation = averagedLocation {
                 locationManager.averagedWaypointLocation = averagedLocation
             }
-            isCreatingWaypoint = false
+            creatingWaypoint = false
             isWaypointButtonDisabled = false
             Haptics.vibrate(.success)
         }

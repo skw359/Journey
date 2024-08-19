@@ -6,7 +6,7 @@ struct ProcessingSheet: View {
             Color.black.edgesIgnoringSafeArea(.all)
             
             HStack(spacing: 10) {
-                Image(systemName: "cpu.fill")
+                Image(systemName: "clock.fill")
                     .foregroundColor(.white)
                 
                 Text("Processing")

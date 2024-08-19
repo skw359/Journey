@@ -24,7 +24,7 @@ class SpeedTargetManager: ObservableObject {
         
         // Check for strong GPS signal
         Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            if let location = locationManager.latestLocation, location.horizontalAccuracy <= 5 {
+            if let location = locationManager.latestLocation, location.horizontalAccuracy <= 500 {
                 timer.invalidate()
                 self?.waitingForGPS = false
                 self?.isSettingSpeed = false
