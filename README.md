@@ -42,7 +42,6 @@ Journey is currently in active development. While it's functional, there are sti
 - Explore travel prediction algorithms for reverse geocoding
 
 **Installation**
-To test Journey:
 
 - Clone this repo
 - Open the project in Xcode
@@ -62,7 +61,7 @@ To test Journey:
   <br>
   <img src="https://github.com/user-attachments/assets/441a27c9-206c-4371-ad3d-f99ac64e8c0a" alt="screen3" width="150">
   <br>
-  <img src="https://github.com/user-attachments/assets/f30e68c1-786b-4cec-9980-c3743347b529" alt="screen4" width="150">
+  <img src="https://github.com/user-attachments/assets/55b3cd8d-bcc7-4339-9e82-9c34f0dfed36" alt="screen4" width="150">
   <br>
   <img src="https://github.com/user-attachments/assets/62bb322d-6f8f-4a4a-b05f-626dada6c736" alt="screen6" width="150">
   <br>
