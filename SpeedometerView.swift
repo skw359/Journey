@@ -6,6 +6,7 @@ struct SpeedometerView: View {
     let targetSpeed: Int
     
     @State private var animatedSpeed: Double = 0
+    @State private var speedometerAppear = false
     
     private let arcColor = Color.white
     private let needleColor = Color(hex: "#00ff81")
@@ -18,7 +19,7 @@ struct SpeedometerView: View {
             ZStack {
                 // Background arc
                 Circle()
-                    .trim(from: 0, to: 0.75)  // 270 degrees
+                    .trim(from: 0, to: speedometerAppear ? 0.75 : 0)
                     .stroke(
                         arcColor.opacity(animatedSpeed > 0 ? 0 : 0.2),
                         style: StrokeStyle(
@@ -28,14 +29,14 @@ struct SpeedometerView: View {
                         )
                     )
                     .rotationEffect(.degrees(135))
-                    .animation(.easeOut(duration: 0.3), value: animatedSpeed)
+                    .animation(.easeOut(duration: 0.5), value: speedometerAppear)
                 
                 GradientTrail(progress: 1)
                     .fill(
                         AngularGradient(
                             gradient: Gradient(stops: [
                                 .init(color: needleColor.opacity(0), location: 0),
-                                .init(color: needleColor.opacity(0.5), location: 1)
+                                .init(color: needleColor.opacity(0.4), location: 1)
                             ]),
                             center: .center,
                             startAngle: .degrees(135),
@@ -86,6 +87,13 @@ struct SpeedometerView: View {
             }
             .frame(width: size, height: size)
             .position(center)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.easeOut(duration: 0.5)) {
+                        speedometerAppear = true
+                    }
+                }
+            }
         }
         .aspectRatio(1, contentMode: .fit)
         .onChange(of: currentSpeed) { _, newSpeed in
