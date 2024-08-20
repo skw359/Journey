@@ -19,15 +19,23 @@ struct SpeedometerView: View {
                 // Background arc
                 Circle()
                     .trim(from: 0, to: 0.75)  // 270 degrees
-                    .stroke(arcColor.opacity(0.3), lineWidth: size * 0.03)
+                    .stroke(
+                        arcColor.opacity(animatedSpeed > 0 ? 0 : 0.2),
+                        style: StrokeStyle(
+                            lineWidth: size * 0.03,
+                            lineCap: .round,
+                            lineJoin: .round
+                        )
+                    )
                     .rotationEffect(.degrees(135))
+                    .animation(.easeOut(duration: 0.3), value: animatedSpeed)
                 
                 GradientTrail(progress: 1)
                     .fill(
                         AngularGradient(
                             gradient: Gradient(stops: [
                                 .init(color: needleColor.opacity(0), location: 0),
-                                .init(color: needleColor.opacity(0.85), location: 1)
+                                .init(color: needleColor.opacity(0.5), location: 1)
                             ]),
                             center: .center,
                             startAngle: .degrees(135),
@@ -43,7 +51,14 @@ struct SpeedometerView: View {
                 // Colored arc from 7 o'clock to current position
                 Circle()
                     .trim(from: 0, to: CGFloat(min(animatedSpeed / Double(targetSpeed), 1)) * 0.75)
-                    .stroke(needleColor, lineWidth: size * 0.03)
+                    .stroke(
+                        needleColor,
+                        style: StrokeStyle(
+                            lineWidth: size * 0.03,
+                            lineCap: .butt,
+                            lineJoin: .round
+                        )
+                    )
                     .rotationEffect(.degrees(135))
                 
                 // Extended needle
@@ -74,12 +89,13 @@ struct SpeedometerView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .onChange(of: currentSpeed) { _, newSpeed in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.9, dampingFraction: 0.7)) {
                 animatedSpeed = newSpeed
             }
         }
     }
 }
+
 
 struct GradientTrail: Shape {
     var progress: Double

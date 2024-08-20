@@ -107,7 +107,7 @@ struct SpeedGoalScreen: View {
                                 .foregroundColor(variableColor)
                                 .padding(.bottom, 40)
                         } else {
-                            Text("Waiting...")
+                            Text("")
                                 .font(.headline)
                                 .foregroundColor(variableColor)
                                 .padding(.bottom, 40)
