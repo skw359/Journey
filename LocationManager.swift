@@ -4,53 +4,65 @@ import Combine
 import UserNotifications
 
 class LocationManager: NSObject, ObservableObject {
-    // MARK: - Properties
+    // Core Location Manager
     private var locationManager: CLLocationManager!
-    @Published var startTime: Date?
-    private var timer: Timer?
-    private var waypointLocations: [CLLocation] = []
-    private var waypointCompletion: ((CLLocation?) -> Void)?
-    var lastLocation: CLLocation?
-    private var totalSpeedReadings: Double = 0.0
-    private var numberOfSpeedReadings: Int = 0
-    private var lastGeocodedLocation: CLLocation?
-    private let minimumDistanceForGeocoding: CLLocationDistance = 1000 // 1 km
-    
-    private var previousLocation: CLLocation?
-    private var previousUpdateTime: Date?
-    // Published properties
-    @Published var recording = false
-    @Published var distance = 0.0
-    @Published var totalTime = 0.0
-    @Published var speed = 0.0
     @Published var gpsConnected = false
     @Published var gpsAccuracy: CLLocationAccuracy?
-    @Published var topSpeed: Double = 0.0
-    @Published var averageSpeed: Double = 0.0
-    @Published var currentElevation: Double = 0.0
+    @Published var obtainedGPS = false
+
+    // Location Tracking
+    @Published var lastLocation: CLLocation?
+    @Published var latestLocation: CLLocation?
+    private var previousLocation: CLLocation?
+    private var lastGeocodedLocation: CLLocation?
+    private let minimumDistanceForGeocoding: CLLocationDistance = 1000 // 1 km
     @Published var currentLocationName: String = ""
     @Published var currentCountyName: String = ""
-    @Published var latestLocation: CLLocation?
-    @Published var userHeading: Double = 0.0
-    @Published var recalibratingCompass = false
-    @Published var totalTimeTimer: Int = 0
-    @Published var obtainedGPS = false
-    @Published var accelerationReadings: [Double] = []
-    @Published var calculatingWaypoint = false
-    @Published var averagedWaypointLocation: CLLocation?
-    @Published var heading: Double = 0
-    @Published var elevationReadings: [ElevationReading] = []
-    @Published var moderateAltitudeNotificationSent = false
-    @Published var highAltitudeNotificationSent = false
-    @Published var bearingToWaypoint: Double = 0
-    private var calibrationReadings: [Double] = []
-    private let calibrationDuration: TimeInterval = 20
-    @Published var speedReadings: [SpeedReading] = []
-    
-    
+
+    // Recording State
+    @Published var recording = false
+    @Published var startTime: Date?
+    private var timer: Timer?
     @Published var paused: Bool = false
     private var pauseStartTime: Date?
     private var totalPausedTime: TimeInterval = 0
+
+    // Distance and Time
+    @Published var distance = 0.0
+    @Published var totalTime = 0.0
+    @Published var totalTimeTimer: Int = 0
+    private var previousUpdateTime: Date?
+
+    // Speed
+    @Published var speed = 0.0
+    @Published var topSpeed: Double = 0.0
+    @Published var averageSpeed: Double = 0.0
+    private var totalSpeedReadings: Double = 0.0
+    private var numberOfSpeedReadings: Int = 0
+    @Published var speedReadings: [SpeedReading] = []
+
+    // Elevation
+    @Published var currentElevation: Double = 0.0
+    @Published var elevationReadings: [ElevationReading] = []
+    @Published var moderateAltitudeNotificationSent = false
+    @Published var highAltitudeNotificationSent = false
+
+    // Heading and Compass
+    @Published var userHeading: Double = 0.0
+    @Published var heading: Double = 0
+    @Published var recalibratingCompass = false
+    private var calibrationReadings: [Double] = []
+    private let calibrationDuration: TimeInterval = 20
+
+    // Waypoints
+    private var waypointLocations: [CLLocation] = []
+    private var waypointCompletion: ((CLLocation?) -> Void)?
+    @Published var calculatingWaypoint = false
+    @Published var averagedWaypointLocation: CLLocation?
+    @Published var bearingToWaypoint: Double = 0
+
+    // Acceleration
+    @Published var accelerationReadings: [Double] = []
     
     // MARK: - Initialization
     override init() {
