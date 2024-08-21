@@ -6,7 +6,7 @@ import UserNotifications
 class LocationManager: NSObject, ObservableObject {
     // MARK: - Properties
     private var locationManager: CLLocationManager!
-    private var startTime: Date?
+    @Published var startTime: Date?
     private var timer: Timer?
     private var waypointLocations: [CLLocation] = []
     private var waypointCompletion: ((CLLocation?) -> Void)?
@@ -16,6 +16,8 @@ class LocationManager: NSObject, ObservableObject {
     private var lastGeocodedLocation: CLLocation?
     private let minimumDistanceForGeocoding: CLLocationDistance = 1000 // 1 km
     
+    private var previousLocation: CLLocation?
+    private var previousUpdateTime: Date?
     // Published properties
     @Published var recording = false
     @Published var distance = 0.0
@@ -30,11 +32,11 @@ class LocationManager: NSObject, ObservableObject {
     @Published var currentCountyName: String = ""
     @Published var latestLocation: CLLocation?
     @Published var userHeading: Double = 0.0
-    @Published var isRecalibrating = false
+    @Published var recalibratingCompass = false
     @Published var totalTimeTimer: Int = 0
     @Published var obtainedGPS = false
     @Published var accelerationReadings: [Double] = []
-    @Published var isCalculatingWaypoint = false
+    @Published var calculatingWaypoint = false
     @Published var averagedWaypointLocation: CLLocation?
     @Published var heading: Double = 0
     @Published var elevationReadings: [ElevationReading] = []
@@ -43,16 +45,18 @@ class LocationManager: NSObject, ObservableObject {
     @Published var bearingToWaypoint: Double = 0
     private var calibrationReadings: [Double] = []
     private let calibrationDuration: TimeInterval = 20
+    @Published var speedReadings: [SpeedReading] = []
+    
     
     @Published var paused: Bool = false
     private var pauseStartTime: Date?
     private var totalPausedTime: TimeInterval = 0
     
-    
     // MARK: - Initialization
     override init() {
         super.init()
         setupLocationManager()
+        
     }
     
     private func setupLocationManager() {
@@ -88,7 +92,7 @@ class LocationManager: NSObject, ObservableObject {
     }
     
     func startWaypointCalculation() {
-        isCalculatingWaypoint = true
+        calculatingWaypoint = true
         waypointLocations.removeAll()
         locationManager.requestLocation()
     }
@@ -96,7 +100,7 @@ class LocationManager: NSObject, ObservableObject {
     func recalibrateCompass() {
         guard CLLocationManager.headingAvailable() else { return }
         
-        isRecalibrating = true
+        recalibratingCompass = true
         calibrationReadings.removeAll()
         locationManager.stopUpdatingHeading()
         locationManager.startUpdatingHeading()
@@ -109,13 +113,13 @@ class LocationManager: NSObject, ObservableObject {
     // Calculate the average heading, then update the heading
     private func finalizeCalibration() {
         guard !calibrationReadings.isEmpty else {
-            isRecalibrating = false
+            recalibratingCompass = false
             return
         }
         let averageHeading = calibrationReadings.reduce(0, +) / Double(calibrationReadings.count)
         heading = averageHeading
         userHeading = averageHeading
-        isRecalibrating = false
+        recalibratingCompass = false
         NotificationCenter.default.post(name: Notification.Name("CalibrationComplete"), object: nil)
     }
     
@@ -214,7 +218,7 @@ class LocationManager: NSObject, ObservableObject {
         }
     }
     
-    private func updateBearingToWaypoint() {
+    private func updateBearingforWaypoint() {
         guard let currentLocation = lastLocation,
               let waypointLocation = averagedWaypointLocation else {
             bearingToWaypoint = 0
@@ -261,7 +265,7 @@ class LocationManager: NSObject, ObservableObject {
 extension LocationManager: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard !paused, let location = locations.last else { return }
-        
+        print("Latitude: \(location.coordinate.latitude), Longitude: \(location.coordinate.longitude) Speed: \(location.speed) m/s")
         latestLocation = location
         gpsConnected = true
         gpsAccuracy = location.horizontalAccuracy
@@ -274,7 +278,7 @@ extension LocationManager: CLLocationManagerDelegate {
             elevationSafetyNotification(elevation: location.altitude)
         }
         
-        if isCalculatingWaypoint {
+        if calculatingWaypoint {
             handleWaypointCalculation(location: location)
         }
         
@@ -289,17 +293,17 @@ extension LocationManager: CLLocationManagerDelegate {
         self.lastLocation = location
         
         // Update bearing after setting lastLocation
-        updateBearingToWaypoint()
+        updateBearingforWaypoint()
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         guard !paused else { return }
-        if isRecalibrating {
+        if recalibratingCompass {
             calibrationReadings.append(newHeading.trueHeading)
         } else {
             userHeading = newHeading.trueHeading
             heading = newHeading.trueHeading
-            updateBearingToWaypoint()
+            updateBearingforWaypoint()
         }
     }
     
@@ -336,6 +340,7 @@ extension LocationManager: CLLocationManagerDelegate {
                 let acceleration = speedChange / timeInterval
                 accelerationReadings.append(acceleration)
             }
+            speedReadings.append(SpeedReading(time: location.timestamp, speed: speed))
         }
         
         self.lastLocation = location
@@ -364,10 +369,10 @@ extension LocationManager: CLLocationManagerDelegate {
             averagedWaypointLocation = CLLocation(latitude: averageLat, longitude: averageLon)
             waypointCompletion?(averagedWaypointLocation)
             waypointLocations.removeAll()
-            isCalculatingWaypoint = false
+            calculatingWaypoint = false
             
             // Update bearing after setting averagedWaypointLocation
-            updateBearingToWaypoint()
+            updateBearingforWaypoint()
         }
     }
 }
@@ -414,4 +419,14 @@ extension Double {
 struct ElevationReading {
     var time: Date
     var elevation: Double
+}
+
+struct AccelerationReading {
+    var time: Date
+    var acceleration: Double
+}
+
+struct SpeedReading {
+    var time: Date
+    var speed: Double
 }

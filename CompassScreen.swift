@@ -140,7 +140,7 @@ struct CompassScreen: View {
             self.performingFigure8 = false
             motionManager.stopDeviceMotionUpdates()
         }
-        .onChange(of: viewModel.isRecalibrating) { oldValue, newValue in
+        .onChange(of: viewModel.recalibratingCompass) { oldValue, newValue in
             if newValue {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     overlayOpacity = 1

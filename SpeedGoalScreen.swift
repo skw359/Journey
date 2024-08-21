@@ -10,7 +10,7 @@ struct SpeedGoalScreen: View {
     @State private var isBlinking = false
     @State private var showSetSpeedFromInfo = false
     
-    let variableColor = Color(hex: "#00ff81")
+    let buttonColor = Color(hex: "#00ff81")
     let blinkTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     
     var body: some View {
@@ -26,7 +26,7 @@ struct SpeedGoalScreen: View {
                             
                             HStack {
                                 Image(systemName: "gauge.high")
-                                    .foregroundColor(variableColor)
+                                    .foregroundColor(buttonColor)
                                     .font(.title3)
                                 Text("Speedgoal")
                                     .foregroundColor(.white)
@@ -60,7 +60,7 @@ struct SpeedGoalScreen: View {
                                         .resizable()
                                         .aspectRatio(contentMode: .fit)
                                         .frame(width: 20, height: 20)
-                                        .foregroundColor(variableColor)
+                                        .foregroundColor(buttonColor)
                                     
                                     if speedTargetManager.waitingForGPS {
                                         ShimmeringText(text: "Setting Speed...", baseColor: .white)
@@ -84,7 +84,10 @@ struct SpeedGoalScreen: View {
                     // Speedometer view
                     SpeedometerView(
                         currentSpeed: locationManager.speed,
-                        targetSpeed: speedTargetManager.targetSpeed
+                        targetSpeed: speedTargetManager.targetSpeed,
+                        onSettingsPressed: {
+                            showSetTargetSpeed = true
+                        }
                     )
                     .frame(height: 200)
                     .padding(.vertical, 20)
@@ -104,12 +107,12 @@ struct SpeedGoalScreen: View {
                         if speedTargetManager.startTime != nil {
                             Text(speedTargetManager.formatTime(speedTargetManager.elapsedTime))
                                 .font(.headline)
-                                .foregroundColor(variableColor)
+                                .foregroundColor(buttonColor)
                                 .padding(.bottom, 40)
                         } else {
                             Text("")
                                 .font(.headline)
-                                .foregroundColor(variableColor)
+                                .foregroundColor(buttonColor)
                                 .padding(.bottom, 40)
                         }
                     }
@@ -126,6 +129,8 @@ struct SpeedGoalScreen: View {
                         showSetTargetSpeed = false
                         speedTargetManager.setSpeed = true
                         speedTargetManager.hitTargetSpeed = false
+                        // Update the target speed while in motion
+                        speedTargetManager.updateStatus(currentSpeed: locationManager.speed)
                     }
                 }
             }
@@ -147,6 +152,9 @@ struct SpeedGoalScreen: View {
                     speedTargetManager.setTargetSpeed(locationManager: locationManager) {
                         showSetSpeedFromInfo = false
                         speedTargetManager.setSpeed = true
+                        speedTargetManager.hitTargetSpeed = false
+                        // Update the target speed while in motion
+                        speedTargetManager.updateStatus(currentSpeed: locationManager.speed)
                     }
                 }
             }

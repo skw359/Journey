@@ -14,6 +14,8 @@ struct WaypointScreen: View {
     @State private var isWaypointButtonDisabled = false
     @State private var creatingWaypoint = false
     
+    let buttonColor = Color(hex: "#00ff81")
+    
     var waypointExists: Bool {
         locationManager.averagedWaypointLocation != nil
     }
@@ -119,7 +121,7 @@ struct WaypointScreen: View {
                                                     .resizable()
                                                     .aspectRatio(contentMode: .fit)
                                                     .frame(width: 20, height: 20)
-                                                    .foregroundColor(.white)
+                                                    .foregroundColor(buttonColor)
                                                 
                                                 Text("Create Waypoint")
                                                     .foregroundColor(.white)
@@ -127,7 +129,7 @@ struct WaypointScreen: View {
                                         }
                                         .frame(maxWidth: .infinity)
                                         .padding()
-                                        .background(Color(hex: "#222223"))
+                                        .background(creatingWaypoint ? Color(hex: "#222223") : Color(hex: "#0c3617"))
                                         .cornerRadius(15)
                                     }
                                     .buttonStyle(PlainButtonStyle())

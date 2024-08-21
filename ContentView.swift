@@ -72,6 +72,7 @@ struct ContentView: View {
             SettingsView()
                 .environmentObject(userSettings)
         }
+        
     }
     
     // Initiates the recording process, resets relevant data, and updates the UI

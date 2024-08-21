@@ -4,8 +4,10 @@ import SwiftUI
 struct SpeedometerView: View {
     let currentSpeed: Double
     let targetSpeed: Int
+    var onSettingsPressed: () -> Void
     
     @State private var animatedSpeed: Double = 0
+    @State private var animatedTargetSpeed: Int = 0
     @State private var speedometerAppear = false
     
     private let arcColor = Color.white
@@ -44,14 +46,14 @@ struct SpeedometerView: View {
                         )
                     )
                     .mask(
-                        GradientTrail(progress: animatedSpeed / Double(targetSpeed))
+                        GradientTrail(progress: animatedSpeed / Double(animatedTargetSpeed))
                             .fill(Color.white)
                     )
                     .frame(width: size, height: size)
                 
                 // Colored arc from 7 o'clock to current position
                 Circle()
-                    .trim(from: 0, to: CGFloat(min(animatedSpeed / Double(targetSpeed), 1)) * 0.75)
+                    .trim(from: 0, to: CGFloat(min(animatedSpeed / Double(animatedTargetSpeed), 1)) * 0.75)
                     .stroke(
                         needleColor,
                         style: StrokeStyle(
@@ -63,7 +65,7 @@ struct SpeedometerView: View {
                     .rotationEffect(.degrees(135))
                 
                 // Extended needle
-                ExtendedNeedle(speed: animatedSpeed, maxSpeed: Double(targetSpeed))
+                ExtendedNeedle(speed: animatedSpeed, maxSpeed: Double(animatedTargetSpeed))
                     .fill(needleColor)
                     .frame(width: size, height: size)
                     .rotationEffect(.degrees(135))
@@ -84,6 +86,22 @@ struct SpeedometerView: View {
                 Circle()
                     .fill(Color.green)
                     .frame(width: size * 0.05, height: size * 0.05)
+                
+                VStack {
+                    HStack {
+                        Button(action: onSettingsPressed) {
+                            Image(systemName: "gear")
+                                .font(.system(size: 20)) // Adjust this size as needed
+                                .foregroundColor(.white)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .offset(x: 10, y: -20)
+                        
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
             }
             .frame(width: size, height: size)
             .position(center)
@@ -91,6 +109,7 @@ struct SpeedometerView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     withAnimation(.easeOut(duration: 0.5)) {
                         speedometerAppear = true
+                        animatedTargetSpeed = targetSpeed
                     }
                 }
             }
@@ -99,6 +118,11 @@ struct SpeedometerView: View {
         .onChange(of: currentSpeed) { _, newSpeed in
             withAnimation(.spring(response: 0.9, dampingFraction: 0.7)) {
                 animatedSpeed = newSpeed
+            }
+        }
+        .onChange(of: targetSpeed) { _, newTargetSpeed in
+            withAnimation(.spring(response: 0.9, dampingFraction: 0.7)) {
+                animatedTargetSpeed = newTargetSpeed
             }
         }
     }
