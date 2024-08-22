@@ -13,7 +13,6 @@ class LocationManager: NSObject, ObservableObject {
     // Location Tracking
     @Published var lastLocation: CLLocation?
     @Published var latestLocation: CLLocation?
-    private var previousLocation: CLLocation?
     private var lastGeocodedLocation: CLLocation?
     private let minimumDistanceForGeocoding: CLLocationDistance = 1000 // 1 km
     @Published var currentLocationName: String = ""
@@ -31,14 +30,11 @@ class LocationManager: NSObject, ObservableObject {
     @Published var distance = 0.0
     @Published var totalTime = 0.0
     @Published var totalTimeTimer: Int = 0
-    private var previousUpdateTime: Date?
     
     // Speed
     @Published var speed = 0.0
     @Published var topSpeed: Double = 0.0
     @Published var averageSpeed: Double = 0.0
-    private var totalSpeedReadings: Double = 0.0
-    private var numberOfSpeedReadings: Int = 0
     @Published var speedReadings: [SpeedReading] = []
     
     // Elevation
@@ -66,11 +62,10 @@ class LocationManager: NSObject, ObservableObject {
     
     private let significantElevationChange: Double = 5.0 // 5 meters
     private let significantSpeedChange: Double = 2.23694 // 5 mph in m/s
-    private let significantAccelerationChange: Double = 0.2 // 0.5 m/s^2
+    private let significantAccelerationChange: Double = 0.2 // 0.2 m/s^2
     private let minTimeBetweenReadings: TimeInterval = 10 // 10 seconds
     private var lastSignificantElevationReading: ElevationReading?
     private var lastSignificantSpeedReading: SpeedReading?
-    private var lastSignificantAccelerationReading: AccelerationReading?
     
     // MARK: - Initialization
     override init() {
@@ -97,6 +92,7 @@ class LocationManager: NSObject, ObservableObject {
         recording = true
         startTime = Date()
         totalTimeTimer = 0
+        
         resetMetrics()
         locationManager.startUpdatingLocation()
         setupTimer()
@@ -173,8 +169,6 @@ class LocationManager: NSObject, ObservableObject {
         totalTime = 0.0
         topSpeed = 0.0
         averageSpeed = 0.0
-        totalSpeedReadings = 0.0
-        numberOfSpeedReadings = 0
         accelerationReadings.removeAll()
         elevationReadings.removeAll()
     }
@@ -350,7 +344,7 @@ extension LocationManager: CLLocationManagerDelegate {
                 distance += newDistance * 0.00062137
                 topSpeed = max(topSpeed, currentSpeed * 2.23694)
                 totalTime += timeInterval
-                averageSpeed = (distance / totalTime) * 3600
+                averageSpeed = distance / (totalTime / 3600)
             }
             
             // Update elevation readings
