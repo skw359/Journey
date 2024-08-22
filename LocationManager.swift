@@ -9,7 +9,7 @@ class LocationManager: NSObject, ObservableObject {
     @Published var gpsConnected = false
     @Published var gpsAccuracy: CLLocationAccuracy?
     @Published var obtainedGPS = false
-
+    
     // Location Tracking
     @Published var lastLocation: CLLocation?
     @Published var latestLocation: CLLocation?
@@ -18,7 +18,7 @@ class LocationManager: NSObject, ObservableObject {
     private let minimumDistanceForGeocoding: CLLocationDistance = 1000 // 1 km
     @Published var currentLocationName: String = ""
     @Published var currentCountyName: String = ""
-
+    
     // Recording State
     @Published var recording = false
     @Published var startTime: Date?
@@ -26,13 +26,13 @@ class LocationManager: NSObject, ObservableObject {
     @Published var paused: Bool = false
     private var pauseStartTime: Date?
     private var totalPausedTime: TimeInterval = 0
-
+    
     // Distance and Time
     @Published var distance = 0.0
     @Published var totalTime = 0.0
     @Published var totalTimeTimer: Int = 0
     private var previousUpdateTime: Date?
-
+    
     // Speed
     @Published var speed = 0.0
     @Published var topSpeed: Double = 0.0
@@ -40,27 +40,27 @@ class LocationManager: NSObject, ObservableObject {
     private var totalSpeedReadings: Double = 0.0
     private var numberOfSpeedReadings: Int = 0
     @Published var speedReadings: [SpeedReading] = []
-
+    
     // Elevation
     @Published var currentElevation: Double = 0.0
     @Published var elevationReadings: [ElevationReading] = []
     @Published var moderateAltitudeNotificationSent = false
     @Published var highAltitudeNotificationSent = false
-
+    
     // Heading and Compass
     @Published var userHeading: Double = 0.0
     @Published var heading: Double = 0
     @Published var recalibratingCompass = false
     private var calibrationReadings: [Double] = []
     private let calibrationDuration: TimeInterval = 20
-
+    
     // Waypoints
     private var waypointLocations: [CLLocation] = []
     private var waypointCompletion: ((CLLocation?) -> Void)?
     @Published var calculatingWaypoint = false
     @Published var averagedWaypointLocation: CLLocation?
     @Published var bearingToWaypoint: Double = 0
-
+    
     // Acceleration
     @Published var accelerationReadings: [Double] = []
     
@@ -305,7 +305,7 @@ extension LocationManager: CLLocationManagerDelegate {
         // Record acceleration
         if let lastLocation = self.lastLocation {
             let timeInterval = location.timestamp.timeIntervalSince(lastLocation.timestamp)
-            let speedChange = location.speed - lastLocation.speed
+            let speedChange = max(location.speed, 0) - max(lastLocation.speed, 0)
             let acceleration = speedChange / timeInterval
             accelerationReadings.append(acceleration)
         }
@@ -339,7 +339,7 @@ extension LocationManager: CLLocationManagerDelegate {
         
         let currentTime = location.timestamp
         let currentElevation = location.altitude
-        let currentSpeed = location.speed
+        let currentSpeed = max(location.speed, 0)
         
         if let lastLocation = self.lastLocation {
             let timeInterval = currentTime.timeIntervalSince(lastLocation.timestamp)
@@ -375,12 +375,12 @@ extension LocationManager: CLLocationManagerDelegate {
                 let timeChange = currentTime.timeIntervalSince(lastReading.time)
                 
                 if speedChange >= significantSpeedChange || timeChange >= minTimeBetweenReadings {
-                    let newReading = SpeedReading(time: currentTime, speed: currentSpeed * 2.23694)
+                    let newReading = SpeedReading(time: currentTime, speed: max(currentSpeed * 2.23694, 0))
                     speedReadings.append(newReading)
                     lastSignificantSpeedReading = newReading
                 }
             } else {
-                let newReading = SpeedReading(time: currentTime, speed: currentSpeed * 2.23694)
+                let newReading = SpeedReading(time: currentTime, speed: max(currentSpeed * 2.23694, 0))
                 speedReadings.append(newReading)
                 lastSignificantSpeedReading = newReading
             }
@@ -407,7 +407,7 @@ extension LocationManager: CLLocationManagerDelegate {
         }
         
         self.lastLocation = location
-        self.speed = currentSpeed * 2.23694
+        self.speed = max(currentSpeed * 2.23694, 0)
         self.currentElevation = currentElevation
         
         DispatchQueue.main.async {
