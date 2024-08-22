@@ -40,7 +40,7 @@ struct TravelRecordedView: View {
                 .font(.headline)
                 .fontWeight(.bold)
             
-            SpeedGraphView(readings: locationManager.speedReadings)
+            SpeedGraphView(readings: locationManager.speedReadings, topSpeed: travelData.topSpeed)
                 .frame(height: 125)
                 .border(Color.clear)
         }
@@ -309,10 +309,10 @@ struct ElevationGraphView: View {
 
 struct SpeedGraphView: View {
     var readings: [SpeedReading]
+    var topSpeed: Double
     
     private var maxSpeed: String {
-        let maxSpeed = readings.map { $0.speed }.max() ?? 0
-        return String(format: "%.0f", maxSpeed)
+        return String(format: "%.0f", topSpeed)
     }
     
     private var minSpeed: String {
@@ -336,12 +336,11 @@ struct SpeedGraphView: View {
     private let bottomPadding: CGFloat = 20
     
     private func scaleReading(_ reading: SpeedReading, in size: CGSize) -> CGPoint {
-        let maxSpeed = readings.map { $0.speed }.max() ?? 1
         let totalTime = readings.last?.time.timeIntervalSince(readings.first?.time ?? Date()) ?? 1
         let timeElapsed = reading.time.timeIntervalSince(readings.first?.time ?? Date())
         
         let xScale = (size.width - leftPadding) / CGFloat(totalTime)
-        let yScale = (size.height - bottomPadding) / CGFloat(maxSpeed)
+        let yScale = (size.height - bottomPadding) / CGFloat(topSpeed)
         
         let x = xScale * CGFloat(timeElapsed) + leftPadding
         let y = size.height - (CGFloat(reading.speed) * yScale) - bottomPadding
