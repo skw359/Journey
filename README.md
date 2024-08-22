@@ -38,7 +38,6 @@ Journey is currently in active development. While it's functional, there are sti
 - Develop a more robust reverse geocoding system
 - Optimize battery usage
 - Add support for multiple waypoints
-- Refine speed goal implementation
 - Explore travel prediction algorithms for reverse geocoding
 
 **Installation**
