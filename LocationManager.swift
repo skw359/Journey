@@ -64,6 +64,14 @@ class LocationManager: NSObject, ObservableObject {
     // Acceleration
     @Published var accelerationReadings: [Double] = []
     
+    private let significantElevationChange: Double = 5.0 // 5 meters
+    private let significantSpeedChange: Double = 2.23694 // 5 mph in m/s
+    private let significantAccelerationChange: Double = 0.5 // 0.5 m/s^2
+    private let minTimeBetweenReadings: TimeInterval = 10 // 10 seconds
+    private var lastSignificantElevationReading: ElevationReading?
+    private var lastSignificantSpeedReading: SpeedReading?
+    private var lastSignificantAccelerationReading: AccelerationReading?
+    
     // MARK: - Initialization
     override init() {
         super.init()
@@ -329,33 +337,77 @@ extension LocationManager: CLLocationManagerDelegate {
     private func updateMetrics(with location: CLLocation) {
         guard !paused, recording else { return }
         
+        let currentTime = location.timestamp
+        let currentElevation = location.altitude
+        let currentSpeed = max(0, location.speed * 2.23694) // Convert to mph
+        
         if let lastLocation = self.lastLocation {
-            let timeInterval = location.timestamp.timeIntervalSince(lastLocation.timestamp)
-            speed = max(0, location.speed * 2.23694)
+            let timeInterval = currentTime.timeIntervalSince(lastLocation.timestamp)
             
-            if speed > 0.9 {
+            // Update basic metrics
+            if currentSpeed > 0.9 {
                 let newDistance = location.distance(from: lastLocation)
-                distance += newDistance * 0.00062137
-                topSpeed = max(topSpeed, speed)
+                distance += newDistance * 0.00062137 // Convert to miles
+                topSpeed = max(topSpeed, currentSpeed)
                 totalTime += timeInterval
                 averageSpeed = (distance / totalTime) * 3600
             }
             
-            let newElevation = location.altitude
-            let elevationChange = abs(newElevation - currentElevation)
-            
-            if elevationChange >= 0.3048 {
-                currentElevation = newElevation
-                recordElevationReading(elevation: currentElevation)
+            // Update elevation readings
+            if let lastReading = lastSignificantElevationReading {
+                let elevationChange = abs(currentElevation - lastReading.elevation)
+                let timeChange = currentTime.timeIntervalSince(lastReading.time)
                 
-                let speedChange = location.speed - lastLocation.speed
-                let acceleration = speedChange / timeInterval
-                accelerationReadings.append(acceleration)
+                if elevationChange >= significantElevationChange || timeChange >= minTimeBetweenReadings {
+                    let newReading = ElevationReading(time: currentTime, elevation: currentElevation)
+                    elevationReadings.append(newReading)
+                    lastSignificantElevationReading = newReading
+                }
+            } else {
+                let newReading = ElevationReading(time: currentTime, elevation: currentElevation)
+                elevationReadings.append(newReading)
+                lastSignificantElevationReading = newReading
             }
-            speedReadings.append(SpeedReading(time: location.timestamp, speed: speed))
+            
+            // Update speed readings
+            if let lastReading = lastSignificantSpeedReading {
+                let speedChange = abs(currentSpeed - lastReading.speed)
+                let timeChange = currentTime.timeIntervalSince(lastReading.time)
+                
+                if speedChange >= significantSpeedChange || timeChange >= minTimeBetweenReadings {
+                    let newReading = SpeedReading(time: currentTime, speed: currentSpeed)
+                    speedReadings.append(newReading)
+                    lastSignificantSpeedReading = newReading
+                }
+            } else {
+                let newReading = SpeedReading(time: currentTime, speed: currentSpeed)
+                speedReadings.append(newReading)
+                lastSignificantSpeedReading = newReading
+            }
+            
+            // Update acceleration readings
+            if timeInterval > 0 {
+                let currentAcceleration = (location.speed - lastLocation.speed) / timeInterval
+                if accelerationReadings.isEmpty || abs(currentAcceleration) >= significantAccelerationChange || timeInterval >= minTimeBetweenReadings {
+                    accelerationReadings.append(currentAcceleration)
+                }
+            }
+        } else {
+            // First reading
+            lastSignificantElevationReading = ElevationReading(time: currentTime, elevation: currentElevation)
+            lastSignificantSpeedReading = SpeedReading(time: currentTime, speed: currentSpeed)
+            elevationReadings.append(lastSignificantElevationReading!)
+            speedReadings.append(lastSignificantSpeedReading!)
+            accelerationReadings.append(0) // Initial acceleration is 0
         }
         
         self.lastLocation = location
+        self.speed = currentSpeed
+        self.currentElevation = currentElevation
+        
+        DispatchQueue.main.async {
+            self.objectWillChange.send()
+        }
     }
     
     private func handleWaypointCalculation(location: CLLocation) {
