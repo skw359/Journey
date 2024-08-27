@@ -187,8 +187,12 @@ struct TravelRecordedView: View {
 
 struct ElevationGraphView: View {
     var readings: [ElevationReading]
+    @State private var downsampledReadings: [ElevationReading] = []
     
-    // Calculate max, min, and starting elevations, and format times
+    private let targetSampleCount = 100
+    private let leftPadding: CGFloat = 20
+    private let bottomPadding: CGFloat = 20
+    
     private var maxElevation: String {
         let maxElev = readings.map { $0.elevation }.max() ?? 0
         return formatElevation(maxElev)
@@ -197,11 +201,6 @@ struct ElevationGraphView: View {
     private var minElevation: String {
         let minElev = readings.map { $0.elevation }.min() ?? 0
         return formatElevation(minElev)
-    }
-    
-    private var startElevation: String {
-        let startElev = readings.first?.elevation ?? 0
-        return formatElevation(startElev)
     }
     
     private var startTime: String {
@@ -218,11 +217,8 @@ struct ElevationGraphView: View {
     
     private func formatElevation(_ elevation: Double) -> String {
         let elevationInFeet = elevation * 3.281
-        return "\(String(format: "%.0f", elevationInFeet))"
+        return "\(String(format: "%.0f", elevationInFeet)) ft"
     }
-    
-    private let leftPadding: CGFloat = 20
-    private let bottomPadding: CGFloat = 20 // Added for time labels
     
     private func scaleReading(_ reading: ElevationReading, in size: CGSize) -> CGPoint {
         let initialElevation = readings.first?.elevation ?? 0
@@ -255,9 +251,9 @@ struct ElevationGraphView: View {
                 .frame(height: geometry.size.height - bottomPadding)
                 .position(x: leftPadding / 2 - 5, y: (geometry.size.height - bottomPadding) / 2)
                 
-                // Graph and axis lines
+                // Graph line
                 Path { path in
-                    let points = readings.map { scaleReading($0, in: geometry.size) }
+                    let points = downsampledReadings.map { scaleReading($0, in: geometry.size) }
                     guard let firstPoint = points.first else { return }
                     
                     path.move(to: firstPoint)
@@ -267,14 +263,13 @@ struct ElevationGraphView: View {
                 }
                 .stroke(Color.green, lineWidth: 2)
                 
-                // Draw horizontal line at top elevation
+                // Horizontal lines
                 Path { path in
                     path.move(to: CGPoint(x: leftPadding, y: 0))
                     path.addLine(to: CGPoint(x: geometry.size.width, y: 0))
                 }
                 .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
                 
-                // Draw horizontal line at middle elevation
                 Path { path in
                     path.move(to: CGPoint(x: leftPadding, y: (geometry.size.height - bottomPadding) / 2))
                     path.addLine(to: CGPoint(x: geometry.size.width, y: (geometry.size.height - bottomPadding) / 2))
@@ -293,23 +288,40 @@ struct ElevationGraphView: View {
                     .offset(x: leftPadding / 2, y: bottomPadding / 2)
                 }
                 
-                // Draw the X-axis line
+                // X-axis line
                 Path { path in
                     path.move(to: CGPoint(x: leftPadding, y: geometry.size.height - bottomPadding))
                     path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height - bottomPadding))
                 }
                 .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
             }
-            
         }
-        
+        .onAppear {
+            downsampleData()
+        }
+        .onChange(of: readings) {
+            downsampleData()
+        }
     }
     
+    private func downsampleData() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let downsampled = downsampleReadings(self.readings, targetCount: self.targetSampleCount)
+            DispatchQueue.main.async {
+                self.downsampledReadings = downsampled
+            }
+        }
+    }
 }
 
 struct SpeedGraphView: View {
     var readings: [SpeedReading]
     var topSpeed: Double
+    @State private var downsampledReadings: [SpeedReading] = []
+    
+    private let targetSampleCount = 100
+    private let leftPadding: CGFloat = 20
+    private let bottomPadding: CGFloat = 20
     
     private var maxSpeed: String {
         return String(format: "%.0f", topSpeed)
@@ -332,9 +344,6 @@ struct SpeedGraphView: View {
         return formatter.string(from: readings.last?.time ?? Date())
     }
     
-    private let leftPadding: CGFloat = 20
-    private let bottomPadding: CGFloat = 20
-    
     private func scaleReading(_ reading: SpeedReading, in size: CGSize) -> CGPoint {
         let totalTime = readings.last?.time.timeIntervalSince(readings.first?.time ?? Date()) ?? 1
         let timeElapsed = reading.time.timeIntervalSince(readings.first?.time ?? Date())
@@ -352,15 +361,7 @@ struct SpeedGraphView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 20) {
                 VStack(alignment: .leading, spacing: 0) {
-                    /*
-                     HStack(spacing: 5) {
-                     Image(systemName: "bolt.circle.fill")
-                     .foregroundColor(Color(hex: "#00ff81"))
-                     Text("\(maxSpeed) ")
-                     + Text("mph").font(.caption2)
-                     
-                     }
-                     */
+                    // You can add additional speed information here if needed
                 }
                 .font(.subheadline)
                 Spacer()
@@ -377,9 +378,9 @@ struct SpeedGraphView: View {
                     .frame(height: geometry.size.height - bottomPadding)
                     .position(x: leftPadding / 2 - 5, y: (geometry.size.height - bottomPadding) / 2)
                     
-                    // Graph and axis lines
+                    // Graph line
                     Path { path in
-                        let points = readings.map { scaleReading($0, in: geometry.size) }
+                        let points = downsampledReadings.map { scaleReading($0, in: geometry.size) }
                         guard let firstPoint = points.first else { return }
                         
                         path.move(to: firstPoint)
@@ -389,7 +390,7 @@ struct SpeedGraphView: View {
                     }
                     .stroke(Color.orange, lineWidth: 2)
                     
-                    // Draw horizontal lines
+                    // Horizontal lines
                     Path { path in
                         path.move(to: CGPoint(x: leftPadding, y: 0))
                         path.addLine(to: CGPoint(x: geometry.size.width, y: 0))
@@ -414,13 +415,28 @@ struct SpeedGraphView: View {
                         .offset(x: leftPadding / 2, y: bottomPadding / 2)
                     }
                     
-                    // Draw the X-axis line
+                    // X-axis line
                     Path { path in
                         path.move(to: CGPoint(x: leftPadding, y: geometry.size.height - bottomPadding))
                         path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height - bottomPadding))
                     }
                     .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
                 }
+            }
+        }
+        .onAppear {
+            downsampleData()
+        }
+        .onChange(of: readings) {
+            downsampleData()
+        }
+    }
+    
+    private func downsampleData() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let downsampled = downsampleReadings(self.readings, targetCount: self.targetSampleCount)
+            DispatchQueue.main.async {
+                self.downsampledReadings = downsampled
             }
         }
     }
@@ -430,6 +446,11 @@ struct AccelerationGraphView: View {
     var readings: [Double]
     var startTime: Date
     var endTime: Date
+    @State private var downsampledReadings: [Double] = []
+    
+    private let targetSampleCount = 100
+    private let leftPadding: CGFloat = 20
+    private let bottomPadding: CGFloat = 20
     
     private var maxAcceleration: Double {
         readings.max() ?? 0
@@ -451,13 +472,10 @@ struct AccelerationGraphView: View {
         return formatter.string(from: endTime)
     }
     
-    private let leftPadding: CGFloat = 20
-    private let bottomPadding: CGFloat = 20
-    
     private func scaleReading(_ reading: Double, index: Int, in size: CGSize) -> CGPoint {
         let maxAbsAcceleration = readings.map { abs($0) }.max() ?? 1
         
-        let xScale = (size.width - leftPadding) / CGFloat(readings.count - 1)
+        let xScale = (size.width - leftPadding) / CGFloat(downsampledReadings.count - 1)
         let yMidPoint = (size.height - bottomPadding) / 2
         let yScale = yMidPoint / CGFloat(maxAbsAcceleration)
         
@@ -484,11 +502,9 @@ struct AccelerationGraphView: View {
                         Text(String(format: "%.1f ", minAcceleration)) +
                         Text("m/s").font(.caption2) +
                         Text("²").font(.caption2).baselineOffset(4)
-                        
                     }
                 }
                 .font(.subheadline)
-                
                 Spacer()
             }
             
@@ -505,9 +521,9 @@ struct AccelerationGraphView: View {
                     .frame(height: geometry.size.height - bottomPadding)
                     .position(x: leftPadding / 2 - 5, y: (geometry.size.height - bottomPadding) / 2)
                     
-                    // Graph and axis lines
+                    // Graph line
                     Path { path in
-                        let points = readings.enumerated().map { scaleReading($0.element, index: $0.offset, in: geometry.size) }
+                        let points = downsampledReadings.enumerated().map { scaleReading($0.element, index: $0.offset, in: geometry.size) }
                         guard let firstPoint = points.first else { return }
                         
                         path.move(to: firstPoint)
@@ -517,7 +533,7 @@ struct AccelerationGraphView: View {
                     }
                     .stroke(Color.blue, lineWidth: 2)
                     
-                    // Draw horizontal lines
+                    // Horizontal lines
                     Path { path in
                         path.move(to: CGPoint(x: leftPadding, y: 0))
                         path.addLine(to: CGPoint(x: geometry.size.width, y: 0))
@@ -550,5 +566,28 @@ struct AccelerationGraphView: View {
                 }
             }
         }
+        .onAppear {
+            downsampleData()
+        }
+        .onChange(of: readings) {
+            downsampleData()
+        }
+    }
+    
+    private func downsampleData() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let downsampled = downsampleReadings(self.readings, targetCount: self.targetSampleCount)
+            DispatchQueue.main.async {
+                self.downsampledReadings = downsampled
+            }
+        }
+    }
+}
+
+func downsampleReadings<T>(_ readings: [T], targetCount: Int) -> [T] {
+    guard readings.count > targetCount else { return readings }
+    let stride = Double(readings.count) / Double(targetCount)
+    return (0..<targetCount).map { i in
+        readings[min(readings.count - 1, Int(Double(i) * stride))]
     }
 }
