@@ -479,17 +479,29 @@ extension Double {
     func toDegrees() -> Double { self * 180 / .pi }
 }
 
-struct ElevationReading {
+struct ElevationReading: Equatable {
     var time: Date
     var elevation: Double
+    
+    static func == (lhs: ElevationReading, rhs: ElevationReading) -> Bool {
+        return lhs.time == rhs.time && lhs.elevation == rhs.elevation
+    }
 }
 
-struct AccelerationReading {
+struct AccelerationReading: Equatable {
     var time: Date
     var acceleration: Double
+    
+    static func == (lhs: AccelerationReading, rhs: AccelerationReading) -> Bool {
+        return lhs.time == rhs.time && lhs.acceleration == rhs.acceleration
+    }
 }
 
-struct SpeedReading {
+struct SpeedReading: Equatable {
     var time: Date
     var speed: Double
+    
+    static func == (lhs: SpeedReading, rhs: SpeedReading) -> Bool {
+        return lhs.time == rhs.time && lhs.speed == rhs.speed
+    }
 }
