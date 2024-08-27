@@ -1,5 +1,5 @@
 <div align="center">
-  <strong>👋 Welcome to Journey, a powerful travel companion app designed for Apple Watch</strong>
+  <strong>👋 Welcome to Journey, the independent watch app for exploring your world.</strong>
 </div>
 
 <p></p>
@@ -25,7 +25,7 @@ Journey is designed to be one of the most accurate and user-friendly travel apps
 
 **Development Status**
 
-Journey is currently in active development. While it's functional, there are still optimizations and features to be added. Contributors and testers are welcome!
+Journey is currently in very active development. While it's functional, there are still optimizations and features to be added. Contributors and testers are welcome!
 
 **Known Issues**
 
@@ -38,7 +38,6 @@ Journey is currently in active development. While it's functional, there are sti
 - Develop a more robust reverse geocoding system
 - Optimize battery usage
 - Add support for multiple waypoints
-- Explore travel prediction algorithms for reverse geocoding
 
 **Installation**
 
