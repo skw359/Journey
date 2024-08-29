@@ -24,8 +24,8 @@ struct RecordingView: View {
                     .environmentObject(userSettings)
                     .position(x: geometry.size.width / 2, y: geometry.size.height / 2.2)
                 
-                // CityNameElement (1/4 down the screen vertically, centered horizontally)
-                CityNameElement(locationManager: locationManager)
+                // LocationNameElement (1/4 down the screen vertically, centered horizontally)
+                LocationNameElement(locationManager: locationManager)
                     .position(x: geometry.size.width / 2, y: geometry.size.height * 0.2)
                 
                 // ElevationElement (bottom left)
