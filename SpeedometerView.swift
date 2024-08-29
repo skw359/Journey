@@ -63,6 +63,7 @@ struct SpeedometerView: View {
                         )
                     )
                     .rotationEffect(.degrees(135))
+                    .opacity(animatedSpeed > 0 ? 1 : 0)
                 
                 // Extended needle
                 ExtendedNeedle(speed: animatedSpeed, maxSpeed: Double(animatedTargetSpeed))

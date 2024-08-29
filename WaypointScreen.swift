@@ -10,8 +10,8 @@ struct WaypointScreen: View {
     @State private var circleColor = Color(hex: "#00ff81")
     @State private var ringColor = Color.gray
     @State private var distanceInFeet: Double = 0
-    @State private var showWaytracerInfo = false
-    @State private var isWaypointButtonDisabled = false
+    @State private var showInfoSheet = false
+    @State private var disableWaypointButton = false
     @State private var creatingWaypoint = false
     
     let buttonColor = Color(hex: "#00ff81")
@@ -88,7 +88,7 @@ struct WaypointScreen: View {
                                     .frame(maxWidth: .infinity, alignment: .center)
                                     .offset(y: geometry.size.height / 396 * 20 - 15)
                                     
-                                    Button(action: { showWaytracerInfo.toggle() }) {
+                                    Button(action: { showInfoSheet.toggle() }) {
                                         HStack(alignment: .center, spacing: 10) {
                                             Image(systemName: "questionmark.circle")
                                                 .resizable()
@@ -137,7 +137,7 @@ struct WaypointScreen: View {
                                     
                                     Spacer()
                                 }
-                                .sheet(isPresented: $showWaytracerInfo) {
+                                .sheet(isPresented: $showInfoSheet) {
                                     ScrollView {
                                         VStack(alignment: .leading, spacing: 16) {
                                             Text("Worried about finding your way back?")
@@ -157,7 +157,7 @@ struct WaypointScreen: View {
                                                         .frame(width: 20, height: 20)
                                                         .foregroundColor(.white)
                                                     
-                                                    if isWaypointButtonDisabled {
+                                                    if disableWaypointButton {
                                                         ShimmeringText(text: "Creating", baseColor: .white)
                                                     } else {
                                                         Text("Create Waypoint")
@@ -166,11 +166,11 @@ struct WaypointScreen: View {
                                                 }
                                                 .frame(maxWidth: .infinity)
                                                 .padding()
-                                                .background(isWaypointButtonDisabled ? Color(hex: "#222223") : Color(hex: "#222223"))
+                                                .background(disableWaypointButton ? Color(hex: "#222223") : Color(hex: "#222223"))
                                                 .cornerRadius(15)
                                             }
                                             .buttonStyle(PlainButtonStyle())
-                                            .disabled(isWaypointButtonDisabled)
+                                            .disabled(disableWaypointButton)
                                         }
                                     }
                                 }
@@ -211,7 +211,7 @@ struct WaypointScreen: View {
     }
     
     private func createWaypoint() {
-        isWaypointButtonDisabled = true
+        disableWaypointButton = true
         locationManager.startWaypointCalculation()
         locationManager.averagedWaypointLocation = nil
         
@@ -222,7 +222,7 @@ struct WaypointScreen: View {
                 locationManager.averagedWaypointLocation = averagedLocation
             }
             creatingWaypoint = false
-            isWaypointButtonDisabled = false
+            disableWaypointButton = false
             Haptics.vibrate(.success)
         }
     }

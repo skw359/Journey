@@ -3,10 +3,9 @@ import CoreLocation
 
 struct LocationNameElement: View {
     @ObservedObject var locationManager: LocationManager
-    @State private var countyName: String = ""
-    @State private var lastFetchedCountyName: String? = nil
+    @State private var locationInfo: (name: String, county: String) = ("", "")
     @State private var showCounty: Bool = false
-
+    
     var body: some View {
         Text(displayText)
             .padding(8)
@@ -15,74 +14,61 @@ struct LocationNameElement: View {
             .foregroundColor(Color(hex: "#bee0ec"))
             .transition(.opacity)
             .animation(.easeInOut(duration: 0.2), value: showCounty)
-            .onAppear {
-                getLocationInfo()
-            }
+            .onAppear(perform: updateLocationInfo)
             .onChange(of: locationManager.latestLocation) {
-                getLocationInfo()
+                updateLocationInfo()
             }
             .onTapGesture {
-                if !countyName.isEmpty {
-                    self.showCounty.toggle()
+                if !locationInfo.county.isEmpty {
+                    showCounty.toggle()
                 }
             }
     }
-
+    
     private var displayText: String {
-        if !countyName.isEmpty {
-            return showCounty ? countyName : locationManager.currentLocationName
-        } else {
-            return locationManager.currentLocationName
-        }
+        showCounty && !locationInfo.county.isEmpty ? locationInfo.county : locationInfo.name
     }
-
-    private func getLocationInfo() {
+    
+    private func updateLocationInfo() {
         guard let location = locationManager.latestLocation else {
-            self.countyName = ""
+            locationInfo = ("", "")
             return
         }
-
-        let geocoder = CLGeocoder()
-        geocoder.reverseGeocodeLocation(location) { placemarks, error in
-            if let error = error {
-                print("Geocoding failed with error: \(error.localizedDescription)")
-                self.countyName = self.lastFetchedCountyName ?? ""
-            } else if let placemark = placemarks?.first {
+        
+        CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("Geocoding failed with error: \(error.localizedDescription)")
+                    // Keep the previous location info in case of error
+                    return
+                }
+                
+                guard let placemark = placemarks?.first else {
+                    locationInfo = ("", "")
+                    return
+                }
+                
                 let country = placemark.country ?? ""
+                let city = placemark.locality ?? ""
+                let state = placemark.administrativeArea ?? ""
+                let subAdministrativeArea = placemark.subAdministrativeArea ?? ""
                 
                 if country == "United States" {
-                    self.handleUSLocation(placemark)
+                    let countyName: String
+                    if city.isEmpty && subAdministrativeArea.isEmpty {
+                        countyName = state
+                    } else if subAdministrativeArea == ", \(state)" || city == ", \(state)" {
+                        countyName = state
+                    } else {
+                        countyName = subAdministrativeArea.isEmpty ? city : subAdministrativeArea
+                    }
+                    locationInfo = ("\(city), \(state)", countyName)
                 } else {
-                    self.handleNonUSLocation(placemark)
+                    locationInfo = ("\(city), \(country)", "")
                 }
-            } else {
-                self.countyName = ""
+                
+                locationManager.currentLocationName = locationInfo.name
             }
         }
-    }
-
-    private func handleUSLocation(_ placemark: CLPlacemark) {
-        let locality = placemark.locality ?? ""
-        let subAdministrativeArea = placemark.subAdministrativeArea ?? ""
-        let state = placemark.administrativeArea ?? ""
-
-        if locality.isEmpty && subAdministrativeArea.isEmpty {
-            self.countyName = state
-        } else if subAdministrativeArea == ", \(state)" || locality == ", \(state)" {
-            self.countyName = state
-        } else {
-            let fetchedCounty = subAdministrativeArea.isEmpty ? locality : subAdministrativeArea
-            self.countyName = fetchedCounty
-            self.lastFetchedCountyName = fetchedCounty
-        }
-
-        locationManager.currentLocationName = "\(locality), \(state)"
-    }
-
-    private func handleNonUSLocation(_ placemark: CLPlacemark) {
-        let city = placemark.locality ?? ""
-        let country = placemark.country ?? ""
-        locationManager.currentLocationName = "\(city), \(country)"
-        self.countyName = ""
     }
 }

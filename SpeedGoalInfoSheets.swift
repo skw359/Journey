@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SpeedGoalInfoSheet: View {
-    var onSetSpeed: () -> Void
+    var setSpeed: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -10,11 +10,11 @@ struct SpeedGoalInfoSheet: View {
                 .bold()
             
             Text("Speedgoal allows you set a target speed and times your acceleration until you reach it.")
-            Text("For example, if you want to measure how long it takes to go from 0 to 60 mph, you would set 60 mph as the target. Once movement is detected, the timer starts automatically and continues until you reach 60 mph. This is useful for quantifying acceleration times, athletes tracking sprint starts, or other fitness metrics.")
+            Text("For example, if you want to measure how long it takes to go from 0 to 60 mph, you would set 60 mph as the target. Once movement is detected, the timer automatically starts and continues until you reach 60 mph. This is useful for quantifying acceleration times, athletes tracking sprint starts, or other fitness metrics.")
             
             Spacer()
             
-            Button(action: onSetSpeed) {
+            Button(action: setSpeed) {
                 HStack(alignment: .center, spacing: 10) {
                     Image(systemName: "speedometer")
                         .resizable()
@@ -39,7 +39,7 @@ struct SpeedGoalInfoSheet: View {
 struct SetTargetSpeedSheet: View {
     @Binding var targetSpeed: Int
     @Binding var waitingForGPS: Bool
-    var onSetSpeed: () -> Void
+    var setSpeed: () -> Void
     
     var body: some View {
         VStack {
@@ -75,7 +75,7 @@ struct SetTargetSpeedSheet: View {
                     .frame(height: geometry.size.height * 0.1)
             }
             
-            Button(action: onSetSpeed) {
+            Button(action: setSpeed) {
                 HStack {
                     Image(systemName: "checkmark.circle")
                         .resizable()

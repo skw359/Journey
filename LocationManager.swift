@@ -21,8 +21,8 @@ class LocationManager: NSObject, ObservableObject {
     // Recording State
     @Published var recording = false
     @Published var startTime: Date?
-    private var timer: Timer?
     @Published var paused: Bool = false
+    private var timer: Timer?
     private var pauseStartTime: Date?
     private var totalPausedTime: TimeInterval = 0
     
@@ -59,13 +59,13 @@ class LocationManager: NSObject, ObservableObject {
     
     // Acceleration
     @Published var accelerationReadings: [Double] = []
-    
     private let significantElevationChange: Double = 5.0 // 5 meters
     private let significantSpeedChange: Double = 2.23694 // 5 mph in m/s
     private let significantAccelerationChange: Double = 0.2 // 0.2 m/s^2
     private let minTimeBetweenReadings: TimeInterval = 10 // 10 seconds
     private var lastSignificantElevationReading: ElevationReading?
     private var lastSignificantSpeedReading: SpeedReading?
+    private var lastLocationNameUpdateTime: Date?
     
     // MARK: - Initialization
     override init() {
@@ -216,18 +216,27 @@ class LocationManager: NSObject, ObservableObject {
     }
     
     private func updateLocationName(for location: CLLocation) {
+        let currentTime = Date()
+        
+        // Check if a minute has passed since the last update
+        if let lastUpdateTime = lastLocationNameUpdateTime,
+           currentTime.timeIntervalSince(lastUpdateTime) < 60 {
+            return // Less than a minute has passed, don't update
+        }
+        
         // Check if we've moved far enough to warrant a new geocoding
         if let lastLocation = lastGeocodedLocation,
            location.distance(from: lastLocation) < minimumDistanceForGeocoding {
             return // We haven't moved far enough, no need to update
         }
-        
-        // We've moved far enough, so update the location name
+
+        // We've moved far enough and it's been at least a minute, so update the location name
         location.fetchCityAndState { [weak self] locationName, countyName in
             DispatchQueue.main.async {
                 self?.currentLocationName = locationName ?? ""
                 self?.currentCountyName = countyName ?? ""
                 self?.lastGeocodedLocation = location
+                self?.lastLocationNameUpdateTime = currentTime
             }
         }
     }
