@@ -85,7 +85,7 @@ struct SpeedGoalScreen: View {
                     SpeedometerView(
                         currentSpeed: locationManager.speed,
                         targetSpeed: speedTargetManager.targetSpeed,
-                        onSettingsPressed: {
+                        SpeedGoalSettingsPressed: {
                             showSetTargetSpeed = true
                         }
                     )

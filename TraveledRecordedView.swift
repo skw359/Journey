@@ -86,8 +86,8 @@ struct TravelRecordedView: View {
             
             dataDisplay(topValue: String(format: "%.0f", travelData.averageSpeed),
                         topLabel: "AVG Speed",
-                        bottomValue: String(format: "%.0f"),
-                        bottomLabel: "--")
+                        bottomValue: String(format: " "),
+                        bottomLabel: "")
         }
     }
     

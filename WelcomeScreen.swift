@@ -21,7 +21,7 @@ struct WelcomeScreen: View {
                     featureText("Real-time tracking of distance, speed, elevation, and more.")
                     featureText("Built-in compass, waypoint guidance, and intelligent high altitude alerts to keep you safe.")
                     featureText("Location awareness with current city, state, and county info (internet required)")
-                    featureText("Set target speeds and get alerts when you hit your marks.")
+                    featureText("Set target speeds and get alerted when you hit your marks.")
                     featureText("Runs independently from iPhone.")
                 }
                 .padding()

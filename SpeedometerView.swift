@@ -4,7 +4,7 @@ import SwiftUI
 struct SpeedometerView: View {
     let currentSpeed: Double
     let targetSpeed: Int
-    var onSettingsPressed: () -> Void
+    var SpeedGoalSettingsPressed: () -> Void
     
     @State private var animatedSpeed: Double = 0
     @State private var animatedTargetSpeed: Int = 0
@@ -19,7 +19,7 @@ struct SpeedometerView: View {
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
             
             ZStack {
-                // Background arc
+                // gray background arc
                 Circle()
                     .trim(from: 0, to: speedometerAppear ? 0.75 : 0)
                     .stroke(
@@ -65,8 +65,8 @@ struct SpeedometerView: View {
                     .rotationEffect(.degrees(135))
                     .opacity(animatedSpeed > 0 ? 1 : 0)
                 
-                // Extended needle
-                ExtendedNeedle(speed: animatedSpeed, maxSpeed: Double(animatedTargetSpeed))
+                // Speed needle
+                SpeedometerNeedle(speed: animatedSpeed, maxSpeed: Double(animatedTargetSpeed))
                     .fill(needleColor)
                     .frame(width: size, height: size)
                     .rotationEffect(.degrees(135))
@@ -90,9 +90,9 @@ struct SpeedometerView: View {
                 
                 VStack {
                     HStack {
-                        Button(action: onSettingsPressed) {
+                        Button(action: SpeedGoalSettingsPressed) {
                             Image(systemName: "gear")
-                                .font(.system(size: 20)) // Adjust this size as needed
+                                .font(.system(size: 20))
                                 .foregroundColor(.white)
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -155,7 +155,7 @@ struct GradientTrail: Shape {
     }
 }
 
-struct ExtendedNeedle: Shape {
+struct SpeedometerNeedle: Shape {
     var speed: Double
     var maxSpeed: Double
     
