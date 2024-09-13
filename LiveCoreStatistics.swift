@@ -6,30 +6,22 @@ struct LiveCoreStatistics: View {
 
     var body: some View {
         VStack(spacing: -10) {
-            Text(userSettings.isMetric ?
-                 (userSettings.usePreciseUnits || locationManager.distance * 1.60934 < 16.09 ? "\(formatDisplayValue(locationManager.distance * 1.60934, usePreciseUnits: userSettings.usePreciseUnits)) " :
-                    "\(Int(locationManager.distance * 1.60934)) ") :
-                    (userSettings.usePreciseUnits || locationManager.distance < 10 ? "\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) " :
-                        "\(Int(locationManager.distance)) "))
-            .font(.system(size: 45))
-            .fontWeight(.bold)
-            .foregroundColor(userSettings.isDarkMode ? .black : .white) +
-            Text(userSettings.isMetric ? " KM" : " MILES")
+            Text("\(formatDisplayValue(locationManager.distance, usePreciseUnits: userSettings.usePreciseUnits)) ")
+                .font(.system(size: 45))
+                .fontWeight(.bold)
+                .foregroundColor(userSettings.isDarkMode ? .black : .white) +
+            Text(" MILES")
                 .font(.headline)
                 .fontWeight(.bold)
                 .foregroundColor(Color(hex: "#05df73"))
 
-            Text(userSettings.isMetric ?
-                 (userSettings.usePreciseUnits ? "\(formatDisplayValue(max(locationManager.speed * 1.60934, 0), usePreciseUnits: true)) " :
-                    (locationManager.speed * 1.60934 > 32.19 ? "\(String(format: "%.0f", max(locationManager.speed * 1.60934, 0))) " :
-                        "\(formatDisplayValue(max(locationManager.speed * 1.60934, 0), usePreciseUnits: false)) ")) :
-                    (userSettings.usePreciseUnits ? "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: true)) " :
-                        (locationManager.speed > 20 ? "\(String(format: "%.0f", max(locationManager.speed, 0))) " :
-                            "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: false)) ")))
+            Text(userSettings.usePreciseUnits ? "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: true)) " :
+                    (locationManager.speed > 20 ? "\(String(format: "%.0f", max(locationManager.speed, 0))) " :
+                        "\(formatDisplayValue(max(locationManager.speed, 0), usePreciseUnits: false)) "))
             .font(.system(size: 45))
             .fontWeight(.bold)
             .foregroundColor(userSettings.isDarkMode ? .black : .white) +
-            Text(userSettings.isMetric ? "KPH" : "MPH")
+            Text("MPH")
                 .font(.headline)
                 .foregroundColor(Color(hex: "#05df73"))
         }

@@ -5,26 +5,8 @@ class DistanceFormatter {
     
     private init() {}
     
-    func formatDistance(_ distanceInFeet: Double, isMetric: Bool) -> String {
-        if isMetric {
-            return formatMetricDistance(distanceInFeet)
-        } else {
-            return formatImperialDistance(distanceInFeet)
-        }
-    }
-    
-    private func formatMetricDistance(_ distanceInFeet: Double) -> String {
-        let meters = distanceInFeet * 0.3048
-        if meters < 1000 {
-            return "\(Int(round(meters))) m"
-        } else {
-            let kilometers = meters / 1000
-            if kilometers < 10 {
-                return String(format: "%.1f km", kilometers)
-            } else {
-                return "\(Int(round(kilometers))) km"
-            }
-        }
+    func formatDistance(_ distanceInFeet: Double) -> String {
+        return formatImperialDistance(distanceInFeet)
     }
     
     private func formatImperialDistance(_ distanceInFeet: Double) -> String {

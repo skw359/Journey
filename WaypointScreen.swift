@@ -25,7 +25,7 @@ struct WaypointScreen: View {
     }
     
     var distanceText: String {
-        DistanceFormatter.shared.formatDistance(distanceInFeet, isMetric: userSettings.isMetric)
+        DistanceFormatter.shared.formatDistance(distanceInFeet)
     }
     
     var body: some View {
@@ -83,7 +83,10 @@ struct WaypointScreen: View {
                                         Image(systemName: "location.circle.fill")
                                             .foregroundColor(Color(hex: "#00ff81"))
                                             .font(.headline)
-                                        AnimatedGradientText(text: "Waytracer")
+                                        Text("Waytracer")
+                                            .foregroundColor(.white)
+                                            .font(.title2)
+                                            .bold()
                                     }
                                     .frame(maxWidth: .infinity, alignment: .center)
                                     .offset(y: geometry.size.height / 396 * 20 - 15)

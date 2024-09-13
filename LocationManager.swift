@@ -420,7 +420,7 @@ extension LocationManager: CLLocationManagerDelegate {
     
     private func handleWaypointCalculation(location: CLLocation) {
         if waypointLocations.count < 3 {
-            if location.horizontalAccuracy <= 5.0 {
+            if location.horizontalAccuracy <= 7.0 { //waypoint accuracy check
                 waypointLocations.append(location)
             }
         } else {

@@ -4,11 +4,7 @@ import Foundation
 
 class UserSettings: ObservableObject {
     
-    @Published var isMetric: Bool {
-        didSet {
-            UserDefaults.standard.set(isMetric, forKey: "isMetric")
-        }
-    }
+    
     
     @Published var usePreciseUnits: Bool {
         didSet {
@@ -23,7 +19,7 @@ class UserSettings: ObservableObject {
     }
     
     init() {
-        isMetric = UserDefaults.standard.bool(forKey: "isMetric")
+      //  isMetric = UserDefaults.standard.bool(forKey: "isMetric")
         usePreciseUnits = UserDefaults.standard.bool(forKey: "usePreciseUnits")
         isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
     }

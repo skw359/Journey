@@ -50,7 +50,7 @@ struct StartScreen: View {
                                     .padding()
                                 Spacer()
                             }
-                            .background(geometry.size.width > 176 ? Color(hex: "#212121") : Color.clear)
+                            .background(geometry.size.width > 176 ? Color(hex: "#000000") : Color.clear)
                             .cornerRadius(100)
                             .frame(width: 180)
                             .offset(y: 80)

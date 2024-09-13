@@ -12,7 +12,6 @@ struct SettingsView: View {
                 .padding(-37)
             Form {
                 Section(header: Text("General")) {
-                    Toggle("Use Metric Units", isOn: $userSettings.isMetric)
                     Toggle("Use Precise Units", isOn: $userSettings.usePreciseUnits)
                     Text("Display values with two decimal places.")
                         .font(.caption)
