@@ -13,7 +13,7 @@ struct OptionsScreen: View {
     
     @State private var displayProcessingSheet = false
     
-    let waypointTab = -2
+    let waypointTab = -1
     let stopRecordingViewTab = 3
     
     var body: some View {

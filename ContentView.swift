@@ -119,12 +119,12 @@ struct RecordingTabs: View {
                 .tabItem { Text("Now Playing") }
                 .tag(-3)
             
-            WaypointScreen(locationManager: locationManager)
-                .tabItem { Text("Waypoint")}
-                .tag(-2)
-            
             SpeedGoalScreen(locationManager: locationManager)
                 .tabItem { Text("Target Speed") }
+                .tag(-2)
+            
+            WaypointScreen(locationManager: locationManager)
+                .tabItem { Text("Waypoint")}
                 .tag(-1)
             
             CompassScreen(viewModel: locationManager)
