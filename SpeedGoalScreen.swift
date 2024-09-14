@@ -98,6 +98,7 @@ struct SpeedGoalScreen: View {
             .padding()
             .foregroundColor(.white)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+           
         }
         .overlay(
             Group {

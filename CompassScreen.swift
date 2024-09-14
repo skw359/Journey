@@ -74,6 +74,7 @@ struct CompassScreen: View {
                     .font(.caption)
                     .offset(y:100)
             }
+            
             .overlay(
                 Triangle()
                     .fill(viewModel.alignedWithCardinalDirection() ? Color.green : Color.red)
@@ -82,7 +83,7 @@ struct CompassScreen: View {
                 alignment: .top
             )
             .frame(width: geometry.size.width, height: geometry.size.height)
-            
+            .pauseOverlay(locationManager: viewModel)
             // Calibration instructions overlay
             if showCalibrationInstructions || showRecalibratingMessage {
                 ZStack {
@@ -122,6 +123,7 @@ struct CompassScreen: View {
                 .animation(.easeInOut(duration: 0.5), value: overlayOpacity)
                 .frame(width: geometry.size.width, height: geometry.size.height)
             }
+            
         }
         .onChange(of: showCalibrationInstructions) { oldValue, newValue in
             if newValue {
@@ -290,6 +292,7 @@ struct CompassScreen: View {
             return Color.gray
         }
     }
+    
 }
 
 struct Triangle: Shape {

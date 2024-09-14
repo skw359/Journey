@@ -34,9 +34,11 @@ struct RecordingView: View {
                     .position(x: geometry.size.width * 0.20, y: geometry.size.height * 0.8)
                 
                 // TotalTimeElement (bottom right)
-                TotalTimeElement(locationManager: locationManager)
-                    .frame(width: geometry.size.width * 0.4)
-                    .position(x: geometry.size.width * 0.75, y: geometry.size.height * 0.8)
+                GeometryReader { geometry in
+                    TotalTimeElement(locationManager: locationManager)
+                        .frame(maxWidth: geometry.size.width * 0.4, alignment: .trailing)
+                        .position(x: min(geometry.size.width * 0.75, geometry.size.width - geometry.size.width * 0.2), y: geometry.size.height * 0.8)
+                }
                 pauseOverlay(size: geometry.size)
                     .opacity(locationManager.paused ? 1 : 0)
                     .animation(.easeInOut(duration: 0.35), value: locationManager.paused)
@@ -63,12 +65,6 @@ struct RecordingView: View {
         }
         .frame(width: size.width, height: size.height)
         .position(x: size.width / 2, y: size.height / 2)
-      /*  .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                locationManager.togglePause()
-            }
-        }
-       */
     }
     
     private var signalStrengthElement: some View {

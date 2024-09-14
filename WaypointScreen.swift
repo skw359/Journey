@@ -182,6 +182,7 @@ struct WaypointScreen: View {
                         Spacer()
                     }
                 }
+                .pauseOverlay(locationManager: locationManager)
                 .onChange(of: locationManager.latestLocation) { _, _ in
                     updateWaypointInfo()
                 }

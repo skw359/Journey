@@ -115,7 +115,7 @@ struct OptionsScreen: View {
     private func endButton(size: CGSize) -> some View {
         Button(action: {
             displayProcessingSheet = true
-
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 DispatchQueue.global(qos: .userInitiated).async {
                     let travelData = prepareTravelData()

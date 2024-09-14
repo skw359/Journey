@@ -23,7 +23,7 @@ struct SpeedometerView: View {
                 Circle()
                     .trim(from: 0, to: speedometerAppear ? 0.75 : 0)
                     .stroke(
-                        arcColor.opacity(animatedSpeed > 0 ? 0 : 0.2),
+                        arcColor.opacity(animatedSpeed > 0 ? 0.08 : 0.2),
                         style: StrokeStyle(
                             lineWidth: size * 0.03,
                             lineCap: .round,

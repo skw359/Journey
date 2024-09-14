@@ -9,6 +9,8 @@ struct TotalTimeElement: View {
             Text(locationManager.totalTimeTextTimer)
                 .font(.system(size: 26))
                 .foregroundColor(userSettings.isDarkMode ? .black : .white)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
             Text("Total Time")
                 .font(.system(size: 14))
                 .foregroundColor(Color(hex: "#05df73"))
