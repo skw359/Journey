@@ -44,7 +44,7 @@ struct StartScreen: View {
                                 Image(systemName: "info.circle")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(Color(hex: "#2cdbae"))
-                                Text("Do not use indoors")
+                                Text("Don't use indoors.")
                                     .font(.system(size: 12))
                                     .foregroundColor(Color.white)
                                     .padding()

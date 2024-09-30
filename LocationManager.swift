@@ -105,6 +105,8 @@ class LocationManager: NSObject, ObservableObject {
         recording = false
         locationManager.stopUpdatingLocation()
         stopTimer()
+        timer?.invalidate()
+        timer = nil
     }
     
     func startWaypointCalculation() {

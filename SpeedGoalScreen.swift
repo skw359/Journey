@@ -7,7 +7,7 @@ struct SpeedGoalScreen: View {
     @State private var backgroundColor = Color.black
     @State private var showTargetSpeedInfo = false
     @State private var showSetTargetSpeed = false
-    @State private var isBlinking = false
+    @State private var timerBlinking = false
     @State private var showSetSpeedFromInfo = false
     
     let buttonColor = Color(hex: "#00ff81")
@@ -170,12 +170,12 @@ struct SpeedGoalScreen: View {
         }
         .onReceive(blinkTimer) { _ in
             if speedTargetManager.hitTargetSpeed {
-                isBlinking.toggle()
+                timerBlinking.toggle()
             }
         }
         .onChange(of: speedTargetManager.hitTargetSpeed) { oldValue, newValue in
             if !newValue {
-                isBlinking = false
+                timerBlinking = false
             }
         }
     }
