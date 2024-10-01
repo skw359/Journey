@@ -1,19 +1,28 @@
 import SwiftUI
 import CoreLocation
 
+// Color scheme enum
+enum AccentColor {
+    static let accent = Color(hex: "#00ff81")
+    static let background = Color(hex: "#0c3617")
+    static let gridLine = Color(hex: "#2e2e2e")
+}
+
 struct TravelRecordedView: View {
     var travelData: TravelData
     @Environment(\.presentationMode) var presentationMode
     @Binding var navigationPath: NavigationPath
     @ObservedObject var locationManager: LocationManager
     
-    var temporaryFontSizeFix: CGFloat {
+    @ScaledMetric private var baseFontSize: CGFloat = 30
+    
+    private var temporaryFontSize: CGFloat {
         if locationManager.totalTime >= 36000 {
-            return 15
+            return baseFontSize * 0.5
         } else if locationManager.totalTime >= 3600 {
-            return 20
+            return baseFontSize * 0.67
         } else {
-            return 30
+            return baseFontSize
         }
     }
     
@@ -70,11 +79,10 @@ struct TravelRecordedView: View {
             
             Text("Miles Traveled")
                 .font(.caption)
-                .foregroundColor(Color(hex: "#00ff81"))
+                .foregroundColor(AccentColor.accent)
         }
     }
     
-    // Top speed, avg speed, total time
     private var speedAndTimeSection: some View {
         HStack {
             dataDisplay(topValue: String(format: "%.0f", travelData.topSpeed),
@@ -91,27 +99,11 @@ struct TravelRecordedView: View {
         }
     }
     
-    // Creates a vertical display of two data points, each with a value and label. Used for displaying the speed and time information
+    @ViewBuilder
     private func dataDisplay(topValue: String, topLabel: String, bottomValue: String, bottomLabel: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(topValue)
-                    .font(.system(size: 30))
-                
-                    .frame(maxWidth: .infinity, alignment: .center)
-                Text(topLabel)
-                    .font(.caption)
-                    .foregroundColor(Color(hex: "#00ff81"))
-            }
-            
-            VStack(alignment: .leading, spacing: 5) {
-                Text(bottomValue)
-                    .font(.system(size: temporaryFontSizeFix))
-                    .frame(maxWidth: .infinity, alignment: .center)
-                Text(bottomLabel)
-                    .font(.caption)
-                    .foregroundColor(Color(hex: "#00ff81"))
-            }
+            DataDisplayRow(value: topValue, label: topLabel)
+            DataDisplayRow(value: bottomValue, label: bottomLabel, fontSize: temporaryFontSize)
         }
     }
     
@@ -130,7 +122,6 @@ struct TravelRecordedView: View {
         return "\(String(format: "%.0f", elevationInFeet)) ft"
     }
     
-    // computed property creates the elevation graph section of the view
     private var elevationSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Elevation")
@@ -140,12 +131,12 @@ struct TravelRecordedView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 5) {
                         Image(systemName: "triangle.fill")
-                            .foregroundColor(Color(hex: "#00ff81"))
+                            .foregroundColor(AccentColor.accent)
                         Text(maxElevation)
                     }
                     HStack(spacing: 5) {
                         Image(systemName: "triangle.fill")
-                            .foregroundColor(Color(hex: "#00ff81"))
+                            .foregroundColor(AccentColor.accent)
                             .rotationEffect(.degrees(180))
                         Text(minElevation)
                     }
@@ -168,11 +159,12 @@ struct TravelRecordedView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color(hex: "#0c3617"))
+                .background(AccentColor.background)
                 .cornerRadius(15)
         }
         .buttonStyle(PlainButtonStyle())
         .padding(.vertical, 40)
+        .accessibilityLabel("Finish and return to previous screen")
     }
     
     private func debugInfo() {
@@ -183,7 +175,22 @@ struct TravelRecordedView: View {
     }
 }
 
-// MARK: Graphs
+struct DataDisplayRow: View {
+    let value: String
+    let label: String
+    var fontSize: CGFloat = 30
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(value)
+                .font(.system(size: fontSize))
+                .frame(maxWidth: .infinity, alignment: .center)
+            Text(label)
+                .font(.caption)
+                .foregroundColor(AccentColor.accent)
+        }
+    }
+}
 
 struct ElevationGraphView: View {
     var readings: [ElevationReading]
@@ -242,7 +249,6 @@ struct ElevationGraphView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Y-Axis (Elevation) labels
                 VStack {
                     Text(maxElevation).foregroundColor(.gray).font(.footnote)
                     Spacer()
@@ -251,7 +257,6 @@ struct ElevationGraphView: View {
                 .frame(height: geometry.size.height - bottomPadding)
                 .position(x: leftPadding / 2 - 5, y: (geometry.size.height - bottomPadding) / 2)
                 
-                // Graph line
                 Path { path in
                     let points = downsampledReadings.map { scaleReading($0, in: geometry.size) }
                     guard let firstPoint = points.first else { return }
@@ -261,22 +266,22 @@ struct ElevationGraphView: View {
                         path.addLine(to: point)
                     }
                 }
-                .stroke(Color.green, lineWidth: 2)
+                .stroke(AccentColor.accent, lineWidth: 2)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Elevation graph")
                 
-                // Horizontal lines
                 Path { path in
                     path.move(to: CGPoint(x: leftPadding, y: 0))
                     path.addLine(to: CGPoint(x: geometry.size.width, y: 0))
                 }
-                .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                .stroke(AccentColor.gridLine, lineWidth: 1)
                 
                 Path { path in
                     path.move(to: CGPoint(x: leftPadding, y: (geometry.size.height - bottomPadding) / 2))
                     path.addLine(to: CGPoint(x: geometry.size.width, y: (geometry.size.height - bottomPadding) / 2))
                 }
-                .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                .stroke(AccentColor.gridLine, lineWidth: 1)
                 
-                // X-Axis (Time) labels
                 VStack {
                     Spacer()
                     HStack {
@@ -288,12 +293,11 @@ struct ElevationGraphView: View {
                     .offset(x: leftPadding / 2, y: bottomPadding / 2)
                 }
                 
-                // X-axis line
                 Path { path in
                     path.move(to: CGPoint(x: leftPadding, y: geometry.size.height - bottomPadding))
                     path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height - bottomPadding))
                 }
-                .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                .stroke(AccentColor.gridLine, lineWidth: 1)
             }
         }
         .onAppear {
@@ -361,7 +365,7 @@ struct SpeedGraphView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 20) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // You can add additional speed information here if needed
+
                 }
                 .font(.subheadline)
                 Spacer()
@@ -369,7 +373,6 @@ struct SpeedGraphView: View {
             
             GeometryReader { geometry in
                 ZStack {
-                    // Y-Axis (Speed) labels
                     VStack {
                         Text(maxSpeed).foregroundColor(.gray).font(.footnote)
                         Spacer()
@@ -378,7 +381,6 @@ struct SpeedGraphView: View {
                     .frame(height: geometry.size.height - bottomPadding)
                     .position(x: leftPadding / 2 - 5, y: (geometry.size.height - bottomPadding) / 2)
                     
-                    // Graph line
                     Path { path in
                         let points = downsampledReadings.map { scaleReading($0, in: geometry.size) }
                         guard let firstPoint = points.first else { return }
@@ -389,21 +391,20 @@ struct SpeedGraphView: View {
                         }
                     }
                     .stroke(Color.orange, lineWidth: 2)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Speed graph")
                     
-                    // Horizontal lines
                     Path { path in
                         path.move(to: CGPoint(x: leftPadding, y: 0))
                         path.addLine(to: CGPoint(x: geometry.size.width, y: 0))
                     }
-                    .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                    .stroke(AccentColor.gridLine, lineWidth: 1)
                     
                     Path { path in
-                        path.move(to: CGPoint(x: leftPadding, y: (geometry.size.height - bottomPadding) / 2))
                         path.addLine(to: CGPoint(x: geometry.size.width, y: (geometry.size.height - bottomPadding) / 2))
                     }
-                    .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                    .stroke(AccentColor.gridLine, lineWidth: 1)
                     
-                    // X-Axis (Time) labels
                     VStack {
                         Spacer()
                         HStack {
@@ -415,12 +416,11 @@ struct SpeedGraphView: View {
                         .offset(x: leftPadding / 2, y: bottomPadding / 2)
                     }
                     
-                    // X-axis line
                     Path { path in
                         path.move(to: CGPoint(x: leftPadding, y: geometry.size.height - bottomPadding))
                         path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height - bottomPadding))
                     }
-                    .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                    .stroke(AccentColor.gridLine, lineWidth: 1)
                 }
             }
         }
@@ -491,14 +491,14 @@ struct AccelerationGraphView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 5) {
                         Image(systemName: "arrow.up.right")
-                            .foregroundColor(Color(hex: "#00ff81"))
+                            .foregroundColor(AccentColor.accent)
                         Text(String(format: "%.1f ", maxAcceleration)) +
                         Text("m/s").font(.caption2) +
                         Text("²").font(.caption2).baselineOffset(4)
                     }
                     HStack(spacing: 5) {
                         Image(systemName: "arrow.down.right")
-                            .foregroundColor(Color(hex: "#00ff81"))
+                            .foregroundColor(AccentColor.accent)
                         Text(String(format: "%.1f ", minAcceleration)) +
                         Text("m/s").font(.caption2) +
                         Text("²").font(.caption2).baselineOffset(4)
@@ -510,7 +510,6 @@ struct AccelerationGraphView: View {
             
             GeometryReader { geometry in
                 ZStack {
-                    // Y-Axis (Acceleration) labels
                     VStack {
                         Text(String(format: "%.1f", maxAcceleration)).foregroundColor(.gray).font(.footnote)
                         Spacer()
@@ -521,7 +520,6 @@ struct AccelerationGraphView: View {
                     .frame(height: geometry.size.height - bottomPadding)
                     .position(x: leftPadding / 2 - 5, y: (geometry.size.height - bottomPadding) / 2)
                     
-                    // Graph line
                     Path { path in
                         let points = downsampledReadings.enumerated().map { scaleReading($0.element, index: $0.offset, in: geometry.size) }
                         guard let firstPoint = points.first else { return }
@@ -532,27 +530,27 @@ struct AccelerationGraphView: View {
                         }
                     }
                     .stroke(Color.blue, lineWidth: 2)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Acceleration graph")
                     
-                    // Horizontal lines
                     Path { path in
                         path.move(to: CGPoint(x: leftPadding, y: 0))
                         path.addLine(to: CGPoint(x: geometry.size.width, y: 0))
                     }
-                    .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                    .stroke(AccentColor.gridLine, lineWidth: 1)
                     
                     Path { path in
                         path.move(to: CGPoint(x: leftPadding, y: (geometry.size.height - bottomPadding) / 2))
                         path.addLine(to: CGPoint(x: geometry.size.width, y: (geometry.size.height - bottomPadding) / 2))
                     }
-                    .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                    .stroke(AccentColor.gridLine, lineWidth: 1)
                     
                     Path { path in
                         path.move(to: CGPoint(x: leftPadding, y: geometry.size.height - bottomPadding))
                         path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height - bottomPadding))
                     }
-                    .stroke(Color(hex: "#2e2e2e"), lineWidth: 1)
+                    .stroke(AccentColor.gridLine, lineWidth: 1)
                     
-                    // X-Axis (Time) labels
                     VStack {
                         Spacer()
                         HStack {
@@ -591,3 +589,10 @@ func downsampleReadings<T>(_ readings: [T], targetCount: Int) -> [T] {
         readings[min(readings.count - 1, Int(Double(i) * stride))]
     }
 }
+
+// Helper function for localization
+func localizedString(_ key: String, comment: String = "") -> String {
+    NSLocalizedString(key, comment: comment)
+}
+
+
