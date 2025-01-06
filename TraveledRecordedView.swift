@@ -33,7 +33,7 @@ struct TravelRecordedView: View {
                 speedAndTimeSection
                 elevationSection
                 speedSection
-                accelerationSection
+                //accelerationSection REMOVED
                 doneButton
             }
             .padding()
@@ -55,21 +55,7 @@ struct TravelRecordedView: View {
         }
     }
     
-    private var accelerationSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Acceleration")
-                .font(.headline)
-                .fontWeight(.bold)
-            
-            AccelerationGraphView(
-                readings: locationManager.accelerationReadings,
-                startTime: locationManager.startTime ?? Date(),
-                endTime: Date()
-            )
-            .frame(height: 125)
-            .border(Color.clear)
-        }
-    }
+    // Removed accelerationSection
     
     private var milesTraveled: some View {
         VStack(spacing: 5) {
@@ -442,145 +428,7 @@ struct SpeedGraphView: View {
     }
 }
 
-struct AccelerationGraphView: View {
-    var readings: [Double]
-    var startTime: Date
-    var endTime: Date
-    @State private var downsampledReadings: [Double] = []
-    
-    private let targetSampleCount = 100
-    private let leftPadding: CGFloat = 20
-    private let bottomPadding: CGFloat = 20
-    
-    private var maxAcceleration: Double {
-        readings.max() ?? 0
-    }
-    
-    private var minAcceleration: Double {
-        readings.min() ?? 0
-    }
-    
-    private var startTimeString: String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: startTime)
-    }
-    
-    private var endTimeString: String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: endTime)
-    }
-    
-    private func scaleReading(_ reading: Double, index: Int, in size: CGSize) -> CGPoint {
-        let maxAbsAcceleration = readings.map { abs($0) }.max() ?? 1
-        
-        let xScale = (size.width - leftPadding) / CGFloat(downsampledReadings.count - 1)
-        let yMidPoint = (size.height - bottomPadding) / 2
-        let yScale = yMidPoint / CGFloat(maxAbsAcceleration)
-        
-        let x = xScale * CGFloat(index) + leftPadding
-        let y = yMidPoint - (CGFloat(reading) * yScale)
-        
-        return CGPoint(x: x, y: y)
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 20) {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.up.right")
-                            .foregroundColor(AccentColor.accent)
-                        Text(String(format: "%.1f ", maxAcceleration)) +
-                        Text("m/s").font(.caption2) +
-                        Text("²").font(.caption2).baselineOffset(4)
-                    }
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.down.right")
-                            .foregroundColor(AccentColor.accent)
-                        Text(String(format: "%.1f ", minAcceleration)) +
-                        Text("m/s").font(.caption2) +
-                        Text("²").font(.caption2).baselineOffset(4)
-                    }
-                }
-                .font(.subheadline)
-                Spacer()
-            }
-            
-            GeometryReader { geometry in
-                ZStack {
-                    VStack {
-                        Text(String(format: "%.1f", maxAcceleration)).foregroundColor(.gray).font(.footnote)
-                        Spacer()
-                        Text("0").foregroundColor(.gray).font(.footnote)
-                        Spacer()
-                        Text(String(format: "%.1f", minAcceleration)).foregroundColor(.gray).font(.footnote)
-                    }
-                    .frame(height: geometry.size.height - bottomPadding)
-                    .position(x: leftPadding / 2 - 5, y: (geometry.size.height - bottomPadding) / 2)
-                    
-                    Path { path in
-                        let points = downsampledReadings.enumerated().map { scaleReading($0.element, index: $0.offset, in: geometry.size) }
-                        guard let firstPoint = points.first else { return }
-                        
-                        path.move(to: firstPoint)
-                        for point in points.dropFirst() {
-                            path.addLine(to: point)
-                        }
-                    }
-                    .stroke(Color.blue, lineWidth: 2)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Acceleration graph")
-                    
-                    Path { path in
-                        path.move(to: CGPoint(x: leftPadding, y: 0))
-                        path.addLine(to: CGPoint(x: geometry.size.width, y: 0))
-                    }
-                    .stroke(AccentColor.gridLine, lineWidth: 1)
-                    
-                    Path { path in
-                        path.move(to: CGPoint(x: leftPadding, y: (geometry.size.height - bottomPadding) / 2))
-                        path.addLine(to: CGPoint(x: geometry.size.width, y: (geometry.size.height - bottomPadding) / 2))
-                    }
-                    .stroke(AccentColor.gridLine, lineWidth: 1)
-                    
-                    Path { path in
-                        path.move(to: CGPoint(x: leftPadding, y: geometry.size.height - bottomPadding))
-                        path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height - bottomPadding))
-                    }
-                    .stroke(AccentColor.gridLine, lineWidth: 1)
-                    
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Text(startTimeString).foregroundColor(.gray).font(.footnote)
-                            Spacer()
-                            Text(endTimeString).foregroundColor(.gray).font(.footnote)
-                        }
-                        .frame(width: geometry.size.width - leftPadding)
-                        .offset(x: leftPadding / 2, y: bottomPadding / 2)
-                    }
-                }
-            }
-        }
-        .onAppear {
-            downsampleData()
-        }
-        .onChange(of: readings) {
-            downsampleData()
-        }
-    }
-    
-    private func downsampleData() {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let downsampled = downsampleReadings(self.readings, targetCount: self.targetSampleCount)
-            DispatchQueue.main.async {
-                self.downsampledReadings = downsampled
-            }
-        }
-    }
-}
+// REMOVED AccelerationGraphView struct entirely
 
 func downsampleReadings<T>(_ readings: [T], targetCount: Int) -> [T] {
     guard readings.count > targetCount else { return readings }
@@ -594,5 +442,3 @@ func downsampleReadings<T>(_ readings: [T], targetCount: Int) -> [T] {
 func localizedString(_ key: String, comment: String = "") -> String {
     NSLocalizedString(key, comment: comment)
 }
-
-

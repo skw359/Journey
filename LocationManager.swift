@@ -57,11 +57,10 @@ class LocationManager: NSObject, ObservableObject {
     @Published var averagedWaypointLocation: CLLocation?
     @Published var bearingToWaypoint: Double = 0
     
-    // Acceleration
-    @Published var accelerationReadings: [Double] = []
+    // Acceleration - REMOVED accelerationReadings and related properties
     private let significantElevationChange: Double = 5.0 // 5 meters
     private let significantSpeedChange: Double = 2.23694 // 5 mph in m/s
-    private let significantAccelerationChange: Double = 0.2 // 0.2 m/s^2
+    //private let significantAccelerationChange: Double = 0.2 // REMOVED
     private let minTimeBetweenReadings: TimeInterval = 10 // 10 seconds
     private var lastSignificantElevationReading: ElevationReading?
     private var lastSignificantSpeedReading: SpeedReading?
@@ -171,7 +170,7 @@ class LocationManager: NSObject, ObservableObject {
         totalTime = 0.0
         topSpeed = 0.0
         averageSpeed = 0.0
-        accelerationReadings.removeAll()
+        //accelerationReadings.removeAll() REMOVED
         elevationReadings.removeAll()
     }
     
@@ -307,13 +306,7 @@ extension LocationManager: CLLocationManagerDelegate {
             handleWaypointCalculation(location: location)
         }
         
-        // Record acceleration
-        if let lastLocation = self.lastLocation {
-            let timeInterval = location.timestamp.timeIntervalSince(lastLocation.timestamp)
-            let speedChange = max(location.speed, 0) - max(lastLocation.speed, 0)
-            let acceleration = speedChange / timeInterval
-            accelerationReadings.append(acceleration)
-        }
+        // Record acceleration - REMOVED acceleration recording
         
         self.lastLocation = location
         
@@ -390,25 +383,14 @@ extension LocationManager: CLLocationManagerDelegate {
                 lastSignificantSpeedReading = newReading
             }
             
-            // Update acceleration readings
-            if timeInterval > 0 {
-                let speedChange = currentSpeed - lastLocation.speed
-                let currentAcceleration = speedChange / timeInterval
-                
-                if currentAcceleration.isFinite && (accelerationReadings.isEmpty || abs(currentAcceleration) >= significantAccelerationChange || timeInterval >= minTimeBetweenReadings) {
-                    accelerationReadings.append(currentAcceleration)
-                    
-                    // Debug print
-                    print("Acceleration: \(currentAcceleration), Speed change: \(speedChange), Time interval: \(timeInterval)")
-                }
-            }
+            // Update acceleration readings - REMOVED acceleration update
         } else {
             // First reading
             lastSignificantElevationReading = ElevationReading(time: currentTime, elevation: currentElevation)
             lastSignificantSpeedReading = SpeedReading(time: currentTime, speed: currentSpeed * 2.23694)
             elevationReadings.append(lastSignificantElevationReading!)
             speedReadings.append(lastSignificantSpeedReading!)
-            accelerationReadings.append(0)
+            //accelerationReadings.append(0) REMOVED
         }
         
         self.lastLocation = location
@@ -499,14 +481,7 @@ struct ElevationReading: Equatable {
     }
 }
 
-struct AccelerationReading: Equatable {
-    var time: Date
-    var acceleration: Double
-    
-    static func == (lhs: AccelerationReading, rhs: AccelerationReading) -> Bool {
-        return lhs.time == rhs.time && lhs.acceleration == rhs.acceleration
-    }
-}
+// REMOVED Acceleration Reading Struct
 
 struct SpeedReading: Equatable {
     var time: Date

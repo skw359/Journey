@@ -13,22 +13,22 @@ struct WelcomeScreen: View {
                     .minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity, alignment: .center)
                 
-                Text("Say hello to the simple, ultimate travel companion for adventurers and explorers. Here's what we got:")
+                Text("The travel companion so good that adventure becomes second nature.")
                     .font(.headline)
                     .multilineTextAlignment(.leading)
                 
                 VStack(alignment: .leading, spacing: 15) {
                     featureText("Real-time tracking of distance, speed, elevation, and more.")
-                    featureText("Built-in compass, waypoint guidance, and intelligent high altitude alerts to keep you safe.")
-                    featureText("Location awareness with current city, state, and county info (internet required)")
+                    featureText("Built-in compass, waypoints, and smart high altitude alerts to keep you safe.")
+                    featureText("Location awareness with live area details.")
                     featureText("Set target speeds and get alerted when you hit your marks.")
-                    featureText("Runs independently from iPhone.")
+                    featureText("No phone required.*")
                 }
                 .padding()
                 .background(Color.white.opacity(0.1))
                 .cornerRadius(10)
                 
-                Text("TDLR; Journey is versatile, perfect all types of outdoor enthusiasts, tailored to you.")
+                Text("TLDR: Active outdoor tracking and navigation tailored for adventurers.")
                     .font(.caption)
                     .multilineTextAlignment(.leading)
                     .padding()
