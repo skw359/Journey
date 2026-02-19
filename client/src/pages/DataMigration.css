@@ -1,0 +1,120 @@
+.migration-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.migration-panel {
+  width: 100%;
+  max-width: 480px;
+  padding: 32px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  text-align: center;
+}
+
+.migration-panel h1 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.migration-panel .migration-desc {
+  margin: 0 0 24px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.migration-count {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(2, 216, 127, 0.1);
+  border: 1px solid rgba(2, 216, 127, 0.2);
+  color: var(--accent-primary);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+.migration-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.migration-btn-primary {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent-primary);
+  color: #fff;
+  font-family: var(--font-family-sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.migration-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.migration-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.migration-btn-secondary {
+  padding: 12px 24px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-family-sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.migration-btn-secondary:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.migration-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 99999;
+}
+
+.migration-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: migration-spin 0.8s linear infinite;
+}
+
+.migration-loading-text {
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+@keyframes migration-spin {
+  to { transform: rotate(360deg); }
+}

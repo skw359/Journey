@@ -1,0 +1,112 @@
+.travel-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72em;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+.travel-mode-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.travel-mode-badge.foot {
+  background: rgba(2, 216, 127, 0.15);
+  border: 1px solid rgba(2, 216, 127, 0.3);
+  color: #02d87f;
+}
+[data-theme="light"] .travel-mode-badge.foot {
+  color: #059669;
+  border-color: #059669;
+}
+
+.travel-mode-badge.scooter {
+  background: rgba(74, 144, 226, 0.15);
+  border: 1px solid rgba(74, 144, 226, 0.3);
+  color: #4A90E2;
+}
+[data-theme="light"] .travel-mode-badge.scooter {
+  color: #2563eb;
+  border-color: #2563eb;
+}
+
+.travel-mode-badge.drive {
+  background: rgba(255, 159, 67, 0.15);
+  border: 1px solid rgba(255, 159, 67, 0.3);
+  color: #FF9F43;
+}
+[data-theme="light"] .travel-mode-badge.drive {
+  color: #d97706;
+  border-color: #d97706;
+}
+
+.travel-mode-badge.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.travel-mode-badge.clickable:hover {
+  opacity: 0.8;
+  transform: scale(1.02);
+}
+
+.route-card .travel-mode-badge {
+    background: #20252b !important;
+    border-color: #20252b !important;
+    color: #7d848f !important;
+}
+[data-theme="light"] .route-card .travel-mode-badge {
+    background: #e4e4e7 !important;
+    border-color: #e4e4e7 !important;
+    color: #71717a !important;
+}
+
+.travel-mode-selector {
+  position: relative;
+  display: inline-block;
+}
+
+.travel-mode-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 2500;
+  min-width: 120px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: all 0.2s ease;
+}
+.travel-mode-dropdown.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.travel-mode-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85em;
+  color: var(--text-primary);
+  transition: background-color 0.2s ease;
+}
+.travel-mode-option:hover { background: var(--bg-tertiary); }
+.travel-mode-option svg { width: 16px; height: 16px; }
+.travel-mode-option.foot svg { color: #02d87f; }
+.travel-mode-option.scooter svg { color: #4A90E2; }
+.travel-mode-option.drive svg { color: #FF9F43; }
+[data-theme="light"] .travel-mode-option.foot svg { color: #059669; }
+[data-theme="light"] .travel-mode-option.scooter svg { color: #2563eb; }
+[data-theme="light"] .travel-mode-option.drive svg { color: #d97706; }

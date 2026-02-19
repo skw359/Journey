@@ -1,0 +1,76 @@
+.route-list .route-card {
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border: none;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  position: relative;
+  overflow: hidden;
+}
+
+.route-list .route-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 0;
+  background-color: var(--accent-primary);
+  border-radius: 0 4px 4px 0;
+  transition: height 0.2s ease;
+}
+
+.route-list .route-card.active {
+  background-color: var(--bg-tertiary);
+}
+.route-list .route-card.active::before {
+  height: 48px;
+}
+
+.route-list .route-card:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.route-list .route-card.active h3 { color: var(--text-primary); } 
+.route-list .route-card h3 {
+  margin: 0 0 4px 0;
+  font-size: 1em;
+  font-weight: 500;
+  color: var(--text-primary);
+  transition: color 0.2s ease;
+}
+.route-list .route-card p {
+  margin: 3px 0 0;
+  font-size: 0.85em;
+  color: var(--text-secondary);
+}
+.route-list .route-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+  width: 100%;
+}
+.route-list .route-card-header h3 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.route-list .rank-badge {
+  font-size: 1.1em;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+.route-list .medal-1 { filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.3)); }
+.route-list .medal-2 { filter: drop-shadow(0 0 4px rgba(192, 192, 192, 0.3)); }
+.route-list .medal-3 { filter: drop-shadow(0 0 4px rgba(205, 127, 50, 0.3)); }

@@ -1,0 +1,40 @@
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
+  margin-bottom: 12px;
+  border-bottom: 0px solid var(--bg-tertiary);
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: -15px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.8em;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--bg-tertiary);
+  background: transparent;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  font-family: var(--font-family-sans);
+}
+.filter-btn:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+.filter-btn.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+.filter-btn svg { width: 14px; height: 14px; }
+.filter-btn.foot.active { border-color: var(--accent-primary); color: var(--accent-primary); }
+.filter-btn.scooter.active { border-color: #4A90E2; color: #4A90E2; }
+.filter-btn.drive.active { border-color: #FF9F43; color: #FF9F43; }
+[data-theme="light"] .filter-btn.scooter.active { border-color: #2563eb; color: #2563eb; }
+[data-theme="light"] .filter-btn.drive.active { border-color: #d97706; color: #d97706; }

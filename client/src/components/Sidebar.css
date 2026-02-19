@@ -1,0 +1,22 @@
+.route-list-container {
+  width: 320px;
+  background-color: var(--bg-primary);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  border-right: 0px solid var(--bg-tertiary);
+  flex-shrink: 0;
+  transition: width 0.3s ease, padding 0.3s ease, transform 0.3s ease;
+  overflow: hidden;
+}
+.route-list-container.collapsed {
+  width: 0;
+  padding: 20px 0;
+  border-right-color: transparent;
+}
+.route-list-container h2 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}

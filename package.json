@@ -1,0 +1,28 @@
+{
+  "name": "routes-backend",
+  "version": "1.0.0",
+  "description": "Backend for the Routes app",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "concurrently \"node server/server.js\" \"cd client && npm run dev\"",
+    "build": "cd client && npm run build",
+    "migrate:import": "node server/scripts/migrate-import.js",
+    "migrate:export": "node server/scripts/migrate-export.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "connect-pg-simple": "^10.0.0",
+    "csv-parser": "^3.0.0",
+    "dotenv": "^17.3.1",
+    "express": "^4.17.1",
+    "express-session": "^1.19.0",
+    "heic-convert": "^2.1.0",
+    "multer": "^1.4.3",
+    "pg": "^8.13.0",
+    "unzipper": "^0.10.11"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
