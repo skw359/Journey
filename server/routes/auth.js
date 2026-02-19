@@ -51,6 +51,7 @@ function userResponse(row) {
     displayName: row.display_name,
     firstName: row.first_name,
     lastName: row.last_name,
+    unitPreference: row.unit_preference || 'imperial',
     avatarUrl: row.avatar_filename ? `/api/auth/avatar/${row.avatar_filename}` : null,
   };
 }
@@ -72,7 +73,7 @@ router.get('/status', async (req, res) => {
 
     if (req.session && req.session.userId) {
       const { rows } = await pool.query(
-        'SELECT id, username, display_name, first_name, last_name, avatar_filename FROM users WHERE id = $1',
+        'SELECT id, username, display_name, first_name, last_name, unit_preference, avatar_filename FROM users WHERE id = $1',
         [req.session.userId]
       );
       if (rows.length > 0) {
@@ -114,8 +115,10 @@ router.post('/register', async (req, res) => {
     const displayName = [first, last].filter(Boolean).join(' ') || username.trim();
 
     await pool.query(
-      'INSERT INTO users (id, username, password_hash, display_name, first_name, last_name) VALUES ($1, $2, $3, $4, $5, $6)',
-      [id, username.trim(), passwordHash, displayName, first, last]
+      `INSERT INTO users
+        (id, username, password_hash, display_name, first_name, last_name, unit_preference)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, username.trim(), passwordHash, displayName, first, last, 'imperial']
     );
 
     req.session.userId = id;
@@ -137,6 +140,7 @@ router.post('/register', async (req, res) => {
         displayName,
         firstName: first,
         lastName: last,
+        unitPreference: 'imperial',
         avatarUrl: null,
       },
       existingDataCount: existingCount,
@@ -160,7 +164,7 @@ router.post('/login', async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      'SELECT id, username, password_hash, display_name, first_name, last_name, avatar_filename FROM users WHERE username = $1',
+      'SELECT id, username, password_hash, display_name, first_name, last_name, unit_preference, avatar_filename FROM users WHERE username = $1',
       [username.trim()]
     );
 

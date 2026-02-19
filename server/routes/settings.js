@@ -3,6 +3,51 @@ const { Pool } = require('pg');
 const router = express.Router();
 const { pool, reconnect } = require('../db');
 
+const UNIT_PREFERENCES = new Set(['imperial', 'metric']);
+
+// GET /api/settings/units
+router.get('/units', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT unit_preference FROM users WHERE id = $1',
+      [req.userId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const unitPreference = UNIT_PREFERENCES.has(rows[0].unit_preference)
+      ? rows[0].unit_preference
+      : 'imperial';
+    res.json({ unitPreference });
+  } catch (err) {
+    console.error('Get unit preference error:', err);
+    res.status(500).json({ error: 'Failed to get unit preference' });
+  }
+});
+
+// PUT /api/settings/units
+router.put('/units', async (req, res) => {
+  try {
+    const unitPreference = req.body?.unitPreference;
+    if (!UNIT_PREFERENCES.has(unitPreference)) {
+      return res.status(400).json({ error: 'unitPreference must be "imperial" or "metric"' });
+    }
+
+    const result = await pool.query(
+      'UPDATE users SET unit_preference = $1 WHERE id = $2',
+      [unitPreference, req.userId]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ success: true, unitPreference });
+  } catch (err) {
+    console.error('Update unit preference error:', err);
+    res.status(500).json({ error: 'Failed to update unit preference' });
+  }
+});
+
 // GET /api/settings/database
 router.get('/database', async (req, res) => {
   try {

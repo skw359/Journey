@@ -3,11 +3,13 @@ import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { useTheme } from '../context/ThemeContext';
+import { useUnits } from '../context/UnitsContext';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, zoomPlugin);
 
 export default function AccelerationChart({ route, onPointClick }) {
   const { chartColors } = useTheme();
+  const { convertAcceleration, accelerationUnit } = useUnits();
   const chartRef = useRef(null);
 
   const { data, options } = useMemo(() => {
@@ -21,7 +23,8 @@ export default function AccelerationChart({ route, onPointClick }) {
       const dSpeed = (route.profileSpeedMph[i] - route.profileSpeedMph[i - 1]) * 0.44704;
       const dTime = (route.profileTimeMs[i] - route.profileTimeMs[i - 1]) / 1000;
       if (dTime > 0) {
-        accelerationData.push((dSpeed / dTime) * 3.28084);
+        const accelerationFtPerSec2 = (dSpeed / dTime) * 3.28084;
+        accelerationData.push(convertAcceleration(accelerationFtPerSec2) ?? 0);
       } else {
         accelerationData.push(0);
       }
@@ -30,7 +33,7 @@ export default function AccelerationChart({ route, onPointClick }) {
     const data = {
       labels: timeMinutes.slice(1).map(t => t.toFixed(1)),
       datasets: [{
-        label: 'Acceleration (ft/s\u00B2)',
+        label: `Acceleration (${accelerationUnit})`,
         data: accelerationData,
         borderColor: '#FF6B6B',
         backgroundColor: 'rgba(255, 107, 107, 0.1)',
@@ -54,7 +57,7 @@ export default function AccelerationChart({ route, onPointClick }) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toFixed(2)} ft/s\u00B2`,
+            label: (ctx) => `${ctx.parsed.y.toFixed(2)} ${accelerationUnit}`,
             footer: () => 'Click to delete this point',
           },
         },
@@ -76,12 +79,12 @@ export default function AccelerationChart({ route, onPointClick }) {
       },
       scales: {
         x: { title: { display: true, text: 'Time (minutes)', color: chartColors.color }, grid: { color: chartColors.grid } },
-        y: { title: { display: true, text: 'Acceleration (ft/s\u00B2)', color: chartColors.color }, grid: { color: chartColors.grid } },
+        y: { title: { display: true, text: `Acceleration (${accelerationUnit})`, color: chartColors.color }, grid: { color: chartColors.grid } },
       },
     };
 
     return { data, options };
-  }, [route, chartColors, onPointClick]);
+  }, [accelerationUnit, chartColors, convertAcceleration, onPointClick, route]);
 
   if (!data) return null;
 

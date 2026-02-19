@@ -5,6 +5,7 @@ import 'leaflet.heat';
 import Header from '../components/Header';
 import TopLoader from '../components/TopLoader';
 import { useTheme } from '../context/ThemeContext';
+import { useUnits } from '../context/UnitsContext';
 import { TILE_ATTRIBUTION } from '../utils/mapUtils';
 import { fetchAllPoints } from '../api/journeys';
 import './Heatmap.css';
@@ -25,6 +26,7 @@ const MODE_DESCRIPTIONS = {
 
 export default function Heatmap() {
   const { tileUrl } = useTheme();
+  const { convertDistance, distanceUnit } = useUnits();
   const [mode, setMode] = useState('density');
   const [intensity, setIntensity] = useState(15);
   const [radius, setRadius] = useState(25);
@@ -238,7 +240,10 @@ export default function Heatmap() {
           <div className="stats-container">
             <h3>Statistics</h3>
             <div className="stat-item"><span className="stat-label">Total Journeys:</span><span className="stat-value">{stats.totalRoutes}</span></div>
-            <div className="stat-item"><span className="stat-label">Total Distance:</span><span className="stat-value">{stats.totalDistance?.toFixed?.(1) || 0} mi</span></div>
+            <div className="stat-item">
+              <span className="stat-label">Total Distance:</span>
+              <span className="stat-value">{(convertDistance(stats.totalDistance) ?? 0).toFixed(1)} {distanceUnit}</span>
+            </div>
             <div className="stat-item"><span className="stat-label">Points Displayed:</span><span className="stat-value">{(stats.totalPoints || 0).toLocaleString()}</span></div>
           </div>
         </aside>

@@ -239,6 +239,7 @@ async function initSchema() {
       display_name TEXT,
       first_name TEXT,
       last_name TEXT,
+      unit_preference TEXT NOT NULL DEFAULT 'imperial',
       avatar_filename TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -363,7 +364,43 @@ async function initSchema() {
       ) THEN
         ALTER TABLE users ADD COLUMN avatar_filename TEXT;
       END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'unit_preference'
+      ) THEN
+        ALTER TABLE users ADD COLUMN unit_preference TEXT DEFAULT 'imperial';
+      END IF;
     END $$;
+  `);
+
+  await pool.query(`
+    UPDATE users
+    SET unit_preference = 'imperial'
+    WHERE unit_preference IS NULL
+      OR unit_preference NOT IN ('imperial', 'metric')
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'users_unit_preference_check'
+          AND conrelid = 'users'::regclass
+      ) THEN
+        ALTER TABLE users
+        ADD CONSTRAINT users_unit_preference_check
+        CHECK (unit_preference IN ('imperial', 'metric'));
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ALTER COLUMN unit_preference SET DEFAULT 'imperial',
+    ALTER COLUMN unit_preference SET NOT NULL
   `);
 
   await pool.query('CREATE INDEX IF NOT EXISTS idx_routes_user_id ON routes(user_id)');

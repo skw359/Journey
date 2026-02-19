@@ -8,6 +8,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopLoader from '../components/TopLoader';
 import { useTheme } from '../context/ThemeContext';
+import { useUnits } from '../context/UnitsContext';
 import { TILE_ATTRIBUTION } from '../utils/mapUtils';
 import { fetchAllTimeMapData, fetchHeatmapGrid } from '../api/journeys';
 import './Atlas.css';
@@ -26,14 +27,9 @@ function formatNumber(value, options = {}) {
   return num.toLocaleString('en-US', options);
 }
 
-function formatMiles(value) {
-  return formatNumber(value, {
-    maximumFractionDigits: 0,
-  });
-}
-
 export default function Atlas({ sidebarCollapsed = false }) {
   const { tileUrl } = useTheme();
+  const { convertDistance, distanceUnit } = useUnits();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState({});
@@ -64,6 +60,13 @@ export default function Atlas({ sidebarCollapsed = false }) {
   const startDateRef = useRef(startDate);
   const endDateRef = useRef(endDate);
   const detailFetchSeqRef = useRef(0);
+
+  const formatDistance = (value, fractionDigits = 0) => {
+    const converted = convertDistance(value);
+    return formatNumber(converted ?? 0, {
+      maximumFractionDigits: fractionDigits,
+    });
+  };
 
   useEffect(() => { startDateRef.current = startDate; }, [startDate]);
   useEffect(() => { endDateRef.current = endDate; }, [endDate]);
@@ -251,7 +254,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
         const tooltip = `
           <div class="tooltip-row"><span class="tooltip-label">Journey:</span><span class="tooltip-value">${route.name}</span></div>
           <div class="tooltip-row"><span class="tooltip-label">Date:</span><span class="tooltip-value">${route.date}</span></div>
-          <div class="tooltip-row"><span class="tooltip-label">Distance:</span><span class="tooltip-value">${parseFloat(route.distance).toFixed(1)} mi</span></div>
+          <div class="tooltip-row"><span class="tooltip-label">Distance:</span><span class="tooltip-value">${(convertDistance(route.distance) ?? 0).toFixed(1)} ${distanceUnit}</span></div>
           <div class="tooltip-row"><span class="tooltip-label">Duration:</span><span class="tooltip-value">${route.duration}</span></div>
         `;
         line.bindTooltip(tooltip, { className: 'route-tooltip', sticky: true });
@@ -356,7 +359,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
       renderRoutes(getFilteredRoutes());
       loadDetailRoutes();
     }
-  }, [showRoutes, showMarkers, clusterMarkers, colorByDate, opacity, lineWidth]);
+  }, [showRoutes, showMarkers, clusterMarkers, colorByDate, opacity, lineWidth, distanceUnit]);
 
   useEffect(() => {
     if (loading) return;
@@ -381,15 +384,15 @@ export default function Atlas({ sidebarCollapsed = false }) {
           <div className="stats-overview">
             <h2>All-Time Travel</h2>
             <div className="stat-item"><span className="stat-label">Total Journeys</span><span className="stat-value">{formatNumber(stats.totalRoutes)}</span></div>
-            <div className="stat-item"><span className="stat-label">Total Distance</span><span className="stat-value">{formatMiles(stats.totalDistance)} mi</span></div>
+            <div className="stat-item"><span className="stat-label">Total Distance</span><span className="stat-value">{formatDistance(stats.totalDistance)} {distanceUnit}</span></div>
             <div className="stat-item"><span className="stat-label">Total Time</span><span className="stat-value">{formatTotalTime(stats.totalTime)}</span></div>
             <div className="stat-item"><span className="stat-label">Data Points</span><span className="stat-value">{formatNumber(stats.totalPoints)}</span></div>
 
             <div className="stats-divider" />
 
-            <div className="stat-item"><span className="stat-label">Total Drive</span><span className="stat-value">{formatMiles(stats.modeDistances?.drive)} mi</span></div>
-            <div className="stat-item"><span className="stat-label">Total Micromobility</span><span className="stat-value">{formatMiles(stats.modeDistances?.scooter)} mi</span></div>
-            <div className="stat-item"><span className="stat-label">Total Foot</span><span className="stat-value">{formatMiles(stats.modeDistances?.foot)} mi</span></div>
+            <div className="stat-item"><span className="stat-label">Total Drive</span><span className="stat-value">{formatDistance(stats.modeDistances?.drive)} {distanceUnit}</span></div>
+            <div className="stat-item"><span className="stat-label">Total Micromobility</span><span className="stat-value">{formatDistance(stats.modeDistances?.scooter)} {distanceUnit}</span></div>
+            <div className="stat-item"><span className="stat-label">Total Foot</span><span className="stat-value">{formatDistance(stats.modeDistances?.foot)} {distanceUnit}</span></div>
           </div>
 
           <div className="controls-section">
