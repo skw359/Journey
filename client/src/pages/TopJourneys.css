@@ -68,17 +68,35 @@
   align-items: center;
   gap: 12px;
   background-color: var(--bg-secondary);
-  border-radius: 10px;
-  padding: 12px 15px;
+  border-radius: 8px;
+  padding: 12px 16px;
   margin-bottom: 8px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  border-left: 4px solid var(--bg-secondary);
+  border: none;
+  transition: background-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
 }
-.topjourneys-page .route-card:hover,
+.topjourneys-page .route-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 0;
+  background-color: var(--accent-primary);
+  border-radius: 0 4px 4px 0;
+  transition: height 0.2s ease;
+}
 .topjourneys-page .route-card.active {
   background-color: var(--bg-tertiary);
-  border-left-color: var(--accent-primary);
+}
+.topjourneys-page .route-card.active::before {
+  height: 48px;
+}
+.topjourneys-page .route-card:hover {
+  background-color: var(--bg-tertiary);
 }
 .topjourneys-page .route-card-content { flex: 1; min-width: 0; }
 .topjourneys-page .route-card-name {
