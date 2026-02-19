@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useUnits } from '../context/UnitsContext';
 import Modal from '../components/Modal';
 import {
   LARGE_ROUTE_WARNING_MESSAGE,
@@ -9,6 +10,7 @@ import {
   isLargeRouteWarningSuppressed,
   setLargeRouteWarningSuppressed
 } from '../utils/largeRouteWarning';
+import { UNIT_PREFERENCES } from '../utils/units';
 import { getDatabaseConfig, updateDatabaseConfig, testDatabaseConnection } from '../api/settings';
 import { uploadAvatar } from '../api/auth';
 import './Settings.css';
@@ -16,9 +18,12 @@ import './Settings.css';
 export default function Settings() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout, updateUser, deleteAccount } = useAuth();
+  const { isMetric, setUnitPreference } = useUnits();
   const [suppressLargeRouteWarning, setSuppressLargeRouteWarning] = useState(() => isLargeRouteWarningSuppressed());
   const avatarInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [unitPreferenceSaving, setUnitPreferenceSaving] = useState(false);
+  const [unitPreferenceError, setUnitPreferenceError] = useState('');
 
   // Database config state
   const [dbHost, setDbHost] = useState('');
@@ -60,6 +65,21 @@ export default function Settings() {
     const shouldSuppress = event.target.checked;
     setSuppressLargeRouteWarning(shouldSuppress);
     setLargeRouteWarningSuppressed(shouldSuppress);
+  };
+
+  const handleUnitToggle = async (event) => {
+    const nextPreference = event.target.checked
+      ? UNIT_PREFERENCES.METRIC
+      : UNIT_PREFERENCES.IMPERIAL;
+    setUnitPreferenceError('');
+    setUnitPreferenceSaving(true);
+    try {
+      await setUnitPreference(nextPreference);
+    } catch (err) {
+      setUnitPreferenceError(err.message || 'Failed to save unit preference');
+    } finally {
+      setUnitPreferenceSaving(false);
+    }
   };
 
   const getDbConfig = () => ({
@@ -203,6 +223,29 @@ export default function Settings() {
             </span>
           </label>
 
+          <label className="settings-item" htmlFor="unit-toggle">
+            <div className="settings-item-copy">
+              <span className="settings-item-title">Metric / Imperial units</span>
+              <span className="settings-item-detail">
+                {isMetric
+                  ? 'Showing km, km/h, m, and m/s\u00B2.'
+                  : 'Showing mi, mph, ft, and ft/s\u00B2.'}
+                {unitPreferenceSaving ? ' Saving...' : ''}
+              </span>
+            </div>
+            <span className="settings-switch">
+              <input
+                id="unit-toggle"
+                type="checkbox"
+                checked={isMetric}
+                onChange={handleUnitToggle}
+                disabled={unitPreferenceSaving}
+              />
+              <span className="settings-slider" />
+            </span>
+          </label>
+          {unitPreferenceError && <div className="settings-inline-error">{unitPreferenceError}</div>}
+
           <label className="settings-item" htmlFor="suppress-large-route-warning-toggle">
             <div className="settings-item-copy">
               <span className="settings-item-title">Suppress large route warning</span>
@@ -336,8 +379,8 @@ export default function Settings() {
             </button>
           </div>
           <p className="settings-danger-note">
-            Deleting your account permanently removes any associatted account data, including your journeys,
-            waypoints, photos, pairing tokens, and profile details.
+            Deleting your account removes any associated account data, including your journeys,
+            waypoints, photos, pairing tokens, and profile details permanently.
           </p>
         </section>
       </main>

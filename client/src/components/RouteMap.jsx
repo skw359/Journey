@@ -4,13 +4,14 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-fullscreen';
 import 'leaflet-fullscreen/dist/leaflet.fullscreen.css';
 import { useTheme } from '../context/ThemeContext';
+import { useUnits } from '../context/UnitsContext';
 import { TILE_ATTRIBUTION } from '../utils/mapUtils';
-import { formatTime, mToFt, calculateAcceleration } from '../utils/formatters';
+import { formatTime, calculateAcceleration } from '../utils/formatters';
 import { douglasPeucker, getToleranceForZoom, shouldShowHover } from '../utils/simplify';
 
 const SIMPLIFICATION_THRESHOLD = 5000;
 
-function buildTooltipContent(route, i) {
+function buildTooltipContent(route, i, units) {
   const startTime = route.profileTimeMs[0];
   const time = route.profileTimeMs[i];
   const speed = route.profileSpeedMph[i] || 0;
@@ -19,18 +20,32 @@ function buildTooltipContent(route, i) {
   const acceleration = i > 0
     ? calculateAcceleration(speed, route.profileSpeedMph[i - 1], time, route.profileTimeMs[i - 1])
     : 0;
+  const displaySpeed = units.convertSpeed(speed) ?? 0;
+  const displayDistance = units.convertDistance(distance) ?? 0;
+  const displayElevation = elevation !== null ? units.convertElevation(elevation) : null;
+  const displayAcceleration = units.convertAcceleration(acceleration) ?? 0;
 
   return `
     <div class="tooltip-row"><span class="tooltip-label">Time:</span><span class="tooltip-value">${formatTime(time, startTime)}</span></div>
-    <div class="tooltip-row"><span class="tooltip-label">Speed:</span><span class="tooltip-value">${speed.toFixed(1)} mph</span></div>
-    <div class="tooltip-row"><span class="tooltip-label">Distance:</span><span class="tooltip-value">${distance.toFixed(2)} mi</span></div>
-    ${elevation !== null ? `<div class="tooltip-row"><span class="tooltip-label">Elevation:</span><span class="tooltip-value">${Math.round(mToFt(elevation))} ft</span></div>` : ''}
-    <div class="tooltip-row"><span class="tooltip-label">Acceleration:</span><span class="tooltip-value">${acceleration.toFixed(2)} ft/s\u00B2</span></div>
+    <div class="tooltip-row"><span class="tooltip-label">Speed:</span><span class="tooltip-value">${displaySpeed.toFixed(1)} ${units.speedUnit}</span></div>
+    <div class="tooltip-row"><span class="tooltip-label">Distance:</span><span class="tooltip-value">${displayDistance.toFixed(2)} ${units.distanceUnit}</span></div>
+    ${displayElevation !== null ? `<div class="tooltip-row"><span class="tooltip-label">Elevation:</span><span class="tooltip-value">${Math.round(displayElevation)} ${units.elevationUnit}</span></div>` : ''}
+    <div class="tooltip-row"><span class="tooltip-label">Acceleration:</span><span class="tooltip-value">${displayAcceleration.toFixed(2)} ${units.accelerationUnit}</span></div>
   `;
 }
 
 export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) {
   const { tileUrl } = useTheme();
+  const {
+    convertSpeed,
+    convertDistance,
+    convertElevation,
+    convertAcceleration,
+    speedUnit,
+    distanceUnit,
+    elevationUnit,
+    accelerationUnit,
+  } = useUnits();
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const tileLayerRef = useRef(null);
@@ -40,9 +55,37 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
   const debounceRef = useRef(null);
   const onViewportChangeRef = useRef(onViewportChange);
   const lastRouteIdRef = useRef(null);
+  const unitFormatterRef = useRef({
+    convertSpeed,
+    convertDistance,
+    convertElevation,
+    convertAcceleration,
+    speedUnit,
+    distanceUnit,
+    elevationUnit,
+    accelerationUnit,
+  });
 
-  routeRef.current = route;
-  onViewportChangeRef.current = onViewportChange;
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+
+  useEffect(() => {
+    onViewportChangeRef.current = onViewportChange;
+  }, [onViewportChange]);
+
+  useEffect(() => {
+    unitFormatterRef.current = {
+      convertSpeed,
+      convertDistance,
+      convertElevation,
+      convertAcceleration,
+      speedUnit,
+      distanceUnit,
+      elevationUnit,
+      accelerationUnit,
+    };
+  }, [convertSpeed, convertDistance, convertElevation, convertAcceleration, speedUnit, distanceUnit, elevationUnit, accelerationUnit]);
 
   const emitViewportChange = useCallback((map) => {
     const cb = onViewportChangeRef.current;
@@ -93,7 +136,7 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
           const hover = L.polyline([coords[i], coords[i + 1]], {
             color: 'white', weight: 20, opacity: 0, className: 'interactive-hover-segment', pane: 'routePane',
           }).addTo(map);
-          hover.bindTooltip(buildTooltipContent(currentRoute, i), {
+          hover.bindTooltip(buildTooltipContent(currentRoute, i, unitFormatterRef.current), {
             permanent: false, direction: 'top', offset: [0, -10], opacity: 0.95, className: 'route-tooltip',
           });
           layers.push(hover);
@@ -146,7 +189,7 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
             const hover = L.polyline([curr, next], {
               color: 'white', weight: 20, opacity: 0, className: 'interactive-hover-segment', pane: 'routePane',
             }).addTo(map);
-            hover.bindTooltip(buildTooltipContent(currentRoute, i), {
+            hover.bindTooltip(buildTooltipContent(currentRoute, i, unitFormatterRef.current), {
               permanent: false, direction: 'top', offset: [0, -10], opacity: 0.95, className: 'route-tooltip',
             });
             layers.push(hover);
@@ -201,6 +244,13 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
       tileLayerRef.current.setUrl(tileUrl);
     }
   }, [tileUrl]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const currentRoute = routeRef.current;
+    if (!map || !currentRoute?.coordinates?.length) return;
+    renderRouteLayers(map, currentRoute);
+  }, [renderRouteLayers, speedUnit, distanceUnit, elevationUnit, accelerationUnit]);
 
   useEffect(() => {
     if (mapInstanceRef.current) {

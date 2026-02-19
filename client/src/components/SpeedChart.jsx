@@ -3,11 +3,13 @@ import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { useTheme } from '../context/ThemeContext';
+import { useUnits } from '../context/UnitsContext';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, zoomPlugin);
 
 export default function SpeedChart({ route, onPointClick }) {
   const { chartColors } = useTheme();
+  const { convertDistance, convertSpeed, distanceUnit, speedUnit } = useUnits();
   const [mode, setMode] = useState('time');
   const chartRef = useRef(null);
 
@@ -23,14 +25,17 @@ export default function SpeedChart({ route, onPointClick }) {
     const isTimeMode = mode === 'time';
     const labels = isTimeMode
       ? timeMinutes.map(t => t.toFixed(1))
-      : route.profileDistMi.map(d => d.toFixed(1));
-    const xAxisLabel = isTimeMode ? 'Time (minutes)' : 'Distance (miles)';
+      : route.profileDistMi.map((distance) => {
+        const converted = convertDistance(distance);
+        return (converted ?? 0).toFixed(1);
+      });
+    const xAxisLabel = isTimeMode ? 'Time (minutes)' : `Distance (${distanceUnit})`;
 
     const data = {
       labels,
       datasets: [{
-        label: 'Speed (mph)',
-        data: route.profileSpeedMph,
+        label: `Speed (${speedUnit})`,
+        data: route.profileSpeedMph.map((speed) => convertSpeed(speed) ?? 0),
         borderColor: '#4A90E2',
         backgroundColor: 'rgba(74, 144, 226, 0.1)',
         fill: false,
@@ -55,11 +60,12 @@ export default function SpeedChart({ route, onPointClick }) {
           callbacks: {
             title: (ctx) => {
               const idx = ctx[0].dataIndex;
+              const convertedDistance = convertDistance(route.profileDistMi[idx]);
               return isTimeMode
                 ? `Time: ${timeMinutes[idx].toFixed(1)} min`
-                : `Distance: ${route.profileDistMi[idx].toFixed(2)} mi`;
+                : `Distance: ${(convertedDistance ?? 0).toFixed(2)} ${distanceUnit}`;
             },
-            label: (ctx) => `Speed: ${ctx.parsed.y.toFixed(1)} mph`,
+            label: (ctx) => `Speed: ${ctx.parsed.y.toFixed(1)} ${speedUnit}`,
             footer: () => 'Click to delete this point',
           },
         },
@@ -81,12 +87,12 @@ export default function SpeedChart({ route, onPointClick }) {
       },
       scales: {
         x: { title: { display: true, text: xAxisLabel, color: chartColors.color }, grid: { color: chartColors.grid } },
-        y: { title: { display: true, text: 'Speed (mph)', color: chartColors.color }, grid: { color: chartColors.grid } },
+        y: { title: { display: true, text: `Speed (${speedUnit})`, color: chartColors.color }, grid: { color: chartColors.grid } },
       },
     };
 
     return { data, options };
-  }, [route, mode, chartColors, timeMinutes, onPointClick]);
+  }, [chartColors, convertDistance, convertSpeed, distanceUnit, mode, onPointClick, route, speedUnit, timeMinutes]);
 
   if (!data) return null;
 

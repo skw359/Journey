@@ -1,7 +1,11 @@
 import TravelModeBadge from './TravelModeBadge';
+import { useUnits } from '../context/UnitsContext';
 import './JourneyCard.css';
 
 export default function JourneyCard({ route, active, onClick, variant, rank }) {
+  const { convertDistance, distanceUnit } = useUnits();
+  const distance = convertDistance(route.distance);
+
   return (
     <div
       className={`route-card${active ? ' active' : ''}`}
@@ -16,7 +20,7 @@ export default function JourneyCard({ route, active, onClick, variant, rank }) {
         <h3>{route.name}</h3>
       </div>
       <p>
-        {parseFloat(route.distance).toFixed(1)} mi {'\u2022'} {route.duration.replace(/^0h /, '')}
+        {(distance ?? 0).toFixed(1)} {distanceUnit} {'\u2022'} {route.duration.replace(/^0h /, '')}
       </p>
       <div style={{ marginTop: '8px' }}>
         <TravelModeBadge mode={route.travelMode || 'foot'} variant={variant} />

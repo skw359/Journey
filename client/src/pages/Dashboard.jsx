@@ -20,6 +20,7 @@ import { fetchRoutes, fetchRouteDetail, deleteRoute, renameRoute, updateTravelMo
 import { formatTime, formatDataPointCount } from '../utils/formatters';
 import { showLargeRouteWarning } from '../utils/largeRouteWarning';
 import { useToast } from '../context/ToastContext';
+import { useUnits } from '../context/UnitsContext';
 import './Dashboard.css';
 
 const PREVIEW_MAX_POINTS = 100;
@@ -27,6 +28,7 @@ const DETAIL_ZOOM_THRESHOLD = 8;
 
 export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }) {
   const toast = useToast();
+  const { convertSpeed, speedUnit } = useUnits();
   const [searchParams, setSearchParams] = useSearchParams();
   const [allRoutes, setAllRoutes] = useState([]);
   const [currentRoute, setCurrentRoute] = useState(null);
@@ -645,7 +647,10 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
           <p>Do you want to delete this specific data point?</p>
           {pointToDelete && (
             <div style={{ background: 'var(--bg-secondary)', padding: 15, borderRadius: 8, margin: '15px 0', border: '1px solid var(--bg-tertiary)' }}>
-              <div className="tooltip-row"><span className="tooltip-label">Speed:</span><span className="tooltip-value">{pointToDelete.speed.toFixed(1)} mph</span></div>
+              <div className="tooltip-row">
+                <span className="tooltip-label">Speed:</span>
+                <span className="tooltip-value">{(convertSpeed(pointToDelete.speed) ?? 0).toFixed(1)} {speedUnit}</span>
+              </div>
               <div className="tooltip-row"><span className="tooltip-label">Time:</span><span className="tooltip-value">{formatTime(pointToDelete.time, pointToDelete.startTime)}</span></div>
               <div className="tooltip-row"><span className="tooltip-label">Index:</span><span className="tooltip-value">#{pointToDelete.index}</span></div>
             </div>

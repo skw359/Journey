@@ -1,16 +1,22 @@
-import { mToFt } from '../utils/formatters';
+import { useUnits } from '../context/UnitsContext';
 import './StatsGrid.css';
 
 export default function StatsGrid({ route }) {
+  const { convertDistance, convertSpeed, convertElevation, distanceUnit, speedUnit, elevationUnit } = useUnits();
   if (!route) return null;
+
+  const distance = convertDistance(route.distance);
+  const avgSpeed = convertSpeed(route.avgSpeed);
+  const topSpeed = convertSpeed(route.topSpeed);
+  const topElevation = convertElevation(route.topElevation);
 
   return (
     <div className="stats-section">
       <div className="primary-stat">
         <h3>Distance</h3>
         <p>
-          {parseFloat(route.distance).toFixed(1)}
-          <span className="unit">mi</span>
+          {distance != null ? distance.toFixed(1) : '--'}
+          <span className="unit">{distanceUnit}</span>
         </p>
       </div>
       <div className="stats-grid">
@@ -21,24 +27,22 @@ export default function StatsGrid({ route }) {
         <div className="stat-card">
           <h3>Avg. Speed</h3>
           <p>
-            {parseFloat(route.avgSpeed).toFixed(0)}
-            <span className="unit">mph</span>
+            {avgSpeed != null ? avgSpeed.toFixed(0) : '--'}
+            <span className="unit">{speedUnit}</span>
           </p>
         </div>
         <div className="stat-card">
           <h3>Top Speed</h3>
           <p>
-            {parseFloat(route.topSpeed).toFixed(0)}
-            <span className="unit">mph</span>
+            {topSpeed != null ? topSpeed.toFixed(0) : '--'}
+            <span className="unit">{speedUnit}</span>
           </p>
         </div>
         <div className="stat-card">
           <h3>Top Elevation</h3>
           <p>
-            {route.topElevation
-              ? Math.round(mToFt(route.topElevation))
-              : '--'}
-            <span className="unit">ft</span>
+            {topElevation != null ? Math.round(topElevation) : '--'}
+            <span className="unit">{elevationUnit}</span>
           </p>
         </div>
       </div>

@@ -4,6 +4,24 @@ export async function getDatabaseConfig() {
   return res.json();
 }
 
+export async function getUnitPreference() {
+  const res = await fetch('/api/settings/units');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to get unit preference');
+  return data;
+}
+
+export async function updateUnitPreference(unitPreference) {
+  const res = await fetch('/api/settings/units', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ unitPreference }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to update unit preference');
+  return data;
+}
+
 export async function updateDatabaseConfig(config) {
   const res = await fetch('/api/settings/database', {
     method: 'PUT',

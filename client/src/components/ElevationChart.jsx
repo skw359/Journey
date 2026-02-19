@@ -3,22 +3,29 @@ import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { useTheme } from '../context/ThemeContext';
-import { mToFt } from '../utils/formatters';
+import { useUnits } from '../context/UnitsContext';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, zoomPlugin);
 
 export default function ElevationChart({ route, onPointClick }) {
   const { chartColors } = useTheme();
+  const { convertDistance, convertElevation, distanceUnit, elevationUnit } = useUnits();
   const chartRef = useRef(null);
 
   const { data, options } = useMemo(() => {
     if (!route?.profileDistMi || !route?.profileElevM) return { data: null, options: null };
 
     const data = {
-      labels: route.profileDistMi.map(d => d.toFixed(1)),
+      labels: route.profileDistMi.map((distance) => {
+        const converted = convertDistance(distance);
+        return (converted ?? 0).toFixed(1);
+      }),
       datasets: [{
-        label: 'Elevation (ft)',
-        data: route.profileElevM.map(e => e ? mToFt(e) : null),
+        label: `Elevation (${elevationUnit})`,
+        data: route.profileElevM.map((elevation) => {
+          if (elevation == null) return null;
+          return convertElevation(elevation);
+        }),
         borderColor: '#02d87f',
         backgroundColor: 'rgba(2, 216, 127, 0.1)',
         fill: true,
@@ -41,7 +48,7 @@ export default function ElevationChart({ route, onPointClick }) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => `${Math.round(ctx.parsed.y)} ft`,
+            label: (ctx) => `${Math.round(ctx.parsed.y)} ${elevationUnit}`,
             footer: () => 'Click to delete this point',
           },
         },
@@ -62,13 +69,13 @@ export default function ElevationChart({ route, onPointClick }) {
         }
       },
       scales: {
-        x: { title: { display: true, text: 'Distance (miles)', color: chartColors.color }, grid: { color: chartColors.grid } },
-        y: { title: { display: true, text: 'Elevation (ft)', color: chartColors.color }, grid: { color: chartColors.grid } },
+        x: { title: { display: true, text: `Distance (${distanceUnit})`, color: chartColors.color }, grid: { color: chartColors.grid } },
+        y: { title: { display: true, text: `Elevation (${elevationUnit})`, color: chartColors.color }, grid: { color: chartColors.grid } },
       },
     };
 
     return { data, options };
-  }, [route, chartColors, onPointClick]);
+  }, [chartColors, convertDistance, convertElevation, distanceUnit, elevationUnit, onPointClick, route]);
 
   if (!data) return null;
 

@@ -12,6 +12,7 @@ import FirstRunOnboarding from '../components/FirstRunOnboarding';
 import { fetchRoutes, fetchRouteDetail } from '../api/journeys';
 import { showLargeRouteWarning } from '../utils/largeRouteWarning';
 import { useToast } from '../context/ToastContext';
+import { useUnits } from '../context/UnitsContext';
 import './TopJourneys.css';
 
 const PREVIEW_MAX_POINTS = 100;
@@ -31,6 +32,7 @@ function getRankBadgeClass(rank) {
 
 export default function TopJourneys({ sidebarCollapsed = false }) {
   const toast = useToast();
+  const { convertDistance, distanceUnit } = useUnits();
   const [allRoutes, setAllRoutes] = useState([]);
   const [currentRoute, setCurrentRoute] = useState(null);
   const [currentRouteId, setCurrentRouteId] = useState(null);
@@ -180,7 +182,9 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
                       <div className="route-card-content">
                         <div className="route-card-name">{route.name}</div>
                         <div className="route-card-stats">
-                          <span className="route-card-stat"><strong>{parseFloat(route.distance).toFixed(1)}</strong> mi</span>
+                          <span className="route-card-stat">
+                            <strong>{(convertDistance(route.distance) ?? 0).toFixed(1)}</strong> {distanceUnit}
+                          </span>
                           <span className="route-card-stat"><strong>{route.duration}</strong></span>
                         </div>
                         <div className="route-card-badges">
