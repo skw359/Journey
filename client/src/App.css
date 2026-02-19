@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
 
 :root {
+  --theme-transition-duration: 0.25s;
+  --theme-transition-easing: ease;
   --bg-primary: #000;
   --bg-secondary: #000;
   --bg-tertiary: #2e2e2e;
@@ -28,6 +30,15 @@
   --accent-danger: #dc2626;
   --border-color: #e4e4e7;
   --modal-overlay-bg: rgba(255, 255, 255, 0.4);
+}
+
+:root.theme-transition,
+:root.theme-transition *,
+:root.theme-transition *::before,
+:root.theme-transition *::after {
+  transition-property: background-color, color, border-color, outline-color, text-decoration-color, fill, stroke, box-shadow;
+  transition-duration: var(--theme-transition-duration);
+  transition-timing-function: var(--theme-transition-easing);
 }
 
 html, body, #root {

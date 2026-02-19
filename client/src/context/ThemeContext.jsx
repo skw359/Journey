@@ -1,14 +1,40 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { getTileUrl, getChartColors } from '../utils/mapUtils';
 
 const ThemeContext = createContext();
+const THEME_TRANSITION_DURATION_MS = 250;
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const hasMountedRef = useRef(false);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    const root = document.documentElement;
+    const prefersReducedMotion =
+      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+    const shouldAnimate = hasMountedRef.current && !prefersReducedMotion;
+
+    if (shouldAnimate) {
+      root.classList.add('theme-transition');
+    }
+
+    root.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
+
+    hasMountedRef.current = true;
+
+    if (!shouldAnimate) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      root.classList.remove('theme-transition');
+    }, THEME_TRANSITION_DURATION_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      root.classList.remove('theme-transition');
+    };
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
