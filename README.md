@@ -10,7 +10,7 @@ where you’ve been and visualizes your movement.
 ## What Journey Does
 
 - Records high-fidelity data from your phone or Apple Watch (GPS, elevation, speed, waypoints)
-- Maps each trip with interactive routes
+- Maps each trip with interactive routes (hovering over points, etc.)
 - Detects travel mode automatically (foot, micromobility, drive)
 - Lets you attach photos as memory layers to each route
 - Includes all-time Atlas views (line map + heatmap)
