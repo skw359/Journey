@@ -435,7 +435,7 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
             {hasAnyRoutes && <FilterBar active={activeFilter} onChange={setActiveFilter} />}
             <div className="route-list" style={{ overflowY: 'auto', flexGrow: 1 }}>
               {showFilteredEmptyState ? (
-                <p className="dashboard-empty-filter">No journeys match your current search or filter.</p>
+                <p className="dashboard-empty-filter">No matching journeys could be found with the current search parameters.</p>
               ) : (
                 filteredRoutes.map(route => (
                   <JourneyCard

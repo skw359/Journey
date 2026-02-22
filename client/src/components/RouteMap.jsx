@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-fullscreen';
@@ -8,6 +8,7 @@ import { useUnits } from '../context/UnitsContext';
 import { TILE_ATTRIBUTION } from '../utils/mapUtils';
 import { formatTime, calculateAcceleration } from '../utils/formatters';
 import { douglasPeucker, getToleranceForZoom, shouldShowHover } from '../utils/simplify';
+import { speedToColor } from '../utils/speedColors';
 
 const SIMPLIFICATION_THRESHOLD = 5000;
 
@@ -46,6 +47,8 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
     elevationUnit,
     accelerationUnit,
   } = useUnits();
+  const [heatmapEnabled, setHeatmapEnabled] = useState(false);
+  const heatmapEnabledRef = useRef(false);
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const tileLayerRef = useRef(null);
@@ -87,6 +90,15 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
     };
   }, [convertSpeed, convertDistance, convertElevation, convertAcceleration, speedUnit, distanceUnit, elevationUnit, accelerationUnit]);
 
+  useEffect(() => {
+    heatmapEnabledRef.current = heatmapEnabled;
+    const map = mapInstanceRef.current;
+    const currentRoute = routeRef.current;
+    if (map && currentRoute?.coordinates?.length) {
+      renderRouteLayers(map, currentRoute);
+    }
+  }, [heatmapEnabled]);
+
   const emitViewportChange = useCallback((map) => {
     const cb = onViewportChangeRef.current;
     if (!cb || !map) return;
@@ -111,6 +123,8 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
     const hasProfile = currentRoute.profileTimeMs && currentRoute.profileSpeedMph && currentRoute.profileDistMi;
     const isLarge = coords.length > SIMPLIFICATION_THRESHOLD;
     const zoom = map.getZoom();
+    const heatmap = heatmapEnabledRef.current && hasProfile;
+    const topSpeed = currentRoute.topSpeed || 1;
 
     if (!hasProfile) {
       let renderCoords = coords;
@@ -127,8 +141,9 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
       layers.push(line);
     } else if (!isLarge) {
       for (let i = 0; i < coords.length - 1; i++) {
+        const segColor = heatmap ? speedToColor((currentRoute.profileSpeedMph[i] || 0) / topSpeed) : '#02d87f';
         const line = L.polyline([coords[i], coords[i + 1]], {
-          color: '#02d87f', weight: 4, opacity: 0.9, className: 'visual-route-segment', pane: 'routePane',
+          color: segColor, weight: 4, opacity: 0.9, className: 'visual-route-segment', pane: 'routePane',
         }).addTo(map);
         layers.push(line);
 
@@ -146,36 +161,52 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
       const tolerance = getToleranceForZoom(zoom);
       const showHover = shouldShowHover(zoom);
 
-      if (!showHover) {
-        let renderCoords = coords;
-        if (tolerance) {
-          const { simplified } = douglasPeucker(coords, tolerance);
-          renderCoords = simplified;
+      const mapBounds = map.getBounds();
+      const latBuffer = (mapBounds.getNorth() - mapBounds.getSouth()) * 0.1;
+      const lngBuffer = (mapBounds.getEast() - mapBounds.getWest()) * 0.1;
+      const bufferedBounds = L.latLngBounds(
+        [mapBounds.getSouth() - latBuffer, mapBounds.getWest() - lngBuffer],
+        [mapBounds.getNorth() + latBuffer, mapBounds.getEast() + lngBuffer]
+      );
+
+      if (tolerance) {
+        const { simplified, indices } = douglasPeucker(coords, tolerance);
+        if (heatmap) {
+          for (let i = 0; i < simplified.length - 1; i++) {
+            const segColor = speedToColor((currentRoute.profileSpeedMph[indices[i]] || 0) / topSpeed);
+            const line = L.polyline([simplified[i], simplified[i + 1]], {
+              color: segColor, weight: 4, opacity: 0.9, className: 'visual-route-segment', pane: 'routePane',
+            }).addTo(map);
+            layers.push(line);
+          }
+        } else {
+          const line = L.polyline(simplified, {
+            color: '#02d87f', weight: 4, opacity: 0.9, className: 'visual-route-segment', pane: 'routePane',
+          }).addTo(map);
+          layers.push(line);
         }
-        const line = L.polyline(renderCoords, {
-          color: '#02d87f', weight: 4, opacity: 0.9, className: 'visual-route-segment', pane: 'routePane',
-        }).addTo(map);
-        layers.push(line);
+      } else if (heatmap) {
+        for (let i = 0; i < coords.length - 1; i++) {
+          const curr = coords[i];
+          const next = coords[i + 1];
+          if (!bufferedBounds.contains(L.latLng(curr[0], curr[1])) &&
+              !bufferedBounds.contains(L.latLng(next[0], next[1]))) {
+            continue;
+          }
+          const segColor = speedToColor((currentRoute.profileSpeedMph[i] || 0) / topSpeed);
+          const line = L.polyline([curr, next], {
+            color: segColor, weight: 4, opacity: 0.9, className: 'visual-route-segment', pane: 'routePane',
+          }).addTo(map);
+          layers.push(line);
+        }
       } else {
-        let renderCoords = coords;
-        if (tolerance) {
-          const { simplified } = douglasPeucker(coords, tolerance);
-          renderCoords = simplified;
-        }
-
-        const line = L.polyline(renderCoords, {
+        const line = L.polyline(coords, {
           color: '#02d87f', weight: 4, opacity: 0.9, className: 'visual-route-segment', pane: 'routePane',
         }).addTo(map);
         layers.push(line);
+      }
 
-        const mapBounds = map.getBounds();
-        const latBuffer = (mapBounds.getNorth() - mapBounds.getSouth()) * 0.1;
-        const lngBuffer = (mapBounds.getEast() - mapBounds.getWest()) * 0.1;
-        const bufferedBounds = L.latLngBounds(
-          [mapBounds.getSouth() - latBuffer, mapBounds.getWest() - lngBuffer],
-          [mapBounds.getNorth() + latBuffer, mapBounds.getEast() + lngBuffer]
-        );
-
+      if (showHover) {
         for (let i = 0; i < coords.length - 1; i++) {
           const curr = coords[i];
           const next = coords[i + 1];
@@ -329,9 +360,21 @@ export default function RouteMap({ route, sidebarCollapsed, onViewportChange }) 
     }, 100);
   }, [route, clearRouteLayers, emitViewportChange, renderRouteLayers]);
 
+  const hasSpeedData = route?.profileSpeedMph;
+
   return (
     <div className="map-container">
       <div id="map" ref={mapRef} />
+      {hasSpeedData && (
+        <button
+          className={`speed-heatmap-toggle${heatmapEnabled ? ' active' : ''}`}
+          onClick={() => setHeatmapEnabled(prev => !prev)}
+          title={heatmapEnabled ? 'Disable speed heatmap' : 'Enable speed heatmap'}
+        >
+          <span className="speed-heatmap-bar" />
+          <span className="speed-heatmap-label">Speed</span>
+        </button>
+      )}
     </div>
   );
 }
