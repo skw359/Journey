@@ -162,6 +162,7 @@ body {
 .leaflet-control-fullscreen a:hover { background-color: var(--bg-secondary) !important; }
 
 .map-container {
+  position: relative;
   background-color: var(--bg-secondary);
   border-radius: 12px;
   height: 50vh;
@@ -173,6 +174,48 @@ body {
   height: 100%;
   border-radius: 12px;
   background-color: var(--bg-tertiary);
+}
+
+.speed-heatmap-toggle {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.speed-heatmap-toggle:hover {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.speed-heatmap-toggle.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 2px 12px rgba(2, 216, 127, 0.35);
+}
+.speed-heatmap-bar {
+  width: 32px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #00c853, #2979ff, #ff1a00);
+}
+.speed-heatmap-label {
+  font-family: var(--font-family-sans);
+  font-size: 0.75em;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+.speed-heatmap-toggle.active .speed-heatmap-label {
+  color: #fff;
 }
 
 .graphs-section { margin-bottom: 32px; }
