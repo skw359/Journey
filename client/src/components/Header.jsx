@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { to: '/journeys', label: 'Dashboard' },
   { to: '/topjourneys', label: 'Top Journeys' },
   { to: '/atlas', label: 'Atlas' },
+  { to: '/funstats', label: 'Fun Stats' },
 ];
 
 export default function Header({ onToggleSidebar, showSearch, searchValue, onSearchChange }) {

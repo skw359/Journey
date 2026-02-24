@@ -62,6 +62,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
   const startDateRef = useRef(startDate);
   const endDateRef = useRef(endDate);
   const detailFetchSeqRef = useRef(0);
+  const preloadedRef = useRef(false);
 
   const formatDistance = (value, fractionDigits = 0) => {
     const converted = convertDistance(value);
@@ -86,7 +87,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
       debounceRef.current = setTimeout(() => {
         if (mapModeRef.current === 'heatmap') {
           loadHeatmapGrid(startDateRef.current, endDateRef.current);
-        } else {
+        } else if (!preloadedRef.current) {
           loadDetailRoutes();
         }
       }, 400);
@@ -132,9 +133,11 @@ export default function Atlas({ sidebarCollapsed = false }) {
   };
 
   const loadData = async () => {
+    const shouldPreload = localStorage.getItem('preloadData') === 'true';
     loaderRef.current?.start();
     try {
-      const data = await fetchAllTimeMapData({ maxPoints: 100 });
+      preloadedRef.current = shouldPreload;
+      const data = await fetchAllTimeMapData({ maxPoints: shouldPreload ? 0 : 100 });
       allRoutesRef.current = data.routes || [];
       setStats({ ...(data.stats || {}) });
 
@@ -145,7 +148,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
 
       if (mapModeRef.current === 'lines') {
         renderRoutes(data.routes || []);
-        loadDetailRoutes();
+        if (!shouldPreload) loadDetailRoutes();
       }
 
       if (data.bounds) {
@@ -331,7 +334,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
       return;
     }
     renderRoutes(getFilteredRoutes(allRoutesRef.current, start, end));
-    loadDetailRoutes();
+    if (!preloadedRef.current) loadDetailRoutes();
   };
 
   const handleModeChange = (nextMode) => {
@@ -359,7 +362,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
   useEffect(() => {
     if (!loading && mapMode === 'lines' && allRoutesRef.current.length > 0) {
       renderRoutes(getFilteredRoutes());
-      loadDetailRoutes();
+      if (!preloadedRef.current) loadDetailRoutes();
     }
   }, [showRoutes, showMarkers, clusterMarkers, colorByDate, opacity, lineWidth, distanceUnit]);
 

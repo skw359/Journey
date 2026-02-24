@@ -1,0 +1,569 @@
+.funstats-main {
+  height: 100%;
+  overflow-y: auto;
+  padding: 32px 24px;
+  box-sizing: border-box;
+}
+
+.funstats-container {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.funstats-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+}
+
+.funstats-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(255,255,255,0.2);
+  border-top: 3px solid var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 1.1s cubic-bezier(0.8, 0.45, 0.6, 0.7) infinite;
+}
+
+.funstats-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.funstats-empty h2 {
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+/* Section panels */
+.funstats-panel {
+  padding: 24px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  margin-bottom: 20px;
+}
+
+.funstats-panel-title {
+  margin: 0 0 16px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ── Hero: Level + Spirit Animal ── */
+.funstats-hero {
+  background: var(--bg-secondary);
+}
+
+.funstats-hero-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.funstats-spirit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.funstats-spirit-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.funstats-spirit-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.funstats-spirit-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.funstats-spirit-trait {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.funstats-level {
+  flex: 1;
+  min-width: 0;
+}
+
+.funstats-level-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.funstats-level-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.funstats-level-xp {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.funstats-level-bar-wrap {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.funstats-level-bar {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent-primary);
+  transition: width 0.5s ease;
+}
+
+.funstats-level-next {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  display: block;
+}
+
+/* ── Travel Profile grid ── */
+.funstats-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+}
+
+.funstats-profile-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.funstats-profile-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.funstats-profile-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.funstats-profile-value .unit {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-left: 3px;
+}
+
+/* ── Stat cards grid ── */
+.funstats-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.funstats-stat-card {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+}
+
+.funstats-stat-card h4 {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.funstats-stat-card .value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.funstats-stat-card .value .unit {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-left: 2px;
+}
+
+.funstats-stat-card .sub {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* ── States ── */
+.funstats-states-count {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.funstats-states-count span {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.funstats-states-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.funstats-state-tag {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ── Bar chart ── */
+.funstats-barchart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 120px;
+  margin-top: 12px;
+}
+
+.funstats-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.funstats-bar {
+  width: 100%;
+  min-height: 2px;
+  background: var(--accent-primary);
+  border-radius: 3px 3px 0 0;
+  transition: height 0.3s ease;
+}
+
+.funstats-bar-label {
+  font-size: 0.55rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ── YoY comparison ── */
+.funstats-yoy {
+  margin-bottom: 8px;
+}
+
+.funstats-yoy-up {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+.funstats-yoy-down {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent-danger, #ff4444);
+}
+
+/* ── Monthly challenge ── */
+.funstats-challenge {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+}
+
+.funstats-challenge-label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.funstats-challenge-bar-wrap {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.funstats-challenge-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent-primary);
+  transition: width 0.5s ease;
+}
+
+.funstats-challenge-pct {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-top: 4px;
+  display: block;
+}
+
+/* ── Activity heatmap (GitHub-style) ── */
+.funstats-heatmap-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.funstats-heatmap {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+
+.funstats-heatmap-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.funstats-heatmap-cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Achievements ── */
+.funstats-achievements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.funstats-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.funstats-badge .badge-desc {
+  font-weight: 400;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+/* ── Achievement progress bars ── */
+.funstats-progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.funstats-progress-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.funstats-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.funstats-progress-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.funstats-progress-nums {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.funstats-progress-bar-wrap {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.funstats-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent-primary);
+  transition: width 0.5s ease;
+}
+
+/* ── Bingo card ── */
+.funstats-bingo-count {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.funstats-bingo-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.funstats-bingo-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-tertiary);
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.funstats-bingo-cell.completed {
+  background: rgba(2, 216, 127, 0.12);
+  border-color: rgba(2, 216, 127, 0.35);
+}
+
+.funstats-bingo-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.funstats-bingo-cell.completed .funstats-bingo-label {
+  color: var(--accent-primary);
+}
+
+/* ── Cluster list ── */
+.funstats-cluster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.funstats-cluster-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.funstats-cluster-item:last-child {
+  border-bottom: none;
+}
+
+.funstats-cluster-rank {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.funstats-cluster-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.funstats-cluster-coord {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.funstats-cluster-visits {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+/* ── Responsive ── */
+@media (max-width: 720px) {
+  .funstats-main {
+    padding: 20px 14px;
+  }
+
+  .funstats-panel {
+    padding: 18px;
+  }
+
+  .funstats-hero-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .funstats-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .funstats-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .funstats-bingo-grid {
+    gap: 4px;
+  }
+
+  .funstats-bingo-label {
+    font-size: 0.58rem;
+  }
+
+  .funstats-barchart {
+    height: 80px;
+  }
+}
