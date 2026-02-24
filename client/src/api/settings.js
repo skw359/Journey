@@ -1,18 +1,20 @@
+import apiFetch from './apiFetch';
+
 export async function getDatabaseConfig() {
-  const res = await fetch('/api/settings/database');
+  const res = await apiFetch('/api/settings/database');
   if (!res.ok) throw new Error('Failed to get database config');
   return res.json();
 }
 
 export async function getUnitPreference() {
-  const res = await fetch('/api/settings/units');
+  const res = await apiFetch('/api/settings/units');
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to get unit preference');
   return data;
 }
 
 export async function updateUnitPreference(unitPreference) {
-  const res = await fetch('/api/settings/units', {
+  const res = await apiFetch('/api/settings/units', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ unitPreference }),
@@ -23,7 +25,7 @@ export async function updateUnitPreference(unitPreference) {
 }
 
 export async function updateDatabaseConfig(config) {
-  const res = await fetch('/api/settings/database', {
+  const res = await apiFetch('/api/settings/database', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -34,7 +36,7 @@ export async function updateDatabaseConfig(config) {
 }
 
 export async function testDatabaseConnection(config) {
-  const res = await fetch('/api/settings/database/test', {
+  const res = await apiFetch('/api/settings/database/test', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),

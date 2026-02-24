@@ -4,12 +4,6 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useUnits } from '../context/UnitsContext';
 import Modal from '../components/Modal';
-import {
-  LARGE_ROUTE_WARNING_MESSAGE,
-  LARGE_ROUTE_WARNING_SUPPRESSED_KEY,
-  isLargeRouteWarningSuppressed,
-  setLargeRouteWarningSuppressed
-} from '../utils/largeRouteWarning';
 import { UNIT_PREFERENCES } from '../utils/units';
 import { getDatabaseConfig, updateDatabaseConfig, testDatabaseConnection } from '../api/settings';
 import { uploadAvatar } from '../api/auth';
@@ -19,7 +13,6 @@ export default function Settings() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout, updateUser, deleteAccount } = useAuth();
   const { isMetric, setUnitPreference } = useUnits();
-  const [suppressLargeRouteWarning, setSuppressLargeRouteWarning] = useState(() => isLargeRouteWarningSuppressed());
   const avatarInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [unitPreferenceSaving, setUnitPreferenceSaving] = useState(false);
@@ -39,18 +32,6 @@ export default function Settings() {
   const [deleteError, setDeleteError] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  useEffect(() => {
-    const handleStorage = (event) => {
-      if (event.key === LARGE_ROUTE_WARNING_SUPPRESSED_KEY) {
-        setSuppressLargeRouteWarning(event.newValue === 'true');
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, []);
 
   useEffect(() => {
     getDatabaseConfig().then(config => {
@@ -60,12 +41,6 @@ export default function Settings() {
       if (config.db_user) setDbUser(config.db_user);
     }).catch(() => {});
   }, []);
-
-  const handleWarningToggle = (event) => {
-    const shouldSuppress = event.target.checked;
-    setSuppressLargeRouteWarning(shouldSuppress);
-    setLargeRouteWarningSuppressed(shouldSuppress);
-  };
 
   const handleUnitToggle = async (event) => {
     const nextPreference = event.target.checked
@@ -246,25 +221,6 @@ export default function Settings() {
           </label>
           {unitPreferenceError && <div className="settings-inline-error">{unitPreferenceError}</div>}
 
-          <label className="settings-item" htmlFor="suppress-large-route-warning-toggle">
-            <div className="settings-item-copy">
-              <span className="settings-item-title">Suppress large route warning</span>
-              <span className="settings-item-detail">
-                Turn off the notification:
-                {' '}
-                &quot;{LARGE_ROUTE_WARNING_MESSAGE}&quot;
-              </span>
-            </div>
-            <span className="settings-switch">
-              <input
-                id="suppress-large-route-warning-toggle"
-                type="checkbox"
-                checked={suppressLargeRouteWarning}
-                onChange={handleWarningToggle}
-              />
-              <span className="settings-slider" />
-            </span>
-          </label>
         </section>
 
         <section className="settings-panel" style={{ marginTop: 24 }}>

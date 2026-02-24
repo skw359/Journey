@@ -18,7 +18,6 @@ import FirstRunOnboarding from '../components/FirstRunOnboarding';
 import { Footprints, Bike, Car } from 'lucide-react';
 import { fetchRoutes, fetchRouteDetail, deleteRoute, renameRoute, updateTravelMode as apiUpdateTravelMode, uploadPhotos as apiUploadPhotos, deletePhoto as apiDeletePhoto, deleteDataPoint } from '../api/journeys';
 import { formatTime, formatDataPointCount } from '../utils/formatters';
-import { showLargeRouteWarning } from '../utils/largeRouteWarning';
 import { useToast } from '../context/ToastContext';
 import { useUnits } from '../context/UnitsContext';
 import './Dashboard.css';
@@ -64,7 +63,6 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
   const fullDetailRouteIdsRef = useRef(new Set());
   const detailFetchInFlightRef = useRef(new Set());
   const selectionSeqRef = useRef(0);
-  const toastInfoRef = useRef(toast.info);
 
   const cacheRouteDetail = useCallback((route) => {
     if (!route?.id) return;
@@ -76,10 +74,6 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
   useEffect(() => {
     currentRouteIdRef.current = currentRouteId;
   }, [currentRouteId]);
-
-  useEffect(() => {
-    toastInfoRef.current = toast.info;
-  }, [toast.info]);
 
   const loadRouteWithAnimation = useCallback(async (routeId) => {
     if (routeId === currentRouteIdRef.current) return;
@@ -98,11 +92,6 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
       setCurrentRoute(route);
       setCurrentRouteId(routeId);
       setInfoExpanded(false);
-
-      const pointCount = route.totalPoints ?? route.coordinates?.length ?? 0;
-      if (pointCount > 5000) {
-        showLargeRouteWarning(toastInfoRef.current);
-      }
     } catch (err) {
       console.error(err);
     } finally {

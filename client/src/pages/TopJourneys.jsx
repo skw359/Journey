@@ -10,7 +10,6 @@ import AccelerationChart from '../components/AccelerationChart';
 import TravelModeBadge from '../components/TravelModeBadge';
 import FirstRunOnboarding from '../components/FirstRunOnboarding';
 import { fetchRoutes, fetchRouteDetail } from '../api/journeys';
-import { showLargeRouteWarning } from '../utils/largeRouteWarning';
 import { useToast } from '../context/ToastContext';
 import { useUnits } from '../context/UnitsContext';
 import './TopJourneys.css';
@@ -46,15 +45,10 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
   const fullDetailRouteIdsRef = useRef(new Set());
   const detailFetchInFlightRef = useRef(new Set());
   const selectionSeqRef = useRef(0);
-  const toastInfoRef = useRef(toast.info);
 
   useEffect(() => {
     currentRouteIdRef.current = currentRouteId;
   }, [currentRouteId]);
-
-  useEffect(() => {
-    toastInfoRef.current = toast.info;
-  }, [toast.info]);
 
   const loadRouteWithAnimation = useCallback(async (routeId) => {
     if (routeId === currentRouteIdRef.current) return;
@@ -72,11 +66,6 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
       setCurrentRouteId(routeId);
       if (route.isFullResolution) fullDetailRouteIdsRef.current.add(routeId);
       else fullDetailRouteIdsRef.current.delete(routeId);
-
-      const pointCount = route.totalPoints ?? route.coordinates?.length ?? 0;
-      if (pointCount > 5000) {
-        showLargeRouteWarning(toastInfoRef.current);
-      }
     } catch (err) {
       console.error(err);
     } finally {
