@@ -1,10 +1,12 @@
+import apiFetch from './apiFetch';
+
 export async function getAuthStatus() {
-  const res = await fetch('/api/auth/status');
+  const res = await apiFetch('/api/auth/status');
   return res.json();
 }
 
 export async function register({ username, password, firstName, lastName }) {
-  const res = await fetch('/api/auth/register', {
+  const res = await apiFetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password, firstName, lastName }),
@@ -15,7 +17,7 @@ export async function register({ username, password, firstName, lastName }) {
 }
 
 export async function login({ username, password }) {
-  const res = await fetch('/api/auth/login', {
+  const res = await apiFetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -26,14 +28,14 @@ export async function login({ username, password }) {
 }
 
 export async function logout() {
-  const res = await fetch('/api/auth/logout', { method: 'POST' });
+  const res = await apiFetch('/api/auth/logout', { method: 'POST' });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Logout failed');
   return data;
 }
 
 export async function deleteAccount(password) {
-  const res = await fetch('/api/auth/account', {
+  const res = await apiFetch('/api/auth/account', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password }),
@@ -44,7 +46,7 @@ export async function deleteAccount(password) {
 }
 
 export async function migrateData() {
-  const res = await fetch('/api/auth/migrate', { method: 'POST' });
+  const res = await apiFetch('/api/auth/migrate', { method: 'POST' });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Migration failed');
   return data;
@@ -53,7 +55,7 @@ export async function migrateData() {
 export async function uploadAvatar(file) {
   const formData = new FormData();
   formData.append('avatar', file);
-  const res = await fetch('/api/auth/avatar', {
+  const res = await apiFetch('/api/auth/avatar', {
     method: 'POST',
     body: formData,
   });

@@ -8,6 +8,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopLoader from '../components/TopLoader';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { useUnits } from '../context/UnitsContext';
 import { TILE_ATTRIBUTION } from '../utils/mapUtils';
 import { fetchAllTimeMapData, fetchHeatmapGrid } from '../api/journeys';
@@ -29,6 +30,7 @@ function formatNumber(value, options = {}) {
 
 export default function Atlas({ sidebarCollapsed = false }) {
   const { tileUrl } = useTheme();
+  const toast = useToast();
   const { convertDistance, distanceUnit } = useUnits();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

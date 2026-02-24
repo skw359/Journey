@@ -2,6 +2,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { Search, Map as MapIcon, User } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLoadingContext } from '../context/LoadingContext';
 import './Header.css';
 
 const NAV_LINKS = [
@@ -13,6 +14,7 @@ const NAV_LINKS = [
 export default function Header({ onToggleSidebar, showSearch, searchValue, onSearchChange }) {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { isLoading: dataLoading } = useLoadingContext();
   const searchRef = useRef(null);
   const closeProfileMenuTimeoutRef = useRef(null);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -126,6 +128,13 @@ export default function Header({ onToggleSidebar, showSearch, searchValue, onSea
               onKeyDown={handleSearchKeyDown}
             />
             <Search className="search-icon" size={16} />
+          </div>
+        )}
+
+        {dataLoading && (
+          <div className="header-loading-indicator">
+            <div className="header-loading-spinner" />
+            <span className="header-loading-text">Loading…</span>
           </div>
         )}
 
