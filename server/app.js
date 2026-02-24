@@ -49,6 +49,7 @@ const mapsRouter = require('./routes/maps');
 const authRouter = require('./routes/auth');
 const settingsRouter = require('./routes/settings');
 const pairingRouter = require('./routes/pairing');
+const funstatsRouter = require('./routes/funstats');
 
 // Health check (unprotected)
 app.get('/ping', (req, res) => {
@@ -70,6 +71,9 @@ app.use(photosRouter);
 
 // Journey CRUD (protected)
 app.use('/api/routes', requireSession, journeysRouter);
+
+// Fun stats (protected)
+app.use('/api', requireSession, funstatsRouter);
 
 // Map data endpoints (protected)
 app.use('/api', requireSession, mapsRouter);
@@ -102,7 +106,7 @@ app.get('/database', requireSession, async (req, res) => {
 });
 
 // SPA fallback routes
-app.get(['/alltime', '/atlas'], (req, res) => {
+app.get(['/alltime', '/atlas', '/funstats'], (req, res) => {
     if (fs.existsSync(CLIENT_DIST)) {
         res.sendFile(path.join(CLIENT_DIST, 'index.html'));
     } else {

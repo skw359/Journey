@@ -100,6 +100,7 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
 
   useEffect(() => {
     const load = async () => {
+      const shouldPreload = localStorage.getItem('preloadData') === 'true';
       try {
         const routes = await fetchRoutes();
         setAllRoutes(routes);
@@ -108,7 +109,25 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
 
         const sorted = [...routes].sort((a, b) => parseFloat(b.distance) - parseFloat(a.distance));
         if (sorted.length > 0) {
-          await loadRouteWithAnimation(sorted[0].id);
+          // Load top journey first at full resolution
+          const topRoute = await fetchRouteDetail(sorted[0].id, { maxPoints: shouldPreload ? 0 : PREVIEW_MAX_POINTS });
+          routeCacheRef.current.set(topRoute.id, topRoute);
+          if (topRoute.isFullResolution) fullDetailRouteIdsRef.current.add(topRoute.id);
+          setCurrentRoute(topRoute);
+          setCurrentRouteId(sorted[0].id);
+
+          // Preload remaining routes in the background
+          if (shouldPreload && sorted.length > 1) {
+            const remaining = sorted.slice(1);
+            Promise.all(
+              remaining.map(r => fetchRouteDetail(r.id, { maxPoints: 0 }))
+            ).then(details => {
+              details.forEach(route => {
+                routeCacheRef.current.set(route.id, route);
+                if (route.isFullResolution) fullDetailRouteIdsRef.current.add(route.id);
+              });
+            }).catch(err => console.error('Failed to preload routes:', err));
+          }
         }
       } catch (err) {
         console.error(err);

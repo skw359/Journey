@@ -27,6 +27,7 @@ export default function Settings() {
   const [dbTestResult, setDbTestResult] = useState(null);
   const [dbSaving, setDbSaving] = useState(false);
   const [dbTesting, setDbTesting] = useState(false);
+  const [preloadData, setPreloadData] = useState(() => localStorage.getItem('preloadData') === 'true');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
@@ -220,6 +221,28 @@ export default function Settings() {
             </span>
           </label>
           {unitPreferenceError && <div className="settings-inline-error">{unitPreferenceError}</div>}
+
+          <label className="settings-item" htmlFor="preload-toggle">
+            <div className="settings-item-copy">
+              <span className="settings-item-title">Preload journey data</span>
+              <span className="settings-item-detail">
+                Use full-resolution data for Atlas and Top Journeys on startup. Uses more resources and bandwidth. It's recommended to leave this option off.
+              </span>
+            </div>
+            <span className="settings-switch">
+              <input
+                id="preload-toggle"
+                type="checkbox"
+                checked={preloadData}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  localStorage.setItem('preloadData', val ? 'true' : 'false');
+                  setPreloadData(val);
+                }}
+              />
+              <span className="settings-slider" />
+            </span>
+          </label>
 
         </section>
 

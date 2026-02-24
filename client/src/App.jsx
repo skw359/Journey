@@ -9,6 +9,7 @@ const loadAtlas = () => import('./pages/Atlas');
 const loadApiDocs = () => import('./pages/ApiDocs');
 const loadSettings = () => import('./pages/Settings');
 const loadPairClient = () => import('./pages/PairClient');
+const loadFunStats = () => import('./pages/FunStats');
 
 const Dashboard = lazy(loadDashboard);
 const TopJourneys = lazy(loadTopJourneys);
@@ -16,6 +17,7 @@ const Atlas = lazy(loadAtlas);
 const ApiDocs = lazy(loadApiDocs);
 const Settings = lazy(loadSettings);
 const PairClient = lazy(loadPairClient);
+const FunStats = lazy(loadFunStats);
 
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
@@ -62,6 +64,8 @@ function preloadRoute(pathname) {
       return loadApiDocs();
     case '/pair':
       return loadPairClient();
+    case '/funstats':
+      return loadFunStats();
     default:
       return loadDashboard();
   }
@@ -201,6 +205,7 @@ export default function App() {
               <Route path="/heatmap" element={<Navigate to="/atlas?view=heatmap" replace />} />
               <Route path="/alltime" element={<Navigate to="/atlas" replace />} />
               <Route path="/atlas" element={<Atlas sidebarCollapsed={sidebarCollapsed.atlas} />} />
+              <Route path="/funstats" element={<FunStats />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/pair" element={<PairClient />} />
               <Route path="/api.html" element={<ApiDocs />} />
