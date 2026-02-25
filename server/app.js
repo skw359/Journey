@@ -70,7 +70,7 @@ app.use('/api/pairing', requireSession, pairingRouter);
 app.use(photosRouter);
 
 // Journey CRUD (protected)
-app.use('/api/routes', requireSession, journeysRouter);
+app.use('/api/routes', requireAuth, journeysRouter);
 
 // Fun stats (protected)
 app.use('/api', requireSession, funstatsRouter);
