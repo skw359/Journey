@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useUnits } from '../context/UnitsContext';
 import { formatCompactDurationMs } from '../utils/formatters';
+import { reverseGeocode } from '../api/geocode';
 import './FunStats.css';
 
 function formatHour(h) {
@@ -51,6 +52,9 @@ export default function FunStats() {
   const [error, setError] = useState(null);
   const { convertDistance, convertSpeed, distanceUnit, speedUnit } = useUnits();
 
+  const [geoLabels, setGeoLabels] = useState(new Map());
+  const geoCacheRef = useRef(new Map());
+
   useEffect(() => {
     fetch('/api/fun-stats', { credentials: 'include' })
       .then(r => { if (!r.ok) throw new Error('Failed to load stats'); return r.json(); })
@@ -58,6 +62,49 @@ export default function FunStats() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!data) return;
+
+    const coords = [];
+    if (data.furthestPointCoord) coords.push(data.furthestPointCoord);
+    if (data.extremePoints) {
+      for (const key of ['north', 'south', 'east', 'west']) {
+        if (data.extremePoints[key]) coords.push(data.extremePoints[key]);
+      }
+    }
+    if (data.clusters) {
+      for (const c of data.clusters) coords.push([c.lat, c.lon]);
+    }
+
+    if (coords.length === 0) return;
+
+    const unique = new Map();
+    for (const [lat, lon] of coords) {
+      const key = `${lat},${lon}`;
+      if (!unique.has(key) && !geoCacheRef.current.has(key)) unique.set(key, [lat, lon]);
+    }
+
+    if (unique.size === 0) {
+      setGeoLabels(new Map(geoCacheRef.current));
+      return;
+    }
+
+    Promise.allSettled(
+      [...unique.entries()].map(async ([key, [lat, lon]]) => {
+        const geo = await reverseGeocode(lat, lon);
+        return [key, geo];
+      })
+    ).then(results => {
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          const [key, geo] = r.value;
+          geoCacheRef.current.set(key, geo);
+        }
+      }
+      setGeoLabels(new Map(geoCacheRef.current));
+    });
+  }, [data]);
 
   if (loading) {
     return (
@@ -111,6 +158,29 @@ export default function FunStats() {
   const predictableWeekdayHour = Number.isFinite(habitInsights.mostPredictableWeekday?.avgStartHour)
     ? ((Math.round(habitInsights.mostPredictableWeekday.avgStartHour) % 24) + 24) % 24
     : null;
+
+  const geoName = (lat, lon) => {
+    const geo = geoLabels.get(`${lat},${lon}`);
+    if (!geo) return null;
+    const place = geo.place_name && geo.place_name !== 'unknown' ? geo.place_name : null;
+    const city = geo.city && geo.city !== 'unknown' ? geo.city : null;
+    const sc = geo.state_code || geo.country_code || null;
+    if (place && city) return `${place}, ${city}`;
+    if (city && sc) return `${city}, ${sc}`;
+    if (city) return city;
+    if (place) return place;
+    return null;
+  };
+
+  const geoCity = (lat, lon) => {
+    const geo = geoLabels.get(`${lat},${lon}`);
+    if (!geo) return null;
+    const city = geo.city && geo.city !== 'unknown' ? geo.city : null;
+    const sc = geo.state_code || geo.country_code || null;
+    if (city && sc) return `${city}, ${sc}`;
+    if (city) return city;
+    return null;
+  };
 
   // Monthly chart max for bar scaling
   const chartMax = data.monthlyChart?.length > 0
@@ -355,7 +425,7 @@ export default function FunStats() {
               <div className="funstats-stat-card">
                 <h4>Furthest Point</h4>
                 <div className="value">{cd(data.furthestPointMiles)?.toFixed(1) ?? '--'}<span className="unit">{distanceUnit}</span></div>
-                {data.furthestPointCoord && <div className="sub">{data.furthestPointCoord[0].toFixed(4)}, {data.furthestPointCoord[1].toFixed(4)}</div>}
+                {data.furthestPointCoord && <div className="sub">{geoCity(data.furthestPointCoord[0], data.furthestPointCoord[1]) || `${data.furthestPointCoord[0].toFixed(4)}, ${data.furthestPointCoord[1].toFixed(4)}`}</div>}
               </div>
               <div className="funstats-stat-card">
                 <h4>Route Diversity</h4>
@@ -392,10 +462,11 @@ export default function FunStats() {
                 {[['Northernmost', 'north'], ['Southernmost', 'south'], ['Easternmost', 'east'], ['Westernmost', 'west']].map(([label, key]) => {
                   const pt = data.extremePoints[key];
                   if (!pt) return null;
+                  const name = geoCity(pt[0], pt[1]);
                   return (
                     <div key={key} className="funstats-stat-card">
                       <h4>{label}</h4>
-                      <div className="value" style={{ fontSize: '1rem' }}>{pt[0].toFixed(4)}, {pt[1].toFixed(4)}</div>
+                      <div className="value" style={{ fontSize: '1rem' }}>{name || `${pt[0].toFixed(4)}, ${pt[1].toFixed(4)}`}</div>
                     </div>
                   );
                 })}
@@ -739,15 +810,18 @@ export default function FunStats() {
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Most Visited Locations</h2>
               <ul className="funstats-cluster-list">
-                {data.clusters.map((c, i) => (
-                  <li key={i} className="funstats-cluster-item">
-                    <span className="funstats-cluster-rank">{i + 1}</span>
-                    <div className="funstats-cluster-info">
-                      <div className="funstats-cluster-coord">{c.lat.toFixed(4)}, {c.lon.toFixed(4)}</div>
-                      <div className="funstats-cluster-visits">{c.visitCount} departure{c.visitCount !== 1 ? 's' : ''}</div>
-                    </div>
-                  </li>
-                ))}
+                {data.clusters.map((c, i) => {
+                  const name = geoName(c.lat, c.lon);
+                  return (
+                    <li key={i} className="funstats-cluster-item">
+                      <span className="funstats-cluster-rank">{i + 1}</span>
+                      <div className="funstats-cluster-info">
+                        <div className="funstats-cluster-coord">{name || `${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}`}</div>
+                        <div className="funstats-cluster-visits">{c.visitCount} departure{c.visitCount !== 1 ? 's' : ''}</div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           )}

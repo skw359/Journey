@@ -20,6 +20,7 @@ import { fetchRoutes, fetchRouteDetail, deleteRoute, renameRoute, updateTravelMo
 import { formatTime, formatDataPointCount } from '../utils/formatters';
 import { useToast } from '../context/ToastContext';
 import { useUnits } from '../context/UnitsContext';
+import useGeoLabel from '../hooks/useGeoLabel';
 import './Dashboard.css';
 
 const PREVIEW_MAX_POINTS = 100;
@@ -63,6 +64,8 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
   const fullDetailRouteIdsRef = useRef(new Set());
   const detailFetchInFlightRef = useRef(new Set());
   const selectionSeqRef = useRef(0);
+
+  const { label: geoLabel, loading: geoLoading } = useGeoLabel(currentRoute);
 
   const cacheRouteDetail = useCallback((route) => {
     if (!route?.id) return;
@@ -455,6 +458,11 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
                         <ChevronRight size={12} />
                       </button>
                     </div>
+                    {geoLoading ? (
+                      <div className="geo-label-skeleton" />
+                    ) : geoLabel ? (
+                      <div className="geo-label">{geoLabel}</div>
+                    ) : null}
                     <div className={`meta-info-expandable${infoExpanded ? ' expanded' : ''}`}>
                       <div className="details-datetime">{getDateTimeStr()}</div>
                     </div>

@@ -12,6 +12,7 @@ import FirstRunOnboarding from '../components/FirstRunOnboarding';
 import { fetchRoutes, fetchRouteDetail } from '../api/journeys';
 import { useToast } from '../context/ToastContext';
 import { useUnits } from '../context/UnitsContext';
+import useGeoLabel from '../hooks/useGeoLabel';
 import './TopJourneys.css';
 
 const PREVIEW_MAX_POINTS = 100;
@@ -45,6 +46,7 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
   const fullDetailRouteIdsRef = useRef(new Set());
   const detailFetchInFlightRef = useRef(new Set());
   const selectionSeqRef = useRef(0);
+  const { label: geoLabel, loading: geoLoading } = useGeoLabel(currentRoute);
 
   useEffect(() => {
     currentRouteIdRef.current = currentRouteId;
@@ -211,6 +213,11 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
           {currentRoute && (
             <div className={`details-header${isLoading ? ' fade-out' : ''}`}>
               <h2>{currentRoute.name}</h2>
+              {geoLoading ? (
+                <div className="geo-label-skeleton" />
+              ) : geoLabel ? (
+                <div className="geo-label">{geoLabel}</div>
+              ) : null}
             </div>
           )}
           <section className={`main-content${isLoading ? ' fade-out' : ''}${showOnboardingEmptyState ? ' empty-onboarding' : ''}`}>
