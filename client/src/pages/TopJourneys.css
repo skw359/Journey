@@ -21,8 +21,7 @@
 }
 .topjourneys-page .details-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   padding: 20px;
   flex-shrink: 0;
 }
@@ -139,6 +138,28 @@
 }
 .topjourneys-page .sort-btn:hover { color: var(--text-primary); }
 .topjourneys-page .sort-btn.active { background: var(--accent-primary); color: #ffffff; }
+
+.topjourneys-page .geo-label {
+  color: var(--text-secondary);
+  font-size: 0.7em;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topjourneys-page .geo-label-skeleton {
+  width: 150px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  animation: tj-geo-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes tj-geo-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
 
 .topjourneys-page .topjourneys-empty-filter {
   color: var(--text-secondary);

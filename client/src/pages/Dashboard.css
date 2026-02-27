@@ -226,6 +226,40 @@
   color: #059669;
 }
 
+.geo-label {
+  color: var(--text-secondary);
+  font-size: 0.7em;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 20px;
+}
+
+.geo-label-skeleton {
+  width: 150px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  animation: geo-pulse 1.2s ease-in-out infinite;
+  max-height: 20px;
+  opacity: 1;
+  transition: all 0.3s ease;
+}
+
+@keyframes geo-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+.details-header.scrolled .geo-label,
+.details-header.scrolled .geo-label-skeleton {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin: 0;
+}
+
 .dashboard-empty-filter {
   color: var(--text-secondary);
   padding: 20px;
