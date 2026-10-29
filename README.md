@@ -1,5 +1,7 @@
 # Journey
 
+[![Node.js CI](https://github.com/skw359/Journey/actions/workflows/node.js.yml/badge.svg?branch=main)](https://github.com/skw359/Journey/actions/workflows/node.js.yml)
+
 **The first-class timeline platform.**
 
 Journey is a privacy-first travel history and analytics platform that tracks
