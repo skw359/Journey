@@ -6,11 +6,23 @@ const PgSession = require('connect-pg-simple')(session);
 const { pool, withTenantClient, toApiRoute } = require('./db');
 const { CLIENT_DIST, PROJECT_ROOT } = require('./config');
 const { requireSession, requireAuth } = require('./middleware/auth');
+const requestLogger = require('./middleware/requestLogger');
+const log = require('./utils/logger').scope('api');
 
 const app = express();
 
 // Trust reverse proxy headers (X-Forwarded-Proto, X-Forwarded-Host)
 app.set('trust proxy', true);
+
+// Request logging — first in the chain so every response is timed end to end.
+app.use(requestLogger);
+
+// Public landing page at /landing — static, no session or auth. Mounted ahead of the session
+// middleware so a visit never touches the session store, and ahead of the SPA catch-all.
+const LANDING_DIR = path.join(PROJECT_ROOT, 'landing');
+if (fs.existsSync(LANDING_DIR)) {
+    app.use('/landing', express.static(LANDING_DIR, { maxAge: '1h' }));
+}
 
 // Body parsing
 app.use(express.json());
@@ -50,6 +62,7 @@ const authRouter = require('./routes/auth');
 const settingsRouter = require('./routes/settings');
 const pairingRouter = require('./routes/pairing');
 const funstatsRouter = require('./routes/funstats');
+const flightsRouter = require('./routes/flights');
 
 // Health check (unprotected)
 app.get('/ping', (req, res) => {
@@ -66,11 +79,21 @@ app.use('/upload', requireAuth, uploadRouter);
 app.use('/api/settings', requireSession, settingsRouter);
 app.use('/api/pairing', requireSession, pairingRouter);
 
+// Journey AI (Marco) — config + natural-language questions (protected)
+const askRouter = require('./routes/ask');
+app.use('/api/ask', requireSession, askRouter);
+
 // Photos static serving + photo API routes
 app.use(photosRouter);
 
+// Large photo/video uploads sent in pieces (protected)
+app.use('/api/routes/:id/uploads', requireAuth, require('./routes/mediaUploads').router);
+
 // Journey CRUD (protected)
 app.use('/api/routes', requireAuth, journeysRouter);
+
+// Flight import (protected)
+app.use('/api/flights', requireSession, flightsRouter);
 
 // Fun stats (protected)
 app.use('/api', requireSession, funstatsRouter);
@@ -100,13 +123,13 @@ app.get('/database', requireSession, async (req, res) => {
             res.json(result);
         });
     } catch (err) {
-        console.error('GET /database error:', err);
+        log.error('GET /database error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // SPA fallback routes
-app.get(['/alltime', '/atlas', '/funstats'], (req, res) => {
+app.get(['/alltime', '/atlas', '/funstats', '/marco'], (req, res) => {
     if (fs.existsSync(CLIENT_DIST)) {
         res.sendFile(path.join(CLIENT_DIST, 'index.html'));
     } else {

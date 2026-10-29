@@ -6,8 +6,12 @@ const bcrypt = require('bcrypt');
 const multer = require('multer');
 const router = express.Router();
 const { pool, ensureTenantSchema, migrateLegacyDataForUser, tenantSchemaForUser } = require('../db');
-const { requireSession } = require('../middleware/auth');
-const { AVATARS_DIR, PHOTOS_DIR } = require('../config');
+const { requireSession, requireAuth, isPrimaryAccount } = require('../middleware/auth');
+const { AVATARS_DIR } = require('../config');
+const mediaStorage = require('../utils/mediaStorage');
+const { cancelMediaJobsForUser } = require('../utils/mediaQueue');
+const { stopGeoBackfillsForUser } = require('../utils/geoBackfill');
+const log = require('../utils/logger').scope('auth');
 
 const BCRYPT_ROUNDS = 12;
 
@@ -53,6 +57,7 @@ function userResponse(row) {
     lastName: row.last_name,
     unitPreference: row.unit_preference || 'imperial',
     avatarUrl: row.avatar_filename ? `/api/auth/avatar/${row.avatar_filename}` : null,
+    createdAt: row.created_at || null,
   };
 }
 
@@ -65,15 +70,42 @@ router.get('/avatar/:filename', (req, res) => {
   res.sendFile(filePath);
 });
 
+// GET /api/auth/me — Bearer-compatible profile lookup for paired clients (iOS, Watch)
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, username, display_name, first_name, last_name, unit_preference, avatar_filename, created_at FROM users WHERE id = $1',
+      [req.userId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(userResponse(rows[0]));
+  } catch (err) {
+    log.error('Auth me error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/auth/status
 router.get('/status', async (req, res) => {
   try {
     const { rows: users } = await pool.query('SELECT 1 FROM users LIMIT 1');
     const isSetup = users.length > 0;
 
+    // Journey AI (Marco) flag, so the client can show/hide the Marco page
+    // without an extra round trip. Never let a config read break auth status.
+    let marcoEnabled = false;
+    try {
+      const { getMarcoConfig } = require('../ai/marco-config');
+      marcoEnabled = (await getMarcoConfig()).enabled;
+    } catch {
+      marcoEnabled = false;
+    }
+
     if (req.session && req.session.userId) {
       const { rows } = await pool.query(
-        'SELECT id, username, display_name, first_name, last_name, unit_preference, avatar_filename FROM users WHERE id = $1',
+        'SELECT id, username, display_name, first_name, last_name, unit_preference, avatar_filename, created_at FROM users WHERE id = $1',
         [req.session.userId]
       );
       if (rows.length > 0) {
@@ -82,13 +114,14 @@ router.get('/status', async (req, res) => {
           isSetup,
           isAuthenticated: true,
           user: userResponse(rows[0]),
+          marcoEnabled,
         });
       }
     }
 
-    res.json({ isSetup, isAuthenticated: false, user: null });
+    res.json({ isSetup, isAuthenticated: false, user: null, marcoEnabled });
   } catch (err) {
-    console.error('Auth status error:', err);
+    log.error('Auth status error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -114,10 +147,11 @@ router.post('/register', async (req, res) => {
     const last = lastName?.trim() || '';
     const displayName = [first, last].filter(Boolean).join(' ') || username.trim();
 
-    await pool.query(
+    const { rows: created } = await pool.query(
       `INSERT INTO users
         (id, username, password_hash, display_name, first_name, last_name, unit_preference)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING created_at`,
       [id, username.trim(), passwordHash, displayName, first, last, 'imperial']
     );
 
@@ -142,6 +176,7 @@ router.post('/register', async (req, res) => {
         lastName: last,
         unitPreference: 'imperial',
         avatarUrl: null,
+        createdAt: created[0]?.created_at || null,
       },
       existingDataCount: existingCount,
     });
@@ -149,7 +184,7 @@ router.post('/register', async (req, res) => {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'Username already taken' });
     }
-    console.error('Registration error:', err);
+    log.error('Registration error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -164,7 +199,7 @@ router.post('/login', async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      'SELECT id, username, password_hash, display_name, first_name, last_name, unit_preference, avatar_filename FROM users WHERE username = $1',
+      'SELECT id, username, password_hash, display_name, first_name, last_name, unit_preference, avatar_filename, created_at FROM users WHERE username = $1',
       [username.trim()]
     );
 
@@ -184,7 +219,7 @@ router.post('/login', async (req, res) => {
 
     res.json({ user: userResponse(user) });
   } catch (err) {
-    console.error('Login error:', err);
+    log.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -263,6 +298,9 @@ router.delete('/account', requireSession, async (req, res) => {
       client.release();
     }
 
+    cancelMediaJobsForUser(userId);
+    stopGeoBackfillsForUser(userId);
+
     if (avatarFilename) {
       const avatarPath = resolvePathWithin(AVATARS_DIR, path.basename(avatarFilename));
       if (avatarPath && fs.existsSync(avatarPath)) {
@@ -270,24 +308,14 @@ router.delete('/account', requireSession, async (req, res) => {
       }
     }
 
-    for (const filename of photoFilenames) {
-      const photoPath = resolvePathWithin(PHOTOS_DIR, filename);
-      if (photoPath && fs.existsSync(photoPath)) {
-        fs.unlinkSync(photoPath);
-      }
-    }
-
-    const userPhotoDir = resolvePathWithin(PHOTOS_DIR, userId);
-    if (userPhotoDir && fs.existsSync(userPhotoDir)) {
-      fs.rmSync(userPhotoDir, { recursive: true, force: true });
-    }
+    await mediaStorage.removeFiles(photoFilenames, { dirs: [userId] });
 
     req.session.destroy(() => {
       res.clearCookie('journey.sid');
       res.json({ success: true, isSetup });
     });
   } catch (err) {
-    console.error('Delete account error:', err);
+    log.error('Delete account error:', err);
     res.status(500).json({ error: 'Failed to delete account' });
   }
 });
@@ -295,10 +323,7 @@ router.delete('/account', requireSession, async (req, res) => {
 // POST /api/auth/migrate
 router.post('/migrate', requireSession, async (req, res) => {
   try {
-    const { rows: firstUserRows } = await pool.query(
-      'SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT 1'
-    );
-    if (firstUserRows[0]?.id !== req.userId) {
+    if (!(await isPrimaryAccount(req.userId))) {
       return res.status(403).json({ error: 'Legacy data migration is only available to the primary account' });
     }
 
@@ -308,7 +333,7 @@ router.post('/migrate', requireSession, async (req, res) => {
     });
     res.json({ migrated: result.migratedRoutes });
   } catch (err) {
-    console.error('Migration error:', err);
+    log.error('Migration error:', err);
     res.status(500).json({ error: 'Migration failed' });
   }
 });
@@ -346,7 +371,7 @@ router.post('/avatar', requireSession, (req, res) => {
         avatarUrl: `/api/auth/avatar/${req.file.filename}`,
       });
     } catch (dbErr) {
-      console.error('Avatar upload error:', dbErr);
+      log.error('Avatar upload error:', dbErr);
       res.status(500).json({ error: 'Failed to save avatar' });
     }
   });

@@ -4,18 +4,33 @@
   position: relative;
 }
 
+/* The sidebar sits over the map rather than beside it, so opening or closing
+   it never resizes the map: every resize redraws every journey, and doing that
+   on each frame of the slide made it stutter. */
 .atlas-sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
   width: 300px;
   background: var(--bg-primary);
   padding: 20px;
   border-right: 1px solid var(--bg-tertiary);
   overflow-y: auto;
-  flex-shrink: 0;
   transition: width 0.3s ease, padding 0.3s ease;
 }
 .atlas-sidebar.collapsed { width: 0; padding: 20px 0; overflow: hidden; }
 
-.atlas-map { flex: 1; z-index: 1; }
+.atlas-map { position: absolute; inset: 0; z-index: 1; }
+
+/* Zoom buttons ride along with the sidebar's edge: 300px of content + 20px
+   padding on each side + 1px border */
+.atlas-map .ol-zoom {
+  transform: translateX(341px);
+  transition: transform 0.3s ease;
+}
+.atlas-sidebar.collapsed ~ .atlas-map .ol-zoom { transform: none; }
 .atlas-map-toggle {
   position: absolute;
   top: 18px;
@@ -49,6 +64,7 @@
 
 .stats-overview { margin-bottom: 24px; }
 .stats-overview h2 { margin: 0 0 16px; font-size: 1.3em; font-weight: 600; white-space: nowrap; }
+.stats-range-note { margin: -10px 0 16px; font-size: 0.8em; color: var(--text-secondary); white-space: nowrap; }
 
 .controls-section { margin-bottom: 24px; border-top: 1px solid var(--bg-tertiary); padding-top: 16px; }
 .controls-section h3 { margin: 0 0 12px; font-size: 1em; font-weight: 500; white-space: nowrap; }
@@ -94,21 +110,27 @@
 .toggle-label { font-size: 0.85em; color: var(--text-primary); }
 
 .toggle-switch {
-  position: relative; width: 40px; height: 22px;
+  position: relative; width: 46px; height: 26px;
 }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-slider {
-  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-  background: var(--bg-tertiary); border-radius: 11px;
-  transition: background 0.3s; cursor: pointer;
+  position: absolute; inset: 0;
+  border-radius: 999px;
+  background: transparent;
+  border: 2.5px solid var(--text-secondary);
+  transition: border-color 0.2s ease;
 }
 .toggle-slider::before {
-  content: ''; position: absolute; width: 18px; height: 18px;
-  left: 2px; bottom: 2px; background: white; border-radius: 50%;
-  transition: transform 0.3s;
+  content: ''; position: absolute; left: 4px; top: 50%;
+  transform: translateY(-50%);
+  width: 16px; height: 16px; background: var(--text-secondary); border-radius: 50%;
+  transition: transform 0.2s ease, background-color 0.2s ease;
 }
-.toggle-switch input:checked + .toggle-slider { background: var(--accent-primary); }
-.toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+.toggle-switch input:checked + .toggle-slider { border-color: var(--accent-primary); }
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateY(-50%) translateX(17px);
+  background: var(--accent-primary);
+}
 
 .control-group input[type="range"] {
   width: 100%; -webkit-appearance: none; height: 4px;

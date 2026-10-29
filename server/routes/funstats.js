@@ -2,7 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { queryTenant } = require('../db');
 const { haversine } = require('../utils/geo');
+const { statesForCoords } = require('../utils/states');
 const { MIN_ROUTE_MILES } = require('../config');
+const log = require('../utils/logger').scope('funstats');
 
 // DBSCAN clustering on [lat, lon] pairs using haversine distance
 function dbscan(points, epsilonMiles, minPoints) {
@@ -50,27 +52,6 @@ function dbscan(points, epsilonMiles, minPoints) {
     }
     return labels;
 }
-
-// US state bounding boxes [south, west, north, east]
-const US_STATES = {
-    AL:[30.22,-88.47,35.01,-84.89],AK:[51.21,-179.15,71.39,-129.98],AZ:[31.33,-114.81,37.00,-109.04],
-    AR:[33.00,-94.62,36.50,-89.64],CA:[32.53,-124.48,42.01,-114.13],CO:[36.99,-109.06,41.00,-102.04],
-    CT:[40.95,-73.73,42.05,-71.79],DE:[38.45,-75.79,39.84,-75.05],FL:[24.40,-87.63,31.00,-80.03],
-    GA:[30.36,-85.61,35.00,-80.84],HI:[18.91,-160.25,22.24,-154.81],ID:[42.00,-117.24,49.00,-111.04],
-    IL:[36.97,-91.51,42.51,-87.02],IN:[37.77,-88.10,41.76,-84.78],IA:[40.38,-96.64,43.50,-90.14],
-    KS:[36.99,-102.05,40.00,-94.59],KY:[36.50,-89.57,39.15,-81.96],LA:[28.93,-94.04,33.02,-88.82],
-    ME:[42.98,-71.08,47.46,-66.95],MD:[37.91,-79.49,39.72,-75.05],MA:[41.24,-73.50,42.89,-69.93],
-    MI:[41.70,-90.42,48.26,-82.12],MN:[43.50,-97.24,49.38,-89.49],MS:[30.17,-91.66,34.99,-88.10],
-    MO:[35.99,-95.77,40.61,-89.10],MT:[44.36,-116.05,49.00,-104.04],NE:[40.00,-104.05,43.00,-95.31],
-    NV:[35.00,-120.01,42.00,-114.04],NH:[42.70,-72.56,45.31,-70.70],NJ:[38.93,-75.56,41.36,-73.89],
-    NM:[31.33,-109.05,37.00,-103.00],NY:[40.50,-79.76,45.02,-71.86],NC:[33.84,-84.32,36.59,-75.46],
-    ND:[45.94,-104.05,49.00,-96.55],OH:[38.40,-84.82,41.98,-80.52],OK:[33.62,-103.00,37.00,-94.43],
-    OR:[41.99,-124.57,46.29,-116.46],PA:[39.72,-80.52,42.27,-74.69],RI:[41.15,-71.86,42.02,-71.12],
-    SC:[32.03,-83.35,35.22,-78.54],SD:[42.48,-104.06,45.95,-96.44],TN:[34.98,-90.31,36.68,-81.65],
-    TX:[25.84,-106.65,36.50,-93.51],UT:[36.99,-114.05,42.00,-109.04],VT:[42.73,-73.44,45.02,-71.46],
-    VA:[36.54,-83.68,39.47,-75.24],WA:[45.54,-124.85,49.00,-116.92],WV:[37.20,-82.64,40.64,-77.72],
-    WI:[42.49,-92.89,47.08,-86.25],WY:[40.99,-111.06,45.01,-104.05],DC:[38.79,-77.12,38.99,-76.91],
-};
 
 // Level system
 const LEVELS = [
@@ -188,18 +169,60 @@ function median(values) {
         : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+function getRouteTimelineDate(route) {
+    if (route.start_time instanceof Date && !Number.isNaN(route.start_time.getTime())) {
+        return route.start_time;
+    }
+
+    if (typeof route.date === 'string' && route.date.trim()) {
+        const rawDate = route.date.trim();
+        const parsed = new Date(rawDate.includes('T') ? rawDate : `${rawDate}T00:00:00Z`);
+        if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+        }
+    }
+
+    return null;
+}
+
+function buildMonthRange(startDate, endDate) {
+    if (!startDate || !endDate) return [];
+
+    const months = [];
+    const cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
+    const lastMonth = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), 1));
+
+    while (cursor <= lastMonth) {
+        months.push(cursor.toISOString().slice(0, 7));
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+
+    return months;
+}
+
 // GET /api/fun-stats
 router.get('/fun-stats', async (req, res) => {
     try {
-        const { rows: routes } = await queryTenant(req.userId, `
+        const { rows: rawRoutes } = await queryTenant(req.userId, `
             SELECT id, name, date, distance, duration, top_speed, avg_speed,
                    start_time, end_time, coordinates, start_lat, start_lon,
                    end_lat, end_lon, travel_mode, elevation_gain, elevation_loss,
-                   top_elevation
+                   top_elevation, weather_temp, weather_feels_like, weather_humidity,
+                   weather_wind_speed, weather_condition, cities_passed, places_passed
             FROM routes
             WHERE distance >= $1
             ORDER BY start_time ASC
         `, [MIN_ROUTE_MILES]);
+
+        const routes = rawRoutes.slice().sort((a, b) => {
+            const aDate = getRouteTimelineDate(a);
+            const bDate = getRouteTimelineDate(b);
+
+            if (aDate && bDate) return aDate.getTime() - bDate.getTime();
+            if (aDate) return -1;
+            if (bDate) return 1;
+            return 0;
+        });
 
         if (routes.length === 0) {
             return res.json({ empty: true });
@@ -231,14 +254,15 @@ router.get('/fun-stats', async (req, res) => {
         let roundTripCount = 0;
         let weekdayRoundTripCount = 0, weekendRoundTripCount = 0;
         let commuteWindowCount = 0;
-        const modeCounts = { drive: 0, scooter: 0, foot: 0 };
-        const modeDistances = { drive: 0, scooter: 0, foot: 0 };
+        const modeCounts = { drive: 0, scooter: 0, foot: 0, train: 0, metro: 0 };
+        const modeDistances = { drive: 0, scooter: 0, foot: 0, train: 0, metro: 0 };
         let modeSwitchCount = 0, modeSwitchTransitions = 0;
         let previousMode = null;
         const directionCounts = new Array(8).fill(0);
         const seasonCounts = { spring: 0, summer: 0, fall: 0, winter: 0 };
         const seasonDistances = { spring: 0, summer: 0, fall: 0, winter: 0 };
         let firstJourney = null, lastJourney = null;
+        let firstJourneyDate = null;
         const allCoords = [];
         const avgSpeeds = [];
         const seenRouteCoarseCells = new Set();
@@ -267,8 +291,26 @@ router.get('/fun-stats', async (req, res) => {
         // Journey timestamps for gap/break calculation
         const journeyTimestamps = [];
 
+        // Weather trackers
+        const weatherTemps = [];       // { date, temp, feelsLike, name }
+        const weatherConditions = {};  // condition -> count
+        let hottestJourney = null, hottestTemp = -Infinity;
+        let coldestJourney = null, coldestTemp = Infinity;
+        let windiestJourney = null, windiestSpeed = 0;
+        let humidestJourney = null, humidestVal = 0;
+        let biggestFeelsLikeDiff = null, biggestFeelsLikeDiffVal = 0;
+        let totalTemp = 0, tempCount = 0;
+        let totalHumidity = 0, humidityCount = 0;
+        let totalWindSpeed = 0, windCount = 0;
+        const tempBuckets = {};        // "30-40" -> count
+        const seasonTemps = { spring: [], summer: [], fall: [], winter: [] };
+        let rainCount = 0, snowCount = 0, stormCount = 0;
+
         for (const route of routes) {
             const dist = Number(route.distance) || 0;
+            const routeDate = getRouteTimelineDate(route);
+            const routeDateStr = routeDate ? routeDate.toISOString().slice(0, 10) : null;
+            const routeMonthStr = routeDate ? routeDateStr.slice(0, 7) : null;
             totalDistance += dist;
 
             if (route.top_speed != null && Number(route.top_speed) > maxSpeed) {
@@ -290,6 +332,72 @@ router.get('/fun-stats', async (req, res) => {
                 if (elev > maxElevation) maxElevation = elev;
                 if (elev > mostScenicElev) { mostScenicElev = elev; mostScenicRoute = route; }
                 hasElevation = true;
+            }
+
+            // Weather data
+            const wTemp = route.weather_temp != null ? Number(route.weather_temp) : null;
+            const wFeelsLike = route.weather_feels_like != null ? Number(route.weather_feels_like) : null;
+            const wHumidity = route.weather_humidity != null ? Number(route.weather_humidity) : null;
+            const wWind = route.weather_wind_speed != null ? Number(route.weather_wind_speed) : null;
+            const wCondition = route.weather_condition || null;
+
+            if (wTemp != null && Number.isFinite(wTemp)) {
+                const dateStr = route.start_time ? route.start_time.toISOString().slice(0, 10) : route.date;
+                weatherTemps.push({ date: dateStr, temp: wTemp, feelsLike: wFeelsLike, name: route.name || dateStr });
+                totalTemp += wTemp;
+                tempCount++;
+
+                if (wTemp > hottestTemp) { hottestTemp = wTemp; hottestJourney = { name: route.name, date: dateStr, temp: wTemp }; }
+                if (wTemp < coldestTemp) { coldestTemp = wTemp; coldestJourney = { name: route.name, date: dateStr, temp: wTemp }; }
+
+                // Feels-like difference
+                if (wFeelsLike != null && Number.isFinite(wFeelsLike)) {
+                    const diff = Math.abs(wTemp - wFeelsLike);
+                    if (diff > biggestFeelsLikeDiffVal) {
+                        biggestFeelsLikeDiffVal = diff;
+                        biggestFeelsLikeDiff = { name: route.name, date: dateStr, temp: wTemp, feelsLike: wFeelsLike, diff };
+                    }
+                }
+
+                // Temperature bucket (10-degree ranges)
+                const bucketBase = Math.floor(wTemp / 10) * 10;
+                const bucketKey = `${bucketBase}`;
+                tempBuckets[bucketKey] = (tempBuckets[bucketKey] || 0) + 1;
+
+                // Season temps
+                if (route.start_time) {
+                    const month = route.start_time.getUTCMonth();
+                    if (month >= 2 && month <= 4) seasonTemps.spring.push(wTemp);
+                    else if (month >= 5 && month <= 7) seasonTemps.summer.push(wTemp);
+                    else if (month >= 8 && month <= 10) seasonTemps.fall.push(wTemp);
+                    else seasonTemps.winter.push(wTemp);
+                }
+            }
+
+            if (wHumidity != null && Number.isFinite(wHumidity)) {
+                totalHumidity += wHumidity;
+                humidityCount++;
+                if (wHumidity > humidestVal) {
+                    humidestVal = wHumidity;
+                    humidestJourney = { name: route.name, date: route.start_time ? route.start_time.toISOString().slice(0, 10) : route.date, humidity: wHumidity };
+                }
+            }
+
+            if (wWind != null && Number.isFinite(wWind)) {
+                totalWindSpeed += wWind;
+                windCount++;
+                if (wWind > windiestSpeed) {
+                    windiestSpeed = wWind;
+                    windiestJourney = { name: route.name, date: route.start_time ? route.start_time.toISOString().slice(0, 10) : route.date, windSpeed: wWind };
+                }
+            }
+
+            if (wCondition) {
+                weatherConditions[wCondition] = (weatherConditions[wCondition] || 0) + 1;
+                const lc = wCondition.toLowerCase();
+                if (lc.includes('rain') || lc.includes('drizzle')) rainCount++;
+                if (lc.includes('snow') || lc.includes('sleet') || lc.includes('ice')) snowCount++;
+                if (lc.includes('thunder') || lc.includes('storm')) stormCount++;
             }
 
             // Travel mode
@@ -348,13 +456,24 @@ router.get('/fun-stats', async (req, res) => {
                 journeyTimestamps.push({ start: route.start_time.getTime(), end: route.end_time.getTime() });
 
                 if (durationMs > longestTimeVal) { longestTimeVal = durationMs; longestTimeRoute = route; }
+            }
 
-                const dateStr = route.start_time.toISOString().slice(0, 10);
-                dayDistances[dateStr] = (dayDistances[dateStr] || 0) + dist;
-                dayRouteCounts[dateStr] = (dayRouteCounts[dateStr] || 0) + 1;
-                const monthStr = dateStr.slice(0, 7);
-                monthDistances[monthStr] = (monthDistances[monthStr] || 0) + dist;
+            if (routeDateStr) {
+                dayDistances[routeDateStr] = (dayDistances[routeDateStr] || 0) + dist;
+                dayRouteCounts[routeDateStr] = (dayRouteCounts[routeDateStr] || 0) + 1;
+            }
+            if (routeMonthStr) {
+                monthDistances[routeMonthStr] = (monthDistances[routeMonthStr] || 0) + dist;
+            }
+            if (routeDate) {
+                if (!firstJourney) {
+                    firstJourney = route;
+                    firstJourneyDate = routeDate;
+                }
+                lastJourney = route;
+            }
 
+            if (route.start_time) {
                 const dow = route.start_time.getUTCDay();
                 dayOfWeekCounts[dow]++;
                 const hour = route.start_time.getUTCHours();
@@ -387,9 +506,6 @@ router.get('/fun-stats', async (req, res) => {
                 else if (month >= 5 && month <= 7) { seasonCounts.summer++; seasonDistances.summer += dist; }
                 else if (month >= 8 && month <= 10) { seasonCounts.fall++; seasonDistances.fall += dist; }
                 else { seasonCounts.winter++; seasonDistances.winter += dist; }
-
-                if (!firstJourney) firstJourney = route;
-                lastJourney = route;
             }
 
             if (route.start_lat != null && route.start_lon != null) {
@@ -398,7 +514,6 @@ router.get('/fun-stats', async (req, res) => {
 
             // Process coordinates
             const coords = route.coordinates || [];
-            const routeMonthStr = route.start_time ? route.start_time.toISOString().slice(0, 7) : null;
             const routeCoarseCells = new Set();
             let routeAddsNewTerritory = false;
 
@@ -788,14 +903,24 @@ router.get('/fun-stats', async (req, res) => {
         const co2SavedKg = (scooterMiles + footMiles) * 0.404; // vs driving
 
         // ── State detection ──
-        const statesVisited = new Set();
-        // Sample every 10th coordinate for performance
-        for (let i = 0; i < allCoords.length; i += 10) {
-            const [lat, lon] = allCoords[i];
-            for (const [state, [s, w, n, e]] of Object.entries(US_STATES)) {
-                if (lat >= s && lat <= n && lon >= w && lon <= e) {
-                    statesVisited.add(state);
-                }
+        // Point-in-polygon against real boundaries: a coordinate belongs to
+        // the one state it is actually in. Sample every 10th coordinate for
+        // performance — still ~130 m apart at driving speed.
+        const statesVisited = statesForCoords(allCoords, { sampleEvery: 10 });
+
+        // ── Cities passed through (aggregate) ──
+        const allCities = new Set();
+        for (const r of routes) {
+            if (Array.isArray(r.cities_passed)) {
+                r.cities_passed.forEach(c => allCities.add(c));
+            }
+        }
+
+        // ── Unique places (aggregate) ──
+        const allPlaces = new Set();
+        for (const r of routes) {
+            if (Array.isArray(r.places_passed)) {
+                r.places_passed.forEach(p => allPlaces.add(p));
             }
         }
 
@@ -806,10 +931,12 @@ router.get('/fun-stats', async (req, res) => {
         }
 
         // ── Monthly distance chart data ──
-        const sortedMonths = Object.keys(monthDistances).sort();
+        const sortedMonths = firstJourneyDate
+            ? buildMonthRange(firstJourneyDate, now)
+            : Object.keys(monthDistances).sort();
         const monthlyChart = sortedMonths.map(m => ({
             month: m,
-            distanceMiles: Number(monthDistances[m].toFixed(1)),
+            distanceMiles: Number((monthDistances[m] || 0).toFixed(1)),
         }));
 
         // ── Year-over-year comparison ──
@@ -1048,7 +1175,7 @@ router.get('/fun-stats', async (req, res) => {
             seasonCounts,
             seasonDistances: { spring: Number(seasonDistances.spring.toFixed(1)), summer: Number(seasonDistances.summer.toFixed(1)), fall: Number(seasonDistances.fall.toFixed(1)), winter: Number(seasonDistances.winter.toFixed(1)) },
             modeCounts,
-            modeDistances: { drive: Number(modeDistances.drive.toFixed(1)), scooter: Number(modeDistances.scooter.toFixed(1)), foot: Number(modeDistances.foot.toFixed(1)) },
+            modeDistances: { drive: Number(modeDistances.drive.toFixed(1)), scooter: Number(modeDistances.scooter.toFixed(1)), foot: Number(modeDistances.foot.toFixed(1)), train: Number(modeDistances.train.toFixed(1)), metro: Number(modeDistances.metro.toFixed(1)) },
             elevation: hasElevation ? {
                 totalGainFt: Number(totalElevGain.toFixed(0)),
                 totalLossFt: Number(totalElevLoss.toFixed(0)),
@@ -1059,7 +1186,9 @@ router.get('/fun-stats', async (req, res) => {
             lastJourney: lastJourney ? { date: lastJourney.date, name: lastJourney.name, startTime: lastJourney.start_time?.toISOString() || null } : null,
             totalDataPoints: allCoords.length,
             // New stats
-            statesVisited: [...statesVisited].sort(),
+            statesVisited,
+            citiesPassed: [...allCities].sort(),
+            uniquePlaces: [...allPlaces].sort(),
             extremePoints: {
                 north: northernmost, south: southernmost,
                 east: easternmost, west: westernmost,
@@ -1095,9 +1224,38 @@ router.get('/fun-stats', async (req, res) => {
             monthlyChallenge,
             bingoCard,
             superlatives,
+            // Weather stats
+            weather: tempCount > 0 ? {
+                tempTimeline: weatherTemps,
+                avgTemp: Number((totalTemp / tempCount).toFixed(1)),
+                hottestJourney,
+                coldestJourney,
+                tempRange: { min: Number(coldestTemp.toFixed(1)), max: Number(hottestTemp.toFixed(1)) },
+                tempBuckets: Object.entries(tempBuckets)
+                    .map(([base, count]) => ({ rangeStart: Number(base), count }))
+                    .sort((a, b) => a.rangeStart - b.rangeStart),
+                journeysWithWeather: tempCount,
+                conditions: Object.entries(weatherConditions)
+                    .map(([condition, count]) => ({ condition, count }))
+                    .sort((a, b) => b.count - a.count),
+                avgHumidity: humidityCount > 0 ? Number((totalHumidity / humidityCount).toFixed(0)) : null,
+                avgWindSpeed: windCount > 0 ? Number((totalWindSpeed / windCount).toFixed(1)) : null,
+                windiestJourney,
+                humidestJourney,
+                biggestFeelsLikeDiff,
+                rainCount,
+                snowCount,
+                stormCount,
+                seasonAvgTemps: {
+                    spring: seasonTemps.spring.length > 0 ? Number((seasonTemps.spring.reduce((a, b) => a + b, 0) / seasonTemps.spring.length).toFixed(1)) : null,
+                    summer: seasonTemps.summer.length > 0 ? Number((seasonTemps.summer.reduce((a, b) => a + b, 0) / seasonTemps.summer.length).toFixed(1)) : null,
+                    fall: seasonTemps.fall.length > 0 ? Number((seasonTemps.fall.reduce((a, b) => a + b, 0) / seasonTemps.fall.length).toFixed(1)) : null,
+                    winter: seasonTemps.winter.length > 0 ? Number((seasonTemps.winter.reduce((a, b) => a + b, 0) / seasonTemps.winter.length).toFixed(1)) : null,
+                },
+            } : null,
         });
     } catch (err) {
-        console.error('GET /api/fun-stats error:', err);
+        log.error('GET /api/fun-stats error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

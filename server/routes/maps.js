@@ -3,6 +3,32 @@ const router = express.Router();
 const { queryTenant } = require('../db');
 const { detectTravelMode } = require('../utils/geo');
 const { MIN_ROUTE_MILES } = require('../config');
+const { sendCompressedJson } = require('../utils/compressedJson');
+const log = require('../utils/logger').scope('maps');
+
+// Up to this many points per journey, the overview has Postgres thin each
+// journey itself, so only those points leave the database
+const MAX_DB_SAMPLE_POINTS = 1000;
+
+// A jsonpath picking `max` evenly spaced points, first and last included, like
+// downsample() below. Subscripts are truncated, so `+ 0.5` rounds them.
+function samplePath(max) {
+    if (max === 1) return '$[0]';
+    const subscripts = [];
+    for (let i = 0; i < max; i++) {
+        if (i === 0) subscripts.push('0');
+        else if (i === max - 1) subscripts.push('last');
+        else subscripts.push(`${i} * last / ${max - 1} + 0.5`);
+    }
+    return `$[${subscripts.join(', ')}]`;
+}
+
+// To 6 decimals (~11 cm): finer than the map can draw, in about half the
+// characters of a full-precision number
+function roundCoord(coord) {
+    if (!Array.isArray(coord) || !Number.isFinite(coord[0]) || !Number.isFinite(coord[1])) return coord;
+    return [Math.round(coord[0] * 1e6) / 1e6, Math.round(coord[1] * 1e6) / 1e6];
+}
 
 // GET /api/alltime-map-data
 router.get('/alltime-map-data', async (req, res) => {
@@ -23,13 +49,31 @@ router.get('/alltime-map-data', async (req, res) => {
                         && Number.isFinite(north) && Number.isFinite(east);
         }
 
-        const { rows: routes } = await queryTenant(req.userId, `
+        // Every recorded point of every journey (millions) leaving the database
+        // was most of this request's time, so the overview gets each journey
+        // already thinned, plus its full point count. Filtering to an area
+        // needs the full tracks.
+        const thinInDb = !hasBounds && maxPoints > 0 && maxPoints <= MAX_DB_SAMPLE_POINTS;
+        const { rows: routes } = await queryTenant(req.userId, thinInDb ? `
+            SELECT id, name, date, distance, duration, top_speed, avg_speed,
+                   start_time, end_time, start_lat, start_lon,
+                   end_lat, end_lon, travel_mode, point_count,
+                   CASE WHEN point_count <= $2 THEN coordinates
+                        ELSE jsonb_path_query_array(coordinates, $3::jsonpath)
+                   END AS coordinates
+            FROM routes
+            CROSS JOIN LATERAL (
+                SELECT CASE WHEN jsonb_typeof(coordinates) = 'array'
+                            THEN jsonb_array_length(coordinates) ELSE 0 END AS point_count
+            ) counted
+            WHERE distance >= $1
+        ` : `
             SELECT id, name, date, distance, duration, top_speed, avg_speed,
                    start_time, end_time, coordinates, start_lat, start_lon,
                    end_lat, end_lon, travel_mode
             FROM routes
             WHERE distance >= $1
-        `, [MIN_ROUTE_MILES]);
+        `, thinInDb ? [MIN_ROUTE_MILES, maxPoints, samplePath(maxPoints)] : [MIN_ROUTE_MILES]);
 
         if (routes.length === 0) {
             return res.json({
@@ -138,7 +182,7 @@ router.get('/alltime-map-data', async (req, res) => {
         let minLat = Infinity, maxLat = -Infinity;
         let minLon = Infinity, maxLon = -Infinity;
 
-        const modeDistances = { drive: 0, scooter: 0, foot: 0 };
+        const modeDistances = { drive: 0, scooter: 0, foot: 0, train: 0, metro: 0, flight: 0 };
 
         const processedRoutes = [];
 
@@ -159,11 +203,13 @@ router.get('/alltime-map-data', async (req, res) => {
                 if (!latestDate || endMs > latestDate) latestDate = endMs;
             }
 
-            const fullCoords = row.coordinates || [];
-            totalPoints += fullCoords.length;
+            // Already thinned when Postgres did it; the bounds then cover the
+            // points that are sent, which is what the map fits to
+            const coords = row.coordinates || [];
+            totalPoints += thinInDb ? row.point_count : coords.length;
 
-            if (fullCoords.length > 0) {
-                fullCoords.forEach(coord => {
+            if (coords.length > 0) {
+                coords.forEach(coord => {
                     minLat = Math.min(minLat, coord[0]);
                     maxLat = Math.max(maxLat, coord[0]);
                     minLon = Math.min(minLon, coord[1]);
@@ -171,11 +217,13 @@ router.get('/alltime-map-data', async (req, res) => {
                 });
             }
 
-            if (hasBounds && !routeIntersectsBounds(fullCoords, row.start_lat, row.start_lon, row.end_lat, row.end_lon)) {
+            if (hasBounds && !routeIntersectsBounds(coords, row.start_lat, row.start_lon, row.end_lat, row.end_lon)) {
                 continue;
             }
 
-            const coordinates = maxPoints === 0 ? fullCoords : downsample(fullCoords, maxPoints);
+            // maxPoints=0 is the "Preload journey data" setting asking for full
+            // resolution, so those points go out exactly as recorded
+            const coordinates = maxPoints === 0 ? coords : downsample(coords, maxPoints).map(roundCoord);
 
             processedRoutes.push({
                 id: row.id,
@@ -208,7 +256,7 @@ router.get('/alltime-map-data', async (req, res) => {
             northeast: [maxLat, maxLon]
         } : null;
 
-        res.json({
+        sendCompressedJson(req, res, {
             routes: processedRoutes,
             stats: {
                 totalRoutes: routes.length,
@@ -224,13 +272,16 @@ router.get('/alltime-map-data', async (req, res) => {
                 modeDistances: {
                     drive: Number(modeDistances.drive.toFixed(1)),
                     scooter: Number(modeDistances.scooter.toFixed(1)),
-                    foot: Number(modeDistances.foot.toFixed(1))
+                    foot: Number(modeDistances.foot.toFixed(1)),
+                    train: Number(modeDistances.train.toFixed(1)),
+                    metro: Number(modeDistances.metro.toFixed(1)),
+                    flight: Number(modeDistances.flight.toFixed(1))
                 }
             },
             bounds
         });
     } catch (err) {
-        console.error('GET /api/alltime-map-data error:', err);
+        log.error('GET /api/alltime-map-data error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -354,7 +405,7 @@ router.get('/all-points', async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('GET /api/all-points error:', err);
+        log.error('GET /api/all-points error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -445,7 +496,7 @@ router.get('/heatmap-grid', async (req, res) => {
 
         res.json({ cells, totalPoints });
     } catch (err) {
-        console.error('GET /api/heatmap-grid error:', err);
+        log.error('GET /api/heatmap-grid error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

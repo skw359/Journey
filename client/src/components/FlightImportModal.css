@@ -1,0 +1,323 @@
+/* Flight Import Modal — wider than standard modal */
+.flight-import-modal {
+  min-width: 0;
+}
+.flight-import-modal .modal-header {
+  color: #A855F7;
+}
+[data-theme="light"] .flight-import-modal .modal-header {
+  color: #9333ea;
+}
+.modal-overlay .modal-content:has(.flight-import-modal) {
+  max-width: 520px;
+}
+
+.flight-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.flight-header h3 {
+  margin: 0;
+  font-size: 1.3em;
+  font-weight: 500;
+}
+
+.flight-back-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s ease;
+}
+.flight-back-btn:hover {
+  color: var(--text-primary);
+}
+
+/* Search Form */
+.flight-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.flight-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.flight-field label {
+  font-size: 0.8em;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.flight-field .modern-input {
+  margin-top: 0;
+}
+.optional-label {
+  font-weight: 400;
+  opacity: 0.6;
+}
+.flight-number-field {
+  margin-bottom: 16px;
+}
+
+/* Airport input */
+.airport-input-wrap {
+  position: relative;
+}
+.airport-input {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+.airport-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 8px;
+  margin-top: 4px;
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.airport-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: background-color 0.15s ease;
+}
+.airport-suggestion:hover {
+  background: var(--bg-tertiary);
+}
+.airport-code {
+  font-weight: 700;
+  font-size: 0.95em;
+  color: #A855F7;
+  min-width: 36px;
+}
+[data-theme="light"] .airport-code {
+  color: #9333ea;
+}
+.airport-name {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flight-error {
+  color: var(--accent-danger);
+  font-size: 0.85em;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 8px;
+}
+
+.flight-search-form .modal-buttons {
+  margin-top: 8px;
+}
+.flight-search-form .modal-btn-confirm {
+  background-color: #A855F7;
+}
+.flight-search-form .modal-btn-confirm:hover {
+  opacity: 0.85;
+}
+.flight-search-form .modal-btn-confirm .btn-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Results */
+.flight-results-count {
+  color: var(--text-secondary);
+  font-size: 0.85em;
+  margin: 0 0 12px 0;
+}
+.flight-results-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.flight-result-card {
+  padding: 14px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.flight-result-card:hover {
+  border-color: #A855F7;
+  background: rgba(168, 85, 247, 0.05);
+}
+
+.flight-result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.flight-result-number {
+  font-weight: 700;
+  font-size: 0.95em;
+  color: var(--text-primary);
+}
+.flight-result-airline {
+  font-size: 0.8em;
+  color: var(--text-secondary);
+}
+.flight-result-synth {
+  font-size: 0.7em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(168, 85, 247, 0.15);
+  color: #A855F7;
+  margin-left: auto;
+}
+
+.flight-result-route {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.flight-result-endpoint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 60px;
+}
+.flight-result-code {
+  font-weight: 700;
+  font-size: 1.2em;
+  color: var(--text-primary);
+}
+.flight-result-time {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+}
+.flight-result-city {
+  font-size: 0.72em;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.flight-result-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+.flight-result-duration {
+  font-size: 0.72em;
+  color: var(--text-secondary);
+}
+
+/* Preview */
+.flight-map-container {
+  height: 280px;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  border: 1px solid var(--bg-tertiary);
+}
+
+.flight-stats-row {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+.flight-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.flight-stat-value {
+  font-weight: 700;
+  font-size: 1.1em;
+  color: var(--text-primary);
+}
+.flight-stat-label {
+  font-size: 0.7em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.flight-synth-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78em;
+  color: var(--text-secondary);
+  margin: 0 0 14px 0;
+  opacity: 0.8;
+}
+
+.flight-preview .flight-field {
+  margin-bottom: 16px;
+}
+
+.flight-preview .modal-buttons {
+  margin-top: 4px;
+}
+
+.flight-import-btn {
+  background-color: #A855F7 !important;
+}
+.flight-import-btn .btn-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Loading */
+.flight-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 0;
+  color: var(--text-secondary);
+}
+.flight-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--bg-tertiary);
+  border-top-color: #A855F7;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.flight-loading p {
+  margin: 0;
+  font-size: 0.9em;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

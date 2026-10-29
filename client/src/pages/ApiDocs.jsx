@@ -54,7 +54,7 @@ const ENDPOINTS = [
       { status: 'pass', label: 'Each item has required fields: id, name, date, distance' },
       { status: 'pass', label: 'Items sorted by startTime descending' },
       { status: 'pass', label: 'Response excludes coordinate arrays' },
-      { status: 'pass', label: 'travelMode \u2208 { foot, scooter, drive }' },
+      { status: 'pass', label: 'travelMode \u2208 { foot, scooter, drive, train, metro, flight }' },
     ],
   },
   {
@@ -150,16 +150,16 @@ const ENDPOINTS = [
       { status: 'pass', label: 'Status code is 200' },
       { status: 'pass', label: 'travelMode persisted to database' },
       { status: 'pass', label: 'Rejects invalid mode \u2192 400' },
-      { status: 'pass', label: 'Valid modes: foot | scooter | drive' },
+      { status: 'pass', label: 'Valid modes: foot | scooter | drive | train | metro | flight' },
     ],
   },
   {
     method: 'POST',
     path: '/api/routes/:id/photos',
-    desc: 'Upload photos to a journey',
+    desc: 'Upload photos and videos to a journey',
     params: [
       { name: ':id', type: 'string', required: true, desc: 'UUID of the journey' },
-      { name: 'photos', type: 'File[]', required: true, desc: 'HEIC or JPG images (max 250, 50MB each)' },
+      { name: 'photos', type: 'File[]', required: true, desc: 'JPG or HEIC images (50MB each) and/or MOV/MP4 videos. HEIC is converted to JPG and video to MP4 in the background; those items have status "processing" until ready' },
     ],
     requestHeaders: { 'Content-Type': 'multipart/form-data', 'Accept': 'application/json' },
     requestBody: {

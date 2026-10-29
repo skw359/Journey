@@ -28,6 +28,7 @@ Recommended:
 - Git
 - A reverse proxy (Nginx recommended)
 - A process manager (pm2 recommended, but systemd works too)
+- ffmpeg (optional, enables video uploads)
 
 ## 1. Prepare the Server
 
@@ -35,8 +36,10 @@ Update packages and install dependencies:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git nginx postgresql postgresql-contrib curl ca-certificates
+sudo apt install -y git nginx postgresql postgresql-contrib curl ca-certificates ffmpeg
 ```
+
+`ffmpeg` converts uploaded videos (e.g. iPhone `.MOV`) into MP4s every browser can play. Without it Journey still runs, but video uploads are rejected. On Windows, install it with `winget install Gyan.FFmpeg` (that build includes the `zscale` filter used for HDR) and restart the terminal so `ffmpeg` is on `PATH`.
 
 Install Node.js: https://nodejs.org/en/download
 
@@ -102,6 +105,33 @@ Important:
 - `PUBLIC_URL` should be your final HTTPS domain (not HTTP, not localhost).
 - `SESSION_SECRET` should be a long random value, generated using node.
 
+### Frontend environment
+
+The frontend has its own environment file. Copy the template:
+
+```bash
+cp client/.env.example client/.env
+```
+
+Then edit `client/.env` and add your CARTO Basemaps key:
+
+```env
+VITE_CARTO_KEY=REPLACE_WITH_YOUR_CARTO_KEY
+```
+
+Important:
+
+- Request a free key at https://carto.com/basemaps/apikey/. The free tier covers
+  non-commercial use at 5 million tile requests per calendar month.
+- Without a key Journey still runs, but every map tile is stamped with an
+  "API KEY REQUIRED" watermark by CARTO.
+- Vite inlines `VITE_`-prefixed variables at build time, so `client/.env` must
+  exist **before** step 6. Changing the key later requires another `npm run build`.
+- This value ships inside the frontend bundle and is readable by anyone who loads
+  your site. That is expected for basemap keys, which CARTO scopes to the domain
+  you registered. Keep real secrets in the root `.env` above instead.
+- CARTO and OpenStreetMap attribution must stay visible on the maps.
+
 ## 6. Build and Test Manually
 
 Now it's time to put everything together and build the frontend. We use this command in the project directory (output will be in /client/dist/)
@@ -109,6 +139,9 @@ Now it's time to put everything together and build the frontend. We use this com
 ```bash
 npm run build
 ```
+
+Confirm `client/.env` exists before running this. The CARTO key is compiled into
+the bundle, so a build without it produces watermarked maps until you rebuild.
 
 To start the server:
 
@@ -172,8 +205,13 @@ server {
     listen 80;
     server_name journey.example.com;
 
+    # Videos of any size: no body limit, and stream uploads to Node instead of
+    # storing each one on this machine's disk first.
+    client_max_body_size 0;
+
     location / {
         proxy_pass http://127.0.0.1:3003;
+        proxy_request_buffering off;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

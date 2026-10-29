@@ -28,6 +28,13 @@
   object-fit: contain;
   border-radius: 8px;
 }
+.photo-viewer-content video {
+  display: block;
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 8px;
+  background-color: #000;
+}
 
 .photo-viewer-close {
   position: absolute;

@@ -38,6 +38,16 @@ export function getAccelerationUnitLabel(unitPreference) {
   return isMetricPreference(unitPreference) ? 'm/s\u00B2' : 'ft/s\u00B2';
 }
 
+export function getTemperatureUnitLabel(unitPreference) {
+  return isMetricPreference(unitPreference) ? '\u00B0C' : '\u00B0F';
+}
+
+export function convertTemperatureFromF(value, unitPreference) {
+  const f = toFiniteNumber(value);
+  if (f === null) return null;
+  return isMetricPreference(unitPreference) ? Math.round((f - 32) * 5 / 9) : f;
+}
+
 export function convertDistanceFromMiles(value, unitPreference) {
   const miles = toFiniteNumber(value);
   if (miles === null) return null;

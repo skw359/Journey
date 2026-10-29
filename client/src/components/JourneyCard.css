@@ -1,5 +1,5 @@
 .route-list .route-card {
-  background-color: var(--bg-secondary);
+  background-color: rgba(20, 20, 20, 0.72);
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 8px;
@@ -11,7 +11,9 @@
   flex-direction: column;
   align-items: flex-start;
   position: relative;
-  overflow: hidden;
+}
+[data-theme="light"] .route-list .route-card {
+  background-color: rgba(255, 255, 255, 0.62);
 }
 
 .route-list .route-card::before {
@@ -28,14 +30,20 @@
 }
 
 .route-list .route-card.active {
-  background-color: var(--bg-tertiary);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="light"] .route-list .route-card.active {
+  background-color: rgba(0, 0, 0, 0.06);
 }
 .route-list .route-card.active::before {
   height: 48px;
 }
 
 .route-list .route-card:hover {
-  background-color: var(--bg-tertiary);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="light"] .route-list .route-card:hover {
+  background-color: rgba(0, 0, 0, 0.06);
 }
 
 .route-list .route-card.active h3 { color: var(--text-primary); } 
@@ -67,10 +75,155 @@
 }
 
 .route-list .rank-badge {
-  font-size: 1.1em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
   margin-right: 10px;
   flex-shrink: 0;
+  background: #fff;
+  color: #000;
+  border-radius: 6px;
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
-.route-list .medal-1 { filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.3)); }
-.route-list .medal-2 { filter: drop-shadow(0 0 4px rgba(192, 192, 192, 0.3)); }
-.route-list .medal-3 { filter: drop-shadow(0 0 4px rgba(205, 127, 50, 0.3)); }
+[data-theme="light"] .route-list .rank-badge {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.route-list .route-card-note {
+  margin-top: 6px;
+  font-size: 0.76em;
+  color: var(--accent-danger);
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.route-list .route-card .cities-passed {
+  position: relative;
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.78em;
+  color: var(--text-secondary);
+  cursor: help;
+}
+
+.route-list .route-card .cities-passed-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.92em;
+  white-space: normal;
+  width: max-content;
+  max-width: 220px;
+  line-height: 1.4;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.route-list .route-card .cities-passed:hover .cities-passed-tooltip {
+  display: block;
+}
+
+/* Journeys with photos: the first photo fills the card, under a scrim that
+   keeps the text readable on any photo, in either theme. */
+.route-list .route-card.has-photo {
+  min-height: 128px;
+  justify-content: flex-end;
+  background-color: #111;
+}
+.route-list .route-card.has-photo > :not(.route-card-media) {
+  position: relative;
+  z-index: 1;
+}
+
+.route-list .route-card-media {
+  position: absolute;
+  inset: 0;
+  /* Its own stacking layer: the hover zoom gives the photo a transform, which
+     would otherwise paint it over the dimming overlays below */
+  z-index: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+.route-list .route-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s ease;
+}
+.route-list .route-card-media::before,
+.route-list .route-card-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+/* Dims the whole photo so the list stays calm; hovering or selecting a card
+   lifts it a little */
+.route-list .route-card-media::before {
+  background: #000;
+  opacity: 0.5;
+  transition: opacity 0.25s ease;
+}
+.route-list .route-card.has-photo:hover .route-card-media::before,
+.route-list .route-card.has-photo.active .route-card-media::before {
+  opacity: 0.35;
+}
+/* Extra shade behind the text at the bottom */
+.route-list .route-card-media::after {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.15) 40%,
+    rgba(0, 0, 0, 0.65) 100%
+  );
+  transition: box-shadow 0.2s ease;
+}
+.route-list .route-card.has-photo:hover .route-card-media img {
+  transform: scale(1.04);
+}
+
+/* The photo covers the usual left-edge marker, so the selected card gets a
+   ring drawn on the scrim, above the photo */
+.route-list .route-card.has-photo.active .route-card-media::after {
+  box-shadow: inset 0 0 0 2px var(--accent-primary);
+}
+
+.route-list .route-card.has-photo h3,
+.route-list .route-card.has-photo.active h3 {
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+.route-list .route-card.has-photo p {
+  color: rgba(255, 255, 255, 0.86);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.route-list .route-card.has-photo .cities-passed {
+  color: rgba(255, 255, 255, 0.78);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.route-list .route-card.has-photo .travel-mode-badge {
+  background-color: rgba(0, 0, 0, 0.6);
+}
+[data-theme="light"] .route-list .route-card.has-photo .travel-mode-badge {
+  background-color: rgba(255, 255, 255, 0.9);
+}
+.route-list .route-card.has-photo .cities-passed-tooltip {
+  text-shadow: none;
+}

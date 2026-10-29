@@ -1,0 +1,6 @@
+node_modules/
+build/
+dist/
+tests/fixtures/tenants.json
+npm-install.log
+*.log

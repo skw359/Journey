@@ -1,0 +1,388 @@
+.journey-top-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 900;
+  pointer-events: none;
+}
+
+.journey-top-gradient {
+  position: absolute;
+  inset: 0;
+  height: 240px;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.85) 0%,
+    rgba(0, 0, 0, 0.65) 40%,
+    rgba(0, 0, 0, 0.3) 75%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  pointer-events: none;
+}
+
+[data-theme="light"] .journey-top-gradient {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.75) 40%,
+    rgba(255, 255, 255, 0.35) 75%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.journey-top-content {
+  position: relative;
+  padding: 16px 32px 28px;
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.journey-top-content > * { pointer-events: none; }
+.journey-top-content .jto-mode-label,
+.journey-top-content .jto-travel-mode-dropdown,
+.journey-top-content .jto-title-edit,
+.journey-top-content .jto-meta-item,
+.journey-top-content .jto-badges > * {
+  pointer-events: auto;
+}
+
+/* Line 1: travel mode, then date and time */
+.jto-eyebrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.jto-mode-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.jto-datetime {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.78em;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+[data-theme="light"] .jto-datetime {
+  color: var(--text-secondary);
+  text-shadow: none;
+}
+
+.jto-mode-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 0.72em;
+  font-weight: 500;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.jto-mode-label:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.jto-mode-label-static {
+  cursor: default;
+}
+.jto-mode-label-static:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+[data-theme="light"] .jto-mode-label-static:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.jto-mode-label.foot svg { color: #02d87f; }
+.jto-mode-label.scooter svg { color: #4A90E2; }
+.jto-mode-label.drive svg { color: #FF9F43; }
+.jto-mode-label.train svg { color: #F43F5E; }
+.jto-mode-label.metro svg { color: #14B8A6; }
+.jto-mode-label.flight svg { color: #A855F7; }
+
+[data-theme="light"] .jto-mode-label {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+}
+
+.jto-travel-mode-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+[data-theme="light"] .jto-travel-mode-dropdown {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+.jto-travel-mode-dropdown .travel-mode-option.selected {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.jto-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0;
+}
+
+.jto-title {
+  margin: 0;
+  font-size: clamp(1.5em, 2.6vw, 2em);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+[data-theme="light"] .jto-title {
+  color: var(--text-primary);
+  text-shadow: none;
+}
+
+.jto-title-edit {
+  opacity: 0.65;
+}
+.jto-title-edit:hover { opacity: 1; }
+
+.jto-geo-skeleton {
+  display: inline-block;
+  width: 160px;
+  height: 12px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  animation: jto-pulse 1.2s ease-in-out infinite;
+}
+[data-theme="light"] .jto-geo-skeleton {
+  background: rgba(0, 0, 0, 0.1);
+}
+@keyframes jto-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+/* Line 3: location, distance, duration, speeds — icons instead of labels */
+.jto-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin-top: 4px;
+}
+
+.jto-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #fff;
+  font-size: 1.05em;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+  cursor: default;
+}
+.jto-meta-item svg {
+  flex-shrink: 0;
+  color: var(--accent-primary);
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.45));
+}
+[data-theme="light"] .jto-meta-item {
+  color: var(--text-primary);
+  text-shadow: none;
+}
+[data-theme="light"] .jto-meta-item svg { filter: none; }
+
+.jto-meta-unit {
+  font-size: 0.78em;
+  font-weight: 400;
+  margin-left: 3px;
+  opacity: 0.8;
+}
+
+.jto-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.jto-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.jto-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72em;
+  font-weight: 500;
+  color: #fff;
+}
+.jto-badge-watch {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.jto-badge-waypoints {
+  background: #4A90E2;
+}
+
+.jto-deleted-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 68, 68, 0.16);
+  border: 1px solid rgba(255, 68, 68, 0.45);
+  color: #ff6b6b;
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+.jto-deleted-notice svg { flex-shrink: 0; }
+[data-theme="light"] .jto-deleted-notice {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.4);
+  color: #dc2626;
+}
+
+.journey-top-actions {
+  position: absolute;
+  top: 12px;
+  right: 24px;
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.jto-icon-btn {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.jto-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.jto-icon-btn-danger:hover {
+  background: var(--accent-danger);
+  border-color: var(--accent-danger);
+  color: #fff;
+}
+.jto-icon-btn-restore:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+
+[data-theme="light"] .jto-icon-btn {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: var(--text-secondary);
+}
+[data-theme="light"] .jto-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.journey-top-actions .jto-icon-btn { padding: 6px 8px; }
+
+.jto-measure-btn { gap: 6px; }
+.jto-measure-btn .jto-btn-label {
+  font-family: var(--font-family-sans);
+  font-size: 0.8em;
+  font-weight: 600;
+  padding-right: 2px;
+}
+/* Active uses the same yellow as the measured line on the map. */
+.jto-measure-btn.active,
+[data-theme="light"] .jto-measure-btn.active {
+  background: #ffc83d;
+  border-color: #ffc83d;
+  color: #141414;
+}
+.jto-measure-btn.active:hover,
+[data-theme="light"] .jto-measure-btn.active:hover {
+  background: #f5b820;
+  border-color: #f5b820;
+  color: #141414;
+}
+.jto-title-edit {
+  padding: 6px;
+  background: transparent;
+  border: none;
+}
+.jto-title-edit:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+}
+[data-theme="light"] .jto-title-edit:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+@media (max-width: 680px) {
+  .journey-top-content { padding: 14px 18px 22px; gap: 5px; }
+  /* Leave room for the journey actions in the top right corner */
+  .jto-eyebrow { padding-right: 132px; }
+  .jto-meta { gap: 4px 14px; }
+  .jto-meta-item { font-size: 0.95em; }
+  .jto-title { font-size: 1.4em; }
+  .journey-top-actions { top: 10px; right: 14px; }
+  .jto-measure-btn .jto-btn-label { display: none; }
+}

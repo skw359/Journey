@@ -38,6 +38,17 @@ const ROUTE_COLUMNS = [
   'profile_elev_m',
   'profile_speed_mph',
   'travel_mode',
+  'weather_temp',
+  'weather_feels_like',
+  'weather_humidity',
+  'weather_wind_speed',
+  'weather_wind_dir',
+  'weather_condition',
+  'weather_description',
+  'weather_icon',
+  'sounding_data',
+  'cities_passed',
+  'places_passed',
 ];
 
 function quoteIdent(value) {
@@ -83,8 +94,31 @@ async function createTenantTables(dbClient, schema) {
       profile_dist_mi JSONB,
       profile_elev_m JSONB,
       profile_speed_mph JSONB,
-      travel_mode TEXT
+      travel_mode TEXT,
+      weather_temp DOUBLE PRECISION,
+      weather_feels_like DOUBLE PRECISION,
+      weather_humidity INTEGER,
+      weather_wind_speed DOUBLE PRECISION,
+      weather_wind_dir INTEGER,
+      weather_condition TEXT,
+      weather_description TEXT,
+      weather_icon TEXT,
+      sounding_data JSONB,
+      force_visible BOOLEAN NOT NULL DEFAULT FALSE
     );
+
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS weather_temp DOUBLE PRECISION;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS weather_feels_like DOUBLE PRECISION;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS weather_humidity INTEGER;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS weather_wind_speed DOUBLE PRECISION;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS weather_wind_dir INTEGER;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS weather_condition TEXT;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS weather_description TEXT;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS weather_icon TEXT;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS sounding_data JSONB;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS cities_passed JSONB;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS places_passed JSONB;
+    ALTER TABLE ${qSchema}.routes ADD COLUMN IF NOT EXISTS force_visible BOOLEAN NOT NULL DEFAULT FALSE;
 
     CREATE TABLE IF NOT EXISTS ${qSchema}.waypoints (
       id TEXT PRIMARY KEY,
@@ -103,9 +137,26 @@ async function createTenantTables(dbClient, schema) {
       filename TEXT,
       original_name TEXT,
       mimetype TEXT,
-      size INTEGER,
+      size BIGINT,
       uploaded_at TIMESTAMPTZ
     );
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = '${schema}' AND table_name = 'photos'
+          AND column_name = 'size' AND data_type = 'integer'
+      ) THEN
+        ALTER TABLE ${qSchema}.photos ALTER COLUMN size TYPE BIGINT;
+      END IF;
+    END $$;
+
+    ALTER TABLE ${qSchema}.photos ADD COLUMN IF NOT EXISTS poster_filename TEXT;
+    ALTER TABLE ${qSchema}.photos ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
+    ALTER TABLE ${qSchema}.photos ADD COLUMN IF NOT EXISTS width INTEGER;
+    ALTER TABLE ${qSchema}.photos ADD COLUMN IF NOT EXISTS height INTEGER;
+    ALTER TABLE ${qSchema}.photos ADD COLUMN IF NOT EXISTS status TEXT;
 
     CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_routes_start_time`)}
       ON ${qSchema}.routes(start_time DESC);
@@ -115,6 +166,28 @@ async function createTenantTables(dbClient, schema) {
       ON ${qSchema}.waypoints(route_id);
     CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_photos_route_id`)}
       ON ${qSchema}.photos(route_id);
+
+    CREATE TABLE IF NOT EXISTS ${qSchema}.journey_backups (
+      id TEXT PRIMARY KEY,
+      combined_journey_id TEXT,
+      source_journeys JSONB NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ${qSchema}.trashed_journeys (
+      id TEXT PRIMARY KEY,
+      route_id TEXT,
+      name TEXT,
+      distance DOUBLE PRECISION,
+      duration TEXT,
+      origin TEXT,
+      reason TEXT,
+      snapshot JSONB NOT NULL,
+      deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_trashed_journeys_deleted_at`)}
+      ON ${qSchema}.trashed_journeys(deleted_at);
   `);
 }
 
@@ -265,6 +338,35 @@ async function initSchema() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS geo_backfill_jobs (
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      started_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (user_id, kind)
+    );
+
+    -- Attachment files deleted while their drive was unplugged; removed when it reconnects.
+    CREATE TABLE IF NOT EXISTS media_pending_deletes (
+      name TEXT PRIMARY KEY,
+      is_dir BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Uploads sent in pieces (routes/mediaUploads.js). result is the finished upload's response.
+    CREATE TABLE IF NOT EXISTS media_uploads (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      route_id TEXT NOT NULL,
+      upload_key TEXT,
+      original_name TEXT NOT NULL,
+      mimetype TEXT,
+      size BIGINT NOT NULL,
+      part_name TEXT NOT NULL,
+      result JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     -- Legacy shared tables kept for backwards-compatible migration.
     CREATE TABLE IF NOT EXISTS routes (
       id TEXT PRIMARY KEY,
@@ -293,7 +395,15 @@ async function initSchema() {
       profile_elev_m JSONB,
       profile_speed_mph JSONB,
       travel_mode TEXT,
-      user_id TEXT
+      user_id TEXT,
+      weather_temp DOUBLE PRECISION,
+      weather_feels_like DOUBLE PRECISION,
+      weather_humidity INTEGER,
+      weather_wind_speed DOUBLE PRECISION,
+      weather_condition TEXT,
+      weather_description TEXT,
+      weather_icon TEXT,
+      sounding_data JSONB
     );
 
     CREATE TABLE IF NOT EXISTS waypoints (
@@ -313,7 +423,7 @@ async function initSchema() {
       filename TEXT,
       original_name TEXT,
       mimetype TEXT,
-      size INTEGER,
+      size BIGINT,
       uploaded_at TIMESTAMPTZ
     );
 
@@ -372,6 +482,20 @@ async function initSchema() {
         ALTER TABLE users ADD COLUMN unit_preference TEXT DEFAULT 'imperial';
       END IF;
     END $$;
+  `);
+
+  await pool.query(`
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS weather_temp DOUBLE PRECISION;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS weather_feels_like DOUBLE PRECISION;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS weather_humidity INTEGER;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS weather_wind_speed DOUBLE PRECISION;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS weather_wind_dir INTEGER;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS weather_condition TEXT;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS weather_description TEXT;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS weather_icon TEXT;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS sounding_data JSONB;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS cities_passed JSONB;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS places_passed JSONB;
   `);
 
   await pool.query(`
@@ -440,6 +564,16 @@ function toApiRoute(row, waypoints, photos) {
     waypoints: (waypoints || []).map(toApiWaypoint),
     photos: (photos || []).map(toApiPhoto),
     travelMode: row.travel_mode || null,
+    weather: row.weather_temp != null ? {
+      temp: row.weather_temp,
+      feelsLike: row.weather_feels_like,
+      humidity: row.weather_humidity,
+      windSpeed: row.weather_wind_speed,
+      windDir: row.weather_wind_dir ?? null,
+      condition: row.weather_condition,
+      description: row.weather_description,
+      icon: row.weather_icon,
+    } : null,
   };
 }
 
@@ -455,8 +589,12 @@ function toApiSummary(row) {
     watchRecorded: !!row.watch_recorded,
     waypointCount: Number(row.waypoint_count) || 0,
     photoCount: Number(row.photo_count) || 0,
+    // First photo by upload order, matching the detail view's gallery order
+    coverPhoto: row.cover_photo || null,
     travelMode: row.travel_mode || null,
     avgSpeed: row.avg_speed != null ? Number(row.avg_speed).toFixed(2) : null,
+    citiesPassed: row.cities_passed || [],
+    placesPassed: row.places_passed || [],
   };
 }
 
@@ -473,14 +611,26 @@ function toApiWaypoint(row) {
 }
 
 function toApiPhoto(row) {
-  return {
+  const isVideo = typeof row.mimetype === 'string' && row.mimetype.startsWith('video/');
+  const photo = {
     id: row.id,
     filename: row.filename,
     originalName: row.original_name,
-    size: row.size,
+    // BIGINT comes back from pg as a string.
+    size: row.size != null ? Number(row.size) : null,
     uploadedAt: row.uploaded_at ? row.uploaded_at.toISOString() : null,
     mimetype: row.mimetype,
+    kind: isVideo ? 'video' : 'photo',
+    // NULL status = rows from before video support, which are always ready.
+    status: row.status || 'ready',
   };
+  if (isVideo) {
+    photo.posterFilename = row.poster_filename || null;
+    photo.durationMs = row.duration_ms ?? null;
+    photo.width = row.width ?? null;
+    photo.height = row.height ?? null;
+  }
+  return photo;
 }
 
 module.exports = {

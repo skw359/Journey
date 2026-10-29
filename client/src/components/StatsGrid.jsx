@@ -1,7 +1,8 @@
 import { useUnits } from '../context/UnitsContext';
+import { formatCompassDirection, formatDataPointCount } from '../utils/formatters';
 import './StatsGrid.css';
 
-export default function StatsGrid({ route }) {
+export default function StatsGrid({ route, weather }) {
   const { convertDistance, convertSpeed, convertElevation, distanceUnit, speedUnit, elevationUnit } = useUnits();
   if (!route) return null;
 
@@ -9,6 +10,9 @@ export default function StatsGrid({ route }) {
   const avgSpeed = convertSpeed(route.avgSpeed);
   const topSpeed = convertSpeed(route.topSpeed);
   const topElevation = convertElevation(route.topElevation);
+  const windSpeed = weather ? convertSpeed(weather.windSpeed) : null;
+  const windDirection = weather ? formatCompassDirection(weather.windDir) : null;
+  const hasPointCount = Number.isFinite(route.totalPoints) && route.totalPoints > 0;
 
   return (
     <div className="stats-section">
@@ -45,6 +49,33 @@ export default function StatsGrid({ route }) {
             <span className="unit">{elevationUnit}</span>
           </p>
         </div>
+        {weather && (
+          <>
+            <div className="stat-card">
+              <h3>Wind</h3>
+              <p>
+                {windSpeed != null ? windSpeed.toFixed(0) : '--'}
+                <span className="unit">{windDirection ? `${speedUnit} ${windDirection}` : speedUnit}</span>
+              </p>
+            </div>
+            <div className="stat-card">
+              <h3>Humidity</h3>
+              <p>
+                {weather.humidity}
+                <span className="unit">%</span>
+              </p>
+            </div>
+          </>
+        )}
+        {hasPointCount && (
+          <div className="stat-card">
+            <h3>Data Points</h3>
+            <p>
+              {formatDataPointCount(route.totalPoints)}
+              <span className="unit">points</span>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

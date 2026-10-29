@@ -4,6 +4,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { useTheme } from '../context/ThemeContext';
 import { useUnits } from '../context/UnitsContext';
+import { allowChartZoomStart } from '../utils/wheelZoom';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, zoomPlugin);
 
@@ -37,6 +38,9 @@ export default function ElevationChart({ route, onPointClick }) {
     const options = {
       responsive: true,
       maintainAspectRatio: false,
+      // Tweening re-drew the chart every frame for a second after each
+      // journey switch, stalling the page's fade while it was off screen
+      animation: false,
       interaction: { mode: 'index', intersect: false },
       onClick: (e, elements) => {
         if (elements?.length > 0) onPointClick?.(elements[0].index, route);
@@ -56,16 +60,21 @@ export default function ElevationChart({ route, onPointClick }) {
           pan: {
             enabled: true,
             mode: 'x',
+            threshold: 2,
           },
           zoom: {
-            wheel: {
+            wheel: { enabled: true, speed: 0.1 },
+            onZoomStart: allowChartZoomStart,
+            pinch: { enabled: true },
+            drag: {
               enabled: true,
-            },
-            pinch: {
-              enabled: true
+              backgroundColor: 'rgba(2, 216, 127, 0.15)',
+              borderColor: 'rgba(2, 216, 127, 0.5)',
+              borderWidth: 1,
+              modifierKey: 'shift',
             },
             mode: 'x',
-          }
+          },
         }
       },
       scales: {

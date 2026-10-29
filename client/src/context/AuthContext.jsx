@@ -10,6 +10,7 @@ export function AuthProvider({ children }) {
   const [isSetup, setIsSetup] = useState(true);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [migrationCount, setMigrationCount] = useState(0);
+  const [marcoEnabled, setMarcoEnabled] = useState(false);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -17,6 +18,7 @@ export function AuthProvider({ children }) {
       setIsSetup(data.isSetup);
       setIsAuthenticated(data.isAuthenticated);
       setUser(data.user);
+      setMarcoEnabled(Boolean(data.marcoEnabled));
     } catch {
       setIsSetup(true);
       setIsAuthenticated(false);
@@ -88,6 +90,8 @@ export function AuthProvider({ children }) {
       deleteAccount: removeAccount,
       completeMigration,
       updateUser,
+      marcoEnabled,
+      setMarcoEnabled,
     }}>
       {children}
     </AuthContext.Provider>

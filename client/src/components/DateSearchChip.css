@@ -1,0 +1,48 @@
+.date-search-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  /* Fallback first for browsers without color-mix() */
+  border: 1px solid var(--bg-tertiary);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--accent-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  font-family: var(--font-family-sans);
+  font-size: 0.78em;
+  line-height: 1.2;
+  animation: date-search-chip-in 0.18s ease;
+}
+
+.date-search-chip-icon {
+  flex-shrink: 0;
+  color: var(--accent-primary);
+}
+
+.date-search-chip-label {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.date-search-chip-count {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes date-search-chip-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .date-search-chip { animation: none; }
+}

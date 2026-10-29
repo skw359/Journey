@@ -1,23 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Trash2, Pencil, ChevronRight, AlertCircle, X } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Pencil, AlertCircle, X, Merge, Plane } from 'lucide-react';
 import TopLoader from '../components/TopLoader';
 import Sidebar from '../components/Sidebar';
 import FilterBar from '../components/FilterBar';
 import JourneyCard from '../components/JourneyCard';
 import RouteMap from '../components/RouteMap';
-import StatsGrid from '../components/StatsGrid';
-import ElevationChart from '../components/ElevationChart';
-import SpeedChart from '../components/SpeedChart';
-import AccelerationChart from '../components/AccelerationChart';
-import PhotoGallery from '../components/PhotoGallery';
 import PhotoViewer from '../components/PhotoViewer';
 import Modal from '../components/Modal';
-import TravelModeBadge from '../components/TravelModeBadge';
 import FirstRunOnboarding from '../components/FirstRunOnboarding';
-import { Footprints, Bike, Car } from 'lucide-react';
-import { fetchRoutes, fetchRouteDetail, deleteRoute, renameRoute, updateTravelMode as apiUpdateTravelMode, uploadPhotos as apiUploadPhotos, deletePhoto as apiDeletePhoto, deleteDataPoint } from '../api/journeys';
-import { formatTime, formatDataPointCount } from '../utils/formatters';
+import JourneyTopOverlay from '../components/JourneyTopOverlay';
+import JourneyStage from '../components/JourneyStage';
+import JourneyDetails from '../components/JourneyDetails';
+import FlightImportModal from '../components/FlightImportModal';
+import DateSearchChip from '../components/DateSearchChip';
+import { fetchRoutes, fetchRouteDetail, fetchRouteMedia, deleteRoute, renameRoute, updateTravelMode as apiUpdateTravelMode, uploadPhotos as apiUploadPhotos, deletePhoto as apiDeletePhoto, deleteDataPoint, combineJourneys, undoCombine } from '../api/journeys';
+import { formatTime } from '../utils/formatters';
+import { isVideo, isViewable, previewFilename, coverFilename, describeFiles, describeMedia } from '../utils/media';
+import { parseDateQuery, matchesSearch } from '../utils/dateSearch';
 import { useToast } from '../context/ToastContext';
 import { useUnits } from '../context/UnitsContext';
 import useGeoLabel from '../hooks/useGeoLabel';
@@ -25,9 +25,25 @@ import './Dashboard.css';
 
 const PREVIEW_MAX_POINTS = 100;
 const DETAIL_ZOOM_THRESHOLD = 8;
+// The journey list draws this many cards, and this many more each time it's
+// scrolled to the end. Drawing every journey at once made each click on one
+// re-render thousands of cards.
+const LIST_PAGE_SIZE = 20;
+
+// Upload toast suffix for whatever the server is still converting.
+function processingNote(added) {
+  const pending = added.filter(p => p.status === 'processing');
+  const videos = pending.filter(isVideo).length;
+  const photos = pending.length - videos;
+  if (photos && videos) return ". They'll be ready soon";
+  if (photos) return `. ${added.length === 1 ? 'It' : 'Photos'} will be ready in a moment`;
+  if (videos) return '. Videos are being converted for playback';
+  return '';
+}
 
 export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const { convertSpeed, speedUnit } = useUnits();
   const [searchParams, setSearchParams] = useSearchParams();
   const [allRoutes, setAllRoutes] = useState([]);
@@ -36,17 +52,15 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
   const [activeFilter, setActiveFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [infoExpanded, setInfoExpanded] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
+  const [measureActive, setMeasureActive] = useState(false);
 
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  // Tracked by id: the viewable list shifts when a video finishes processing.
+  const [viewerMediaId, setViewerMediaId] = useState(null);
 
-  const handleScroll = (e) => {
-    setIsScrolled(e.target.scrollTop > 20);
-  };
   const [uploading, setUploading] = useState(false);
-  const [uploadCount, setUploadCount] = useState(0);
+  const [uploadLabel, setUploadLabel] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletePhotoModalOpen, setDeletePhotoModalOpen] = useState(false);
@@ -58,7 +72,17 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
 
   const [travelModeDropdownOpen, setTravelModeDropdownOpen] = useState(false);
 
+  // Combine mode
+  const [combineMode, setCombineMode] = useState(false);
+  const [selectedForCombine, setSelectedForCombine] = useState(new Set());
+  const [combineModalOpen, setCombineModalOpen] = useState(false);
+  const [combineNameValue, setCombineNameValue] = useState('');
+  const [lastCombinedId, setLastCombinedId] = useState(null);
+  const [flightImportOpen, setFlightImportOpen] = useState(false);
+
   const loaderRef = useRef(null);
+  const listRef = useRef(null);
+  const listEndRef = useRef(null);
   const currentRouteIdRef = useRef(currentRouteId);
   const routeCacheRef = useRef(new Map());
   const fullDetailRouteIdsRef = useRef(new Set());
@@ -73,6 +97,23 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
     if (route.isFullResolution) fullDetailRouteIdsRef.current.add(route.id);
     else fullDetailRouteIdsRef.current.delete(route.id);
   }, []);
+
+  // The journey list shows each journey's first photo (or converted video's poster);
+  // keep it in step with uploads and deletes made here.
+  const syncCoverPhoto = useCallback((routeId, photos) => {
+    const coverPhoto = coverFilename(photos);
+    setAllRoutes(prev => prev.map(r => (
+      r.id === routeId && (r.coverPhoto ?? null) !== coverPhoto ? { ...r, coverPhoto } : r
+    )));
+  }, []);
+
+  // Puts a journey's latest media list in its cached detail, its list card and, while it's open, on screen.
+  const applyRouteMedia = useCallback((routeId, photos) => {
+    const cached = routeCacheRef.current.get(routeId);
+    if (cached) cacheRouteDetail({ ...cached, photos });
+    setCurrentRoute(prev => (prev?.id === routeId ? { ...prev, photos } : prev));
+    syncCoverPhoto(routeId, photos);
+  }, [cacheRouteDetail, syncCoverPhoto]);
 
   useEffect(() => {
     currentRouteIdRef.current = currentRouteId;
@@ -94,7 +135,6 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
       cacheRouteDetail(route);
       setCurrentRoute(route);
       setCurrentRouteId(routeId);
-      setInfoExpanded(false);
     } catch (err) {
       console.error(err);
     } finally {
@@ -105,9 +145,8 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
     }
   }, [cacheRouteDetail]);
 
-  const loadFullDetailForViewport = useCallback(async ({ zoom }) => {
-    const routeId = currentRouteIdRef.current;
-    if (!routeId || zoom < DETAIL_ZOOM_THRESHOLD) return;
+  const loadFullDetail = useCallback(async (routeId) => {
+    if (!routeId) return;
     if (fullDetailRouteIdsRef.current.has(routeId)) return;
     if (detailFetchInFlightRef.current.has(routeId)) return;
 
@@ -125,6 +164,17 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
       detailFetchInFlightRef.current.delete(routeId);
     }
   }, [cacheRouteDetail]);
+
+  const loadFullDetailForViewport = useCallback(({ zoom }) => {
+    if (zoom < DETAIL_ZOOM_THRESHOLD) return;
+    loadFullDetail(currentRouteIdRef.current);
+  }, [loadFullDetail]);
+
+  // Measuring snaps to the recorded track, so it needs every point: the
+  // 100-point preview would put A and B on shortcuts the journey never took.
+  useEffect(() => {
+    if (measureActive && currentRouteId) loadFullDetail(currentRouteId);
+  }, [measureActive, currentRouteId, loadFullDetail]);
 
   useEffect(() => {
     const load = async () => {
@@ -155,16 +205,45 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
     load();
   }, []);
 
-  const filteredRoutes = allRoutes
+  const dateWindow = useMemo(() => parseDateQuery(searchValue), [searchValue]);
+
+  const filteredRoutes = useMemo(() => allRoutes
     .filter(r => {
       const matchesFilter = activeFilter === 'all' || r.travelMode === activeFilter;
-      const matchesSearch = r.name.toLowerCase().includes(searchValue.toLowerCase());
-      return matchesFilter && matchesSearch;
+      return matchesFilter && matchesSearch(r, searchValue, dateWindow);
     })
-    .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+    .sort((a, b) => new Date(b.startTime) - new Date(a.startTime)),
+  [allRoutes, activeFilter, searchValue, dateWindow]);
   const hasAnyRoutes = allRoutes.length > 0;
   const showOnboardingEmptyState = !initialLoading && !hasAnyRoutes;
   const showFilteredEmptyState = hasAnyRoutes && filteredRoutes.length === 0;
+
+  // How many of the filtered journeys the list draws; a new filter or search
+  // starts again from the first page
+  const listKey = `${activeFilter}\n${searchValue}`;
+  const [listPage, setListPage] = useState({ key: listKey, count: LIST_PAGE_SIZE });
+  if (listPage.key !== listKey) setListPage({ key: listKey, count: LIST_PAGE_SIZE });
+  const visibleCount = listPage.key === listKey ? listPage.count : LIST_PAGE_SIZE;
+  const visibleRoutes = useMemo(() => filteredRoutes.slice(0, visibleCount), [filteredRoutes, visibleCount]);
+  const hasMoreRoutes = visibleCount < filteredRoutes.length;
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [listKey]);
+
+  // Draws the next page once the end of the list scrolls into view. Runs again
+  // after each page, so a list still too short to scroll keeps filling.
+  useEffect(() => {
+    const list = listRef.current;
+    const end = listEndRef.current;
+    if (!list || !end || sidebarCollapsed || !hasMoreRoutes) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setListPage(prev => ({ ...prev, count: prev.count + LIST_PAGE_SIZE }));
+    }, { root: list, rootMargin: '0px 0px 200px 0px' });
+    observer.observe(end);
+    return () => observer.disconnect();
+  }, [visibleCount, hasMoreRoutes, sidebarCollapsed]);
 
   const handleDeleteJourney = async () => {
     if (!currentRouteId) return;
@@ -188,10 +267,13 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
     }
 
     try {
-      const tid = toast.loading('Deleting journey...');
+      const tid = toast.loading('Moving journey to Recently Deleted...');
       await deleteRoute(routeToDeleteId);
       toast.dismiss(tid);
-      toast.success('Journey deleted successfully');
+      toast.success('Journey moved to Recently Deleted', undefined, {
+        actionLabel: 'View',
+        onAction: () => navigate('/recently-deleted'),
+      });
     } catch (err) {
       console.error(err);
       toast.error('Failed to delete journey');
@@ -270,31 +352,81 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
   const handleUploadPhotos = async (files) => {
     if (!currentRouteId) return;
     const routeId = currentRouteId;
+    const label = describeFiles(files);
     setUploading(true);
-    setUploadCount(files.length);
+    setUploadLabel(label);
+    setUploadProgress(0);
+    const tid = toast.loading(`Uploading ${label}...`);
     try {
-      const tid = toast.loading(`Uploading ${files.length} photo${files.length === 1 ? '' : 's'}...`);
-      await apiUploadPhotos(routeId, files);
+      const result = await apiUploadPhotos(routeId, files, setUploadProgress);
       toast.dismiss(tid);
-      toast.success(`${files.length} photo${files.length === 1 ? '' : 's'} uploaded`);
-      const maxPoints = fullDetailRouteIdsRef.current.has(routeId) ? 0 : PREVIEW_MAX_POINTS;
-      const detail = await fetchRouteDetail(routeId, { maxPoints });
-      cacheRouteDetail(detail);
-      if (currentRouteIdRef.current === routeId) {
-        setCurrentRoute(detail);
+      const added = result.photos || [];
+      if (added.length > 0) {
+        toast.success(`${describeMedia(added)} uploaded${processingNote(added)}`);
+      }
+      for (const skipped of result.skipped || []) {
+        toast.error(`${skipped.name}: ${skipped.reason}`);
+      }
+      // The new items show straight away; the poll below swaps in converted ones as they finish.
+      const cached = routeCacheRef.current.get(routeId);
+      if (cached && added.length > 0) {
+        applyRouteMedia(routeId, [...(cached.photos || []), ...added]);
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to upload photos');
+      toast.dismiss(tid);
+      toast.error(err.message || 'Upload failed');
     }
     setUploading(false);
+    setUploadProgress(null);
   };
+
+  // While uploads on the open journey are converting, poll their status and swap them in when done.
+  const processing = (currentRoute?.photos || []).filter(p => p.status === 'processing');
+  const processingIds = processing.map(p => p.id).join(',');
+  // Photos take seconds to convert, videos minutes.
+  const pollMs = processing.some(p => !isVideo(p)) ? 1000 : 4000;
+
+  useEffect(() => {
+    if (!currentRouteId || !processingIds) return;
+    const routeId = currentRouteId;
+    const pending = processingIds.split(',');
+    const timer = setInterval(async () => {
+      try {
+        const media = await fetchRouteMedia(routeId);
+        if (currentRouteIdRef.current !== routeId) return;
+        const byId = new Map(media.map(p => [p.id, p]));
+        const settled = pending.filter(id => byId.get(id)?.status !== 'processing');
+        if (settled.length === 0) return;
+
+        applyRouteMedia(routeId, media);
+        // Converted photos just appear; only videos and failures get a toast.
+        const done = settled.map(id => byId.get(id)).filter(Boolean);
+        const count = (video, status) => done.filter(p => isVideo(p) === video && p.status === status).length;
+        const readyVideos = count(true, 'ready');
+        const failedVideos = count(true, 'failed');
+        const failedPhotos = count(false, 'failed');
+        if (readyVideos) toast.success(readyVideos === 1 ? 'Video ready to play' : `${readyVideos} videos ready to play`);
+        if (failedVideos) toast.error(failedVideos === 1 ? "A video couldn't be converted" : `${failedVideos} videos couldn't be converted`);
+        if (failedPhotos) toast.error(failedPhotos === 1 ? "A photo couldn't be processed" : `${failedPhotos} photos couldn't be processed`);
+      } catch (err) {
+        console.error(err);
+      }
+    }, pollMs);
+    return () => clearInterval(timer);
+  }, [currentRouteId, processingIds, pollMs, applyRouteMedia, toast]);
+
+  const viewableMedia = (currentRoute?.photos || []).filter(isViewable);
+  const viewerIndex = viewableMedia.findIndex(p => p.id === viewerMediaId);
+  const deletePreview = previewFilename(photoToDelete);
 
   const handleDeletePhoto = async () => {
     if (!currentRouteId || !photoToDelete) return;
     
     const photoId = photoToDelete.id;
+    const noun = isVideo(photoToDelete) ? 'video' : 'photo';
     const oldPhotos = [...(currentRoute.photos || [])];
+    syncCoverPhoto(currentRouteId, oldPhotos.filter(p => p.id !== photoId));
 
     setCurrentRoute(prev => {
       if (!prev || prev.id !== currentRouteId) return prev;
@@ -306,13 +438,14 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
     setPhotoToDelete(null);
 
     try {
-      const tid = toast.loading('Deleting photo...');
+      const tid = toast.loading(`Deleting ${noun}...`);
       await apiDeletePhoto(currentRouteId, photoId);
       toast.dismiss(tid);
-      toast.success('Photo deleted');
+      toast.success(noun === 'video' ? 'Video deleted' : 'Photo deleted');
     } catch (err) {
       console.error(err);
-      toast.error('Failed to delete photo');
+      toast.error(`Failed to delete ${noun}`);
+      syncCoverPhoto(currentRouteId, oldPhotos);
       setCurrentRoute(prev => {
         if (!prev || prev.id !== currentRouteId) return prev;
         const reverted = { ...prev, photos: oldPhotos };
@@ -322,13 +455,15 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
     }
   };
 
-  const handlePointClick = (index, route) => {
+  // Stable, so the charts (which rebuild whenever it changes) aren't redrawn
+  // by every unrelated re-render, such as the one that starts a journey switch
+  const handlePointClick = useCallback((index, route) => {
     const speed = route.profileSpeedMph[index];
     const time = route.profileTimeMs[index];
     const startTime = route.profileTimeMs[0];
     setPointToDelete({ index, speed, time, startTime });
     setPointDeleteModalOpen(true);
-  };
+  }, []);
 
   const handleDeletePoint = async () => {
     if (!currentRouteId || pointToDelete === null) return;
@@ -404,17 +539,91 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
     }
   };
 
-  const getDateTimeStr = () => {
-    if (!currentRoute?.startTime || !currentRoute?.endTime) return '';
-    const start = new Date(currentRoute.startTime);
-    const end = new Date(currentRoute.endTime);
-    const dateStr = start.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-    const startTimeStr = start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const endTimeStr = end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const rawCount = currentRoute.totalPoints ?? currentRoute.coordinates?.length ?? 0;
-    const displayedCount = formatDataPointCount(rawCount);
-    const pointLabel = rawCount === 1 ? 'point' : 'points';
-    return `${dateStr} • ${startTimeStr}–${endTimeStr} • ${displayedCount} ${pointLabel}`;
+  const toggleCombineSelection = useCallback((id) => {
+    setSelectedForCombine(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Stable, so selecting a journey re-renders only the cards whose `active`
+  // changed (JourneyCard is memoized)
+  const handleCardClick = useCallback((id) => {
+    if (combineMode) toggleCombineSelection(id);
+    else loadRouteWithAnimation(id);
+  }, [combineMode, toggleCombineSelection, loadRouteWithAnimation]);
+
+  const handleOpenCombineModal = () => {
+    if (selectedForCombine.size < 2) {
+      toast.error('Select at least 2 journeys to combine');
+      return;
+    }
+    // Default name: earliest journey's name
+    const selected = allRoutes
+      .filter(r => selectedForCombine.has(r.id))
+      .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    setCombineNameValue(selected[0]?.name || '');
+    setCombineModalOpen(true);
+  };
+
+  const handleCombine = async () => {
+    const ids = allRoutes
+      .filter(r => selectedForCombine.has(r.id))
+      .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+      .map(r => r.id);
+
+    setCombineModalOpen(false);
+    setCombineMode(false);
+    setSelectedForCombine(new Set());
+
+    try {
+      const tid = toast.loading(`Combining ${ids.length} journeys...`);
+      const result = await combineJourneys(ids, combineNameValue.trim() || undefined);
+      toast.dismiss(tid);
+      toast.success('Journeys combined successfully');
+
+      // Refresh journey list and select the combined journey
+      const routes = await fetchRoutes();
+      setAllRoutes(routes);
+      routeCacheRef.current.clear();
+      fullDetailRouteIdsRef.current.clear();
+      setLastCombinedId(result.route.id);
+
+      await loadRouteWithAnimation(result.route.id);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to combine: ' + err.message);
+    }
+  };
+
+  const handleUndoCombine = async () => {
+    if (!lastCombinedId) return;
+    try {
+      const tid = toast.loading('Undoing combine...');
+      await undoCombine(lastCombinedId);
+      toast.dismiss(tid);
+      toast.success('Combine undone — journeys restored');
+      setLastCombinedId(null);
+
+      // Refresh journey list
+      const routes = await fetchRoutes();
+      setAllRoutes(routes);
+      routeCacheRef.current.clear();
+      fullDetailRouteIdsRef.current.clear();
+
+      const sorted = [...routes].sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+      if (sorted.length > 0) {
+        await loadRouteWithAnimation(sorted[0].id);
+      } else {
+        setCurrentRoute(null);
+        setCurrentRouteId(null);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to undo combine: ' + err.message);
+    }
   };
 
   return (
@@ -423,151 +632,125 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
 
       <div className="full-screen-container">
         {!showOnboardingEmptyState && (
-          <Sidebar collapsed={sidebarCollapsed}>
-            {hasAnyRoutes && <FilterBar active={activeFilter} onChange={setActiveFilter} />}
-            <div className="route-list" style={{ overflowY: 'auto', flexGrow: 1 }}>
+          <Sidebar collapsed={sidebarCollapsed} floating>
+            {hasAnyRoutes && !combineMode && <FilterBar active={activeFilter} onChange={setActiveFilter} />}
+            {!combineMode && activeFilter === 'flight' && (
+              <button className="import-flight-btn" onClick={() => setFlightImportOpen(true)}>
+                <Plane size={14} /> Import Flight
+              </button>
+            )}
+            {!combineMode && <DateSearchChip dateWindow={dateWindow} count={filteredRoutes.length} />}
+            {combineMode && (
+              <div className="combine-toolbar">
+                <span className="combine-toolbar-label">{selectedForCombine.size} selected</span>
+                <button className="combine-toolbar-btn combine-toolbar-confirm" onClick={handleOpenCombineModal} disabled={selectedForCombine.size < 2}>
+                  <Merge size={14} /> Combine
+                </button>
+                <button className="combine-toolbar-btn combine-toolbar-cancel" onClick={() => { setCombineMode(false); setSelectedForCombine(new Set()); }}>
+                  Cancel
+                </button>
+              </div>
+            )}
+            <div ref={listRef} className="route-list" style={{ overflowY: 'auto', flexGrow: 1 }}>
               {showFilteredEmptyState ? (
-                <p className="dashboard-empty-filter">No matching journeys could be found with the current search parameters.</p>
+                <p className="dashboard-empty-filter">
+                  {dateWindow
+                    ? `No journeys found for ${dateWindow.label}.`
+                    : 'No matching journeys could be found with the current search parameters.'}
+                </p>
               ) : (
-                filteredRoutes.map(route => (
-                  <JourneyCard
-                    key={route.id}
-                    route={route}
-                    active={route.id === currentRouteId}
-                    onClick={(id) => loadRouteWithAnimation(id)}
-                  />
+                visibleRoutes.map(route => (
+                  <div key={route.id} className={`combine-card-wrap${combineMode ? ' combine-mode' : ''}`}>
+                    {combineMode && (
+                      <input
+                        type="checkbox"
+                        className="combine-checkbox"
+                        checked={selectedForCombine.has(route.id)}
+                        onChange={() => toggleCombineSelection(route.id)}
+                      />
+                    )}
+                    <JourneyCard
+                      route={route}
+                      active={!combineMode && route.id === currentRouteId}
+                      onClick={handleCardClick}
+                    />
+                  </div>
                 ))
               )}
+              {hasMoreRoutes && <div ref={listEndRef} className="route-list-end" aria-hidden="true" />}
             </div>
           </Sidebar>
         )}
 
-        <main className={`details-view-container${showOnboardingEmptyState ? ' onboarding-layout' : ''}`} onScroll={handleScroll}>
-          {currentRoute && (
-            <div className={`details-header${isLoading ? ' fade-out' : ''}${isScrolled ? ' scrolled' : ''}`}>
-              <div className="details-title-wrap">
-                <h2>
-                  <div className="title-stack">
-                    <div className="details-title-row">
-                      <div>{currentRoute.name}</div>
-                      <button
-                        className={`info-toggle-btn${infoExpanded ? ' active' : ''}`}
-                        onClick={() => setInfoExpanded(prev => !prev)}
-                        title="Show Details"
-                      >
-                        <ChevronRight size={12} />
-                      </button>
-                    </div>
-                    {geoLoading ? (
-                      <div className="geo-label-skeleton" />
-                    ) : geoLabel ? (
-                      <div className="geo-label">{geoLabel}</div>
-                    ) : null}
-                    <div className={`meta-info-expandable${infoExpanded ? ' expanded' : ''}`}>
-                      <div className="details-datetime">{getDateTimeStr()}</div>
-                    </div>
-                    <div className="badges-row">
-                      {currentRoute.watchRecorded && <span className="badge-watch"> Watch</span>}
-                      <span className="details-travel-mode" style={{ position: 'relative' }}>
-                        <TravelModeBadge
-                          mode={currentRoute.travelMode || 'foot'}
-                          clickable
-                          onClick={(e) => { e.stopPropagation(); setTravelModeDropdownOpen(prev => !prev); }}
-                        />
-                        {travelModeDropdownOpen && (
-                          <div className="travel-mode-dropdown active">
-                            {[
-                              { mode: 'foot', icon: Footprints, label: 'Foot' },
-                              { mode: 'scooter', icon: Bike, label: 'Micromobility' },
-                              { mode: 'drive', icon: Car, label: 'Drive' },
-                            ].map(opt => (
-                              <div
-                                key={opt.mode}
-                                className={`travel-mode-option ${opt.mode}`}
-                                onClick={(e) => { e.stopPropagation(); handleUpdateTravelMode(opt.mode); }}
-                              >
-                                <opt.icon size={16} />
-                                {opt.label}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </span>
-                      {currentRoute.waypoints?.length > 0 && (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', padding: '2px 6px',
-                          background: '#4A90E2', color: 'white', borderRadius: 6, fontSize: '0.72em'
-                        }}>
-                          {currentRoute.waypoints.length} Saved Spot{currentRoute.waypoints.length === 1 ? '' : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </h2>
-                <button
-                  className="icon-btn"
-                  onClick={() => { setRenameValue(currentRoute.name); setRenameModalOpen(true); }}
-                  title="Rename Journey"
-                >
-                  <Pencil size={18} />
-                </button>
-              </div>
-              <button
-                className="delete-btn"
-                onClick={() => setDeleteModalOpen(true)}
-                title="Delete Journey"
-              >
-                <Trash2 size={20} />
-              </button>
-            </div>
-          )}
+        <main className={`details-view-container${showOnboardingEmptyState ? ' onboarding-layout' : ''}${currentRoute && !showOnboardingEmptyState ? ' fullscreen-map' : ''}`}>
 
-          <section className={`main-content${isLoading ? ' fade-out' : ''}${showOnboardingEmptyState ? ' empty-onboarding' : ''}`}>
-            {showOnboardingEmptyState ? (
+          {showOnboardingEmptyState ? (
+            <section className="main-content empty-onboarding">
               <FirstRunOnboarding />
-            ) : currentRoute && (
-              <>
-                <RouteMap
-                  route={currentRoute}
-                  sidebarCollapsed={sidebarCollapsed}
-                  onViewportChange={loadFullDetailForViewport}
-                />
-                <StatsGrid route={currentRoute} />
+            </section>
+          ) : currentRoute && (
+            <JourneyStage
+              routeId={currentRoute.id}
+              loading={isLoading}
+              sidebarCollapsed={sidebarCollapsed}
+              measureActive={measureActive}
+              hero={(
+                <>
+                  <RouteMap
+                    route={currentRoute}
+                    sidebarCollapsed={sidebarCollapsed}
+                    onViewportChange={loadFullDetailForViewport}
+                    weather={currentRoute.weather}
+                    fullscreen
+                    measureActive={measureActive}
+                    onMeasureActiveChange={setMeasureActive}
+                  />
 
-                {currentRoute.profileTimeMs && currentRoute.profileDistMi && (
-                  <div className="graphs-section">
-                    <ElevationChart route={currentRoute} onPointClick={handlePointClick} />
-                    <SpeedChart route={currentRoute} onPointClick={handlePointClick} />
-                    <AccelerationChart route={currentRoute} onPointClick={handlePointClick} />
-                  </div>
-                )}
-
-                <PhotoGallery
-                  photos={currentRoute.photos}
-                  uploading={uploading}
-                  uploadCount={uploadCount}
-                  onUpload={handleUploadPhotos}
-                  onDeletePhoto={(id, filename) => {
-                    setPhotoToDelete({ id, filename });
-                    setDeletePhotoModalOpen(true);
-                  }}
-                  onViewPhoto={(idx) => {
-                    setCurrentPhotoIndex(idx);
-                    setPhotoViewerOpen(true);
-                  }}
-                />
-              </>
-            )}
-          </section>
+                  <JourneyTopOverlay
+                    route={currentRoute}
+                    geoLabel={geoLabel}
+                    geoLoading={geoLoading}
+                    measureActive={measureActive}
+                    onToggleMeasure={() => setMeasureActive(prev => !prev)}
+                    travelModeDropdownOpen={travelModeDropdownOpen}
+                    onToggleTravelModeDropdown={(e) => { e?.stopPropagation?.(); setTravelModeDropdownOpen(prev => !prev); }}
+                    onUpdateTravelMode={handleUpdateTravelMode}
+                    onRename={() => { setRenameValue(currentRoute.name); setRenameModalOpen(true); }}
+                    onCombine={() => setCombineMode(true)}
+                    onDelete={() => setDeleteModalOpen(true)}
+                    onUndoCombine={handleUndoCombine}
+                    showUndo={Boolean(lastCombinedId && currentRouteId === lastCombinedId)}
+                  />
+                </>
+              )}
+            >
+              <JourneyDetails
+                route={currentRoute}
+                onPointClick={handlePointClick}
+                uploading={uploading}
+                uploadLabel={uploadLabel}
+                uploadProgress={uploadProgress}
+                onUpload={handleUploadPhotos}
+                onDeletePhoto={(item) => {
+                  setPhotoToDelete(item);
+                  setDeletePhotoModalOpen(true);
+                }}
+                onViewPhoto={(id) => {
+                  setViewerMediaId(id);
+                  setPhotoViewerOpen(true);
+                }}
+              />
+            </JourneyStage>
+          )}
         </main>
       </div>
 
       <PhotoViewer
-        photos={currentRoute?.photos || []}
-        currentIndex={currentPhotoIndex}
+        photos={viewableMedia}
+        currentIndex={viewerIndex}
         open={photoViewerOpen}
         onClose={() => setPhotoViewerOpen(false)}
-        onNavigate={setCurrentPhotoIndex}
+        onNavigate={(index) => setViewerMediaId(viewableMedia[index]?.id ?? null)}
       />
 
       <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
@@ -578,7 +761,7 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
         <div className="modal-body">
           <p>Are you sure you want to delete this journey?</p>
           <div className="modal-route-name">&quot;{currentRoute?.name}&quot;</div>
-          <p>This action cannot be undone.</p>
+          <p>It will be moved to Recently Deleted and permanently removed after 7 days.</p>
         </div>
         <div className="modal-buttons">
           <button className="modal-btn modal-btn-cancel" onClick={() => setDeleteModalOpen(false)}>Cancel</button>
@@ -589,13 +772,13 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
       <Modal open={deletePhotoModalOpen} onClose={() => { setDeletePhotoModalOpen(false); }}>
         <div className="modal-header">
           <AlertCircle size={24} />
-          <h3>Delete Photo</h3>
+          <h3>Delete {isVideo(photoToDelete) ? 'Video' : 'Photo'}</h3>
         </div>
         <div className="modal-body">
-          <p>Are you sure you want to permanently delete this photo? This action cannot be undone.</p>
-          {photoToDelete && (
+          <p>Are you sure you want to permanently delete this {isVideo(photoToDelete) ? 'video' : 'photo'}? This action cannot be undone.</p>
+          {deletePreview && (
             <div className="modal-photo-preview">
-              <img src={`/photos/${photoToDelete.filename}`} alt="Photo preview" />
+              <img src={`/photos/thumb/${deletePreview}`} alt="Preview" />
             </div>
           )}
         </div>
@@ -662,6 +845,62 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
           </button>
         </div>
       </Modal>
+
+      <Modal open={combineModalOpen} onClose={() => setCombineModalOpen(false)}>
+        <div className="modal-header rename-header">
+          <Merge size={24} />
+          <h3>Combine Journeys</h3>
+        </div>
+        <div className="modal-body">
+          <p>The following {selectedForCombine.size} journeys will be merged into one, in chronological order:</p>
+          <div className="combine-preview-list">
+            {allRoutes
+              .filter(r => selectedForCombine.has(r.id))
+              .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+              .map((r, i) => (
+                <div key={r.id} className="combine-preview-item">
+                  <span className="combine-preview-num">{i + 1}.</span>
+                  <span className="combine-preview-name">{r.name}</span>
+                  <span className="combine-preview-meta">{r.distance} mi &bull; {r.duration}</span>
+                </div>
+              ))}
+          </div>
+          <p style={{ marginTop: 16 }}>Name for the combined journey:</p>
+          <input
+            type="text"
+            className="modern-input"
+            placeholder="Combined journey name..."
+            autoComplete="off"
+            value={combineNameValue}
+            onChange={(e) => setCombineNameValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCombine(); }}
+            autoFocus
+          />
+          <p style={{ fontSize: '0.85em', color: 'var(--text-tertiary)', marginTop: 12 }}>
+            A backup will be saved so you can undo this operation.
+          </p>
+        </div>
+        <div className="modal-buttons">
+          <button className="modal-btn modal-btn-cancel" onClick={() => setCombineModalOpen(false)}>Cancel</button>
+          <button className="modal-btn modal-btn-confirm" onClick={handleCombine}>
+            <span className="btn-text">Combine</span>
+            <span className="btn-loader" />
+          </button>
+        </div>
+      </Modal>
+
+      <FlightImportModal
+        open={flightImportOpen}
+        onClose={() => setFlightImportOpen(false)}
+        onImported={async (newRoute) => {
+          setFlightImportOpen(false);
+          const routes = await fetchRoutes();
+          setAllRoutes(routes);
+          routeCacheRef.current.clear();
+          fullDetailRouteIdsRef.current.clear();
+          await loadRouteWithAnimation(newRoute.id);
+        }}
+      />
     </div>
   );
 }

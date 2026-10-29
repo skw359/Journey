@@ -13,6 +13,7 @@ function detectTravelMode(avgSpeedMph) {
     const speed = parseFloat(avgSpeedMph);
     if (speed <= 7) return 'foot';
     if (speed <= 22) return 'scooter';
+    if (speed >= 150) return 'flight';
     return 'drive';
 }
 
