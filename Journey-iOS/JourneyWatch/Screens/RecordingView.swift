@@ -1,0 +1,77 @@
+import SwiftUI
+import CoreLocation
+import WatchKit
+
+struct RecordingView: View {
+    @ObservedObject var recorder: JourneyRecorder
+    @EnvironmentObject var userSettings: UserSettings
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // SignalStrengthElement (top left)
+                signalStrengthElement
+                    .position(x: geometry.size.width * 0.12, y: geometry.size.height * 0.19)
+
+                RecordingIndicator()
+                    .position(x: WKInterfaceDevice.current().screenBounds.width == 198.0 ?
+                              (geometry.size.width * 0.12 + 29 + 50) :
+                                geometry.size.width / 2,
+                              y: geometry.size.height * 0.064)
+
+                // LiveCoreStatistics (centered)
+                LiveCoreStatistics(recorder: recorder)
+                    .environmentObject(userSettings)
+                    .position(x: geometry.size.width / 2, y: geometry.size.height / 2.2)
+
+                // LocationNameElement
+                LocationNameElement(recorder: recorder)
+                    .position(x: geometry.size.width / 2, y: geometry.size.height * 0.2)
+
+                // ElevationElement (bottom left)
+                ElevationElement(recorder: recorder)
+                    .frame(width: geometry.size.width * 0.4)
+                    .position(x: geometry.size.width * 0.20, y: geometry.size.height * 0.8)
+
+                // TotalTimeElement (bottom right)
+                GeometryReader { geometry in
+                    TotalTimeElement(recorder: recorder)
+                        .frame(maxWidth: geometry.size.width * 0.4, alignment: .trailing)
+                        .position(x: min(geometry.size.width * 0.75, geometry.size.width - geometry.size.width * 0.2), y: geometry.size.height * 0.8)
+                }
+                pauseOverlay(size: geometry.size)
+                    .opacity(recorder.paused ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.35), value: recorder.paused)
+                    .allowsHitTesting(recorder.paused)
+            }
+        }
+        .edgesIgnoringSafeArea(.all)
+    }
+
+    private func pauseOverlay(size: CGSize) -> some View {
+        ZStack {
+            Color.black.opacity(0.95)
+
+            VStack(spacing: 20) {
+                Image(systemName: "pause.circle.fill")
+                    .font(.system(size: size.width * 0.2))
+                    .foregroundColor(.white)
+
+                Text("Journey Paused")
+                    .font(.system(size: size.width * 0.08, weight: .bold))
+                    .foregroundColor(.white)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .position(x: size.width / 2, y: size.height / 2)
+    }
+
+    private var signalStrengthElement: some View {
+        Group {
+            if let accuracy = recorder.gpsAccuracy {
+                SignalStrengthElement(accuracy: accuracy)
+                    .frame(width: 50, height: 20)
+            }
+        }
+    }
+}

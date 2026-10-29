@@ -36,6 +36,7 @@ logs/
 *.sln
 *.sw?
 .claude/
+xcuserdata/
 
 # Project specific
 uploads/
@@ -59,3 +60,4 @@ documentation/PI-NGINX-UPLOADS.md
 client/loginmockup.html
 LOADING_BAR_EXPLANATION.md
 map-regular.png
+Journey-iOS/Journey/JourneyConfig.plist

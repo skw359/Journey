@@ -1,0 +1,728 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1BACF3B42F7B841C007FD1E0 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001AAAA000100000001 /* ZIPFoundation */; };
+		1BACF3B52F7B841C007FD1E0 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = BB000040BBBB004000000001 /* ZIPFoundation */; };
+		BB000021BBBB002100000001 /* JourneyWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = BB000011BBBB001100000001 /* JourneyWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CC000021CCCC002100000001 /* JourneyLiveActivityExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = CC000011CCCC001100000001 /* JourneyLiveActivityExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BB000001BBBB000100000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1B23C50D2F7B62B30076BC81 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB000010BBBB001000000001;
+			remoteInfo = "JourneyWatch Watch App";
+		};
+		CC000001CCCC000100000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1B23C50D2F7B62B30076BC81 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CC000010CCCC001000000001;
+			remoteInfo = JourneyLiveActivityExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BB000020BBBB002000000001 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				BB000021BBBB002100000001 /* JourneyWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC000020CCCC002000000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CC000021CCCC002100000001 /* JourneyLiveActivityExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		1B23C5152F7B62B30076BC81 /* Journey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Journey.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB000011BBBB001100000001 /* JourneyWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "JourneyWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CC000011CCCC001100000001 /* JourneyLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JourneyLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		1B23C5172F7B62B30076BC81 /* Journey */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Journey;
+			sourceTree = "<group>";
+		};
+		BB000012BBBB001200000001 /* JourneyWatch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = JourneyWatch;
+			sourceTree = "<group>";
+		};
+		CC000101CCCC010100000001 /* JourneyShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = JourneyShared;
+			sourceTree = "<group>";
+		};
+		CC000102CCCC010200000001 /* JourneyLiveActivityExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = JourneyLiveActivityExtension;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1B23C5122F7B62B30076BC81 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1BACF3B42F7B841C007FD1E0 /* ZIPFoundation in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000013BBBB001300000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1BACF3B52F7B841C007FD1E0 /* ZIPFoundation in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC000013CCCC001300000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1B23C50C2F7B62B30076BC81 = {
+			isa = PBXGroup;
+			children = (
+				1B23C5172F7B62B30076BC81 /* Journey */,
+				CC000101CCCC010100000001 /* JourneyShared */,
+				CC000102CCCC010200000001 /* JourneyLiveActivityExtension */,
+				BB000012BBBB001200000001 /* JourneyWatch */,
+				1B23C5162F7B62B30076BC81 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1B23C5162F7B62B30076BC81 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1B23C5152F7B62B30076BC81 /* Journey.app */,
+				CC000011CCCC001100000001 /* JourneyLiveActivityExtension.appex */,
+				BB000011BBBB001100000001 /* JourneyWatch Watch App.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1B23C5142F7B62B30076BC81 /* Journey */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B23C5202F7B62B40076BC81 /* Build configuration list for PBXNativeTarget "Journey" */;
+			buildPhases = (
+				1B23C5112F7B62B30076BC81 /* Sources */,
+				1B23C5122F7B62B30076BC81 /* Frameworks */,
+				1B23C5132F7B62B30076BC81 /* Resources */,
+				CC000020CCCC002000000001 /* Embed App Extensions */,
+				BB000020BBBB002000000001 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CC000002CCCC000200000001 /* PBXTargetDependency */,
+				BB000002BBBB000200000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				1B23C5172F7B62B30076BC81 /* Journey */,
+				CC000101CCCC010100000001 /* JourneyShared */,
+			);
+			name = Journey;
+			packageProductDependencies = (
+				AA000001AAAA000100000001 /* ZIPFoundation */,
+			);
+			productName = Journey;
+			productReference = 1B23C5152F7B62B30076BC81 /* Journey.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BB000010BBBB001000000001 /* JourneyWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB000030BBBB003000000001 /* Build configuration list for PBXNativeTarget "JourneyWatch Watch App" */;
+			buildPhases = (
+				BB000014BBBB001400000001 /* Sources */,
+				BB000013BBBB001300000001 /* Frameworks */,
+				BB000015BBBB001500000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				BB000012BBBB001200000001 /* JourneyWatch */,
+			);
+			name = "JourneyWatch Watch App";
+			packageProductDependencies = (
+				BB000040BBBB004000000001 /* ZIPFoundation */,
+			);
+			productName = "JourneyWatch Watch App";
+			productReference = BB000011BBBB001100000001 /* JourneyWatch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CC000010CCCC001000000001 /* JourneyLiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CC000030CCCC003000000001 /* Build configuration list for PBXNativeTarget "JourneyLiveActivityExtension" */;
+			buildPhases = (
+				CC000014CCCC001400000001 /* Sources */,
+				CC000013CCCC001300000001 /* Frameworks */,
+				CC000015CCCC001500000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CC000101CCCC010100000001 /* JourneyShared */,
+				CC000102CCCC010200000001 /* JourneyLiveActivityExtension */,
+			);
+			name = JourneyLiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = JourneyLiveActivityExtension;
+			productReference = CC000011CCCC001100000001 /* JourneyLiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1B23C50D2F7B62B30076BC81 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2640;
+				LastUpgradeCheck = 2640;
+				TargetAttributes = {
+					1B23C5142F7B62B30076BC81 = {
+						CreatedOnToolsVersion = 26.4;
+					};
+					BB000010BBBB001000000001 = {
+						CreatedOnToolsVersion = 26.4;
+					};
+					CC000010CCCC001000000001 = {
+						CreatedOnToolsVersion = 26.4;
+					};
+				};
+			};
+			buildConfigurationList = 1B23C5102F7B62B30076BC81 /* Build configuration list for PBXProject "Journey" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1B23C50C2F7B62B30076BC81;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA000002AAAA000200000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 1B23C5162F7B62B30076BC81 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1B23C5142F7B62B30076BC81 /* Journey */,
+				CC000010CCCC001000000001 /* JourneyLiveActivityExtension */,
+				BB000010BBBB001000000001 /* JourneyWatch Watch App */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1B23C5132F7B62B30076BC81 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000015BBBB001500000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC000015CCCC001500000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1B23C5112F7B62B30076BC81 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000014BBBB001400000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CC000014CCCC001400000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BB000002BBBB000200000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB000010BBBB001000000001 /* JourneyWatch Watch App */;
+			targetProxy = BB000001BBBB000100000001 /* PBXContainerItemProxy */;
+		};
+		CC000002CCCC000200000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CC000010CCCC001000000001 /* JourneyLiveActivityExtension */;
+			targetProxy = CC000001CCCC000100000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1B23C51E2F7B62B40076BC81 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		1B23C51F2F7B62B40076BC81 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		1B23C5212F7B62B40076BC81 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Journey-Info.plist";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Journey needs camera access to scan QR codes for server pairing.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = Journey;
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Journey uses Health data to save your recorded workouts.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Journey needs continuous location access to record your journey even when the app is in the background.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Journey uses your location to record routes and display your current position.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = location;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mason.Journey;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		1B23C5222F7B62B40076BC81 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Journey-Info.plist";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Journey needs camera access to scan QR codes for server pairing.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = Journey;
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Journey uses Health data to save your recorded workouts.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Journey needs continuous location access to record your journey even when the app is in the background.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Journey uses your location to record routes and display your current position.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = location;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mason.Journey;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		BB000031BBBB003100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "JourneyWatch/JourneyWatchApp Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = JourneyWatch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Journey uses Health data to display your workout information.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Journey uses Health data to save your recorded workouts.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "needed for app";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = f;
+				INFOPLIST_KEY_NSLocationUsageDescription = "needed for app";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "needed fo";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.mason.Journey;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mason.Journey.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.4;
+			};
+			name = Debug;
+		};
+		BB000032BBBB003200000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "JourneyWatch/JourneyWatchApp Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = JourneyWatch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Journey uses Health data to display your workout information.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Journey uses Health data to save your recorded workouts.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "needed for app";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = f;
+				INFOPLIST_KEY_NSLocationUsageDescription = "needed for app";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "needed fo";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.mason.Journey;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mason.Journey.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 11.4;
+			};
+			name = Release;
+		};
+		CC000031CCCC003100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/JourneyLiveActivityExtension-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mason.Journey.LiveActivityExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		CC000032CCCC003200000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 83XNM4XSJB;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/JourneyLiveActivityExtension-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mason.Journey.LiveActivityExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1B23C5102F7B62B30076BC81 /* Build configuration list for PBXProject "Journey" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B23C51E2F7B62B40076BC81 /* Debug */,
+				1B23C51F2F7B62B40076BC81 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1B23C5202F7B62B40076BC81 /* Build configuration list for PBXNativeTarget "Journey" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B23C5212F7B62B40076BC81 /* Debug */,
+				1B23C5222F7B62B40076BC81 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB000030BBBB003000000001 /* Build configuration list for PBXNativeTarget "JourneyWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB000031BBBB003100000001 /* Debug */,
+				BB000032BBBB003200000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CC000030CCCC003000000001 /* Build configuration list for PBXNativeTarget "JourneyLiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CC000031CCCC003100000001 /* Debug */,
+				CC000032CCCC003200000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA000002AAAA000200000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.19;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA000001AAAA000100000001 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000002AAAA000200000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+		BB000040BBBB004000000001 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000002AAAA000200000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 1B23C50D2F7B62B30076BC81 /* Project object */;
+}
