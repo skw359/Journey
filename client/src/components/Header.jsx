@@ -31,6 +31,7 @@ export default function Header({ onToggleSidebar, showSearch, searchValue, onSea
       clearTimeout(closeProfileMenuTimeoutRef.current);
       closeProfileMenuTimeoutRef.current = null;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- close the menu on navigation
     setProfileMenuOpen(false);
   }, [location.pathname]);
 

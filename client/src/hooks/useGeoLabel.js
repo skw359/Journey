@@ -57,6 +57,7 @@ export default function useGeoLabel(currentRoute) {
     const endCoord = currentRoute?.endCoord;
 
     if (!startCoord || !endCoord) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when the route has no endpoints
       setLabel(null);
       setLoading(false);
       return;

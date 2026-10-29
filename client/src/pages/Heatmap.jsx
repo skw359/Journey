@@ -46,32 +46,6 @@ export default function Heatmap() {
   const allDataRef = useRef([]);
   const loaderRef = useRef(null);
 
-  useEffect(() => {
-    if (mapInstanceRef.current) return;
-    const map = L.map(mapRef.current).setView([39.8283, -98.5795], 5);
-    mapInstanceRef.current = map;
-    tileLayerRef.current = L.tileLayer(tileUrl, {
-      attribution: TILE_ATTRIBUTION, subdomains: 'abcd', maxZoom: 20,
-    }).addTo(map);
-
-    loadData();
-
-    return () => { map.remove(); mapInstanceRef.current = null; };
-  }, []);
-
-  useEffect(() => {
-    tileLayerRef.current?.setUrl(tileUrl);
-  }, [tileUrl]);
-
-  useEffect(() => {
-    if (mapInstanceRef.current) {
-      const timer = setTimeout(() => {
-        mapInstanceRef.current.invalidateSize();
-      }, 350);
-      return () => clearTimeout(timer);
-    }
-  }, [sidebarCollapsed]);
-
   const calculateAcceleration = (points) => {
     return points.map((point, i) => {
       if (i > 0 && i < points.length - 1) {
@@ -162,6 +136,33 @@ export default function Heatmap() {
     setMode('density'); setGradient('heat');
     updateHeatmap(allDataRef.current);
   };
+
+  useEffect(() => {
+    if (mapInstanceRef.current) return;
+    const map = L.map(mapRef.current).setView([39.8283, -98.5795], 5);
+    mapInstanceRef.current = map;
+    tileLayerRef.current = L.tileLayer(tileUrl, {
+      attribution: TILE_ATTRIBUTION, subdomains: 'abcd', maxZoom: 20,
+    }).addTo(map);
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch once the map exists
+    loadData();
+
+    return () => { map.remove(); mapInstanceRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    tileLayerRef.current?.setUrl(tileUrl);
+  }, [tileUrl]);
+
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      const timer = setTimeout(() => {
+        mapInstanceRef.current.invalidateSize();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (allDataRef.current.length > 0) {

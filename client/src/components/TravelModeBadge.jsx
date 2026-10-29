@@ -1,32 +1,10 @@
-import { Footprints, Bike, Car, Circle, Plane, TrainFront, TrainFrontTunnel } from 'lucide-react';
+import { Circle } from 'lucide-react';
+import { MODE_CONFIG, getTravelModeLabel } from '../utils/travelModes';
 import './TravelModeBadge.css';
 
-const MODE_CONFIG = {
-  foot: { icon: Footprints, label: 'Foot' },
-  scooter: { icon: Bike, label: 'Micromobility' },
-  drive: { icon: Car, label: 'Drive' },
-  train: { icon: TrainFront, label: 'Train' },
-  metro: { icon: TrainFrontTunnel, label: 'Metro' },
-  flight: { icon: Plane, label: 'Flight' },
-};
-
-export function getTravelModeIcon(mode) {
-  return MODE_CONFIG[mode]?.icon || Circle;
-}
-
-export function getTravelModeLabel(mode, variant) {
-  if (variant === 'topjourneys') {
-    switch (mode) {
-      case 'foot': return 'Walk/Run';
-      case 'scooter': return 'Scooter/Bike';
-      case 'drive': return 'Drive';
-      case 'train': return 'Train';
-      case 'metro': return 'Metro';
-      case 'flight': return 'Flight';
-      default: return 'Unknown';
-    }
-  }
-  return MODE_CONFIG[mode]?.label || 'Unknown';
+export function TravelModeIcon({ mode, ...props }) {
+  const Icon = MODE_CONFIG[mode]?.icon || Circle;
+  return <Icon {...props} />;
 }
 
 export default function TravelModeBadge({ mode, clickable, onClick, variant }) {

@@ -55,7 +55,10 @@ function MetaLine({ meta, stopped }) {
 function MarcoProse({ text, streaming, settled, spinCycle, error, onSpinnerTurn }) {
   const hostRef = useRef(null);
   const turnRef = useRef(onSpinnerTurn);
-  turnRef.current = onSpinnerTurn;
+
+  useLayoutEffect(() => {
+    turnRef.current = onSpinnerTurn;
+  });
 
   useLayoutEffect(() => {
     const host = hostRef.current;

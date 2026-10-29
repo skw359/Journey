@@ -389,7 +389,7 @@ function AssertionsSection({ assertions }) {
   assertions.forEach(a => counts[a.status]++);
 
   const times = useMemo(() =>
-    assertions.map(a => a.status === 'skip' ? '\u2014' : `${(Math.random() * 4 + 0.5).toFixed(1)}ms`),
+    assertions.map((a, i) => a.status === 'skip' ? '\u2014' : `${(((i * 17) % 40) / 10 + 0.5).toFixed(1)}ms`),
     [assertions]
   );
 

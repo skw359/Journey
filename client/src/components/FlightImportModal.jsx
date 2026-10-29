@@ -58,6 +58,7 @@ export default function FlightImportModal({ open, onClose, onImported }) {
   // Reset on close
   useEffect(() => {
     if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- parent owns `open`; clear the form when it closes
       setStep(STEPS.SEARCH);
       setDeparture('');
       setArrival('');
@@ -169,7 +170,7 @@ export default function FlightImportModal({ open, onClose, onImported }) {
         arrivalTime: flight.arrival.time,
       });
       setTrackData(track);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load flight track');
       setStep(STEPS.RESULTS);
     }
@@ -256,11 +257,6 @@ export default function FlightImportModal({ open, onClose, onImported }) {
     if (!isoStr) return '--';
     const d = new Date(isoStr);
     return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  };
-
-  const formatFlightDate = (isoStr) => {
-    if (!isoStr) return '';
-    return new Date(isoStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   const goBack = () => {
