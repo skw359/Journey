@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Map as MapIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import VisualCanvas from './VisualCanvas';
@@ -54,7 +53,7 @@ export default function Login() {
 
         <div className="form-side">
           <div className="logo">
-            <MapIcon size={18} strokeWidth={2.2} aria-hidden="true" />
+            <img src="/logo.png" alt="" aria-hidden="true" width={18} height={18} />
             <span>Journey</span>
           </div>
 
@@ -104,8 +103,15 @@ export default function Login() {
               </button>
             </div>
 
-            <button className="btn-primary" type="submit" disabled={loading}>
-              {loading ? 'Logging in...' : 'Log in'}
+            <button
+              className={`btn-primary${loading ? ' is-loading' : ''}`}
+              type="submit"
+              disabled={loading}
+              aria-busy={loading}
+              aria-label={loading ? 'Logging in' : undefined}
+            >
+              <span className="btn-label">Log in</span>
+              {loading && <span className="btn-spinner" aria-hidden="true" />}
             </button>
           </form>
 

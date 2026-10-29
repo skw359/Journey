@@ -1,0 +1,186 @@
+.journey-stage {
+  /* Width the floating journey list covers on the left, so centred and
+     padded content can stay clear of it */
+  --stage-left-inset: 0px;
+  position: absolute;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-primary);
+  transition: opacity 0.3s ease-in-out;
+  opacity: 1;
+}
+.journey-stage.with-sidebar {
+  /* .route-list-container.floating: 16px from the edge, then 320px of
+     content + 16px padding + 1px border on each side */
+  --stage-left-inset: 370px;
+}
+.journey-stage.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Map: one full screen tall, fading into the details below */
+.journey-hero {
+  --hero-fade-height: clamp(80px, 14%, 140px);
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Subtle parallax: as the page scrolls, the map drifts up at 70% of the
+   page's speed. Where the browser can tie an animation to scrolling it runs
+   off the main thread; elsewhere JourneyStage sets --hero-parallax. Only the
+   map itself moves: the fade, weather badge and measuring bar stay put. */
+@media (prefers-reduced-motion: no-preference) {
+  .journey-hero .map-container > #map {
+    transform: translate3d(0, var(--hero-parallax, 0px), 0);
+  }
+  @supports (animation-timeline: scroll()) {
+    .journey-stage {
+      scroll-timeline: --journey-scroll block;
+    }
+    .journey-hero .map-container > #map {
+      animation: journey-map-parallax linear both;
+      animation-timeline: --journey-scroll;
+      animation-range: 0 100vh;
+    }
+  }
+}
+@keyframes journey-map-parallax {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, 30vh, 0); }
+}
+
+.journey-hero-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--hero-fade-height);
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.35) 35%,
+    rgba(0, 0, 0, 0.8) 70%,
+    #000 100%
+  );
+}
+[data-theme="light"] .journey-hero-fade {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.4) 35%,
+    rgba(255, 255, 255, 0.85) 70%,
+    #fff 100%
+  );
+}
+
+/* The map, controls included, sits beneath the fade, so the map credits move
+   from the bottom corner to just above it. A fullscreen map has no fade. */
+.journey-hero .ol-attribution {
+  bottom: calc(var(--hero-fade-height) + 0.5em);
+}
+.journey-hero #map:fullscreen .ol-attribution {
+  bottom: 0.5em;
+}
+
+/* The header's first line (travel mode, date and time) runs where the
+   weather badge used to sit, so the badge moves to the bottom right of the
+   map, clear of the header at any width, with its popups opening upwards. */
+.journey-hero .map-container.fullscreen .weather-badge.weather-overlay {
+  top: auto;
+  left: auto;
+  bottom: 72px;
+  right: 24px;
+}
+.journey-hero .weather-overlay .weather-tooltip,
+.journey-hero .weather-overlay .sounding-panel {
+  top: auto;
+  bottom: calc(100% + 6px);
+  left: auto;
+  right: 0;
+}
+
+/* Touch screens can't wheel past the map, and dragging it pans; the faded
+   strip is where a swipe scrolls down to the details instead. */
+@media (hover: none) {
+  .journey-hero-fade { pointer-events: auto; }
+}
+
+.journey-scroll-cue {
+  position: absolute;
+  bottom: 20px;
+  left: calc(var(--stage-left-inset) + (100% - var(--stage-left-inset)) / 2);
+  transform: translateX(-50%);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px 7px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: var(--font-family-sans);
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: opacity 0.25s ease, background 0.2s ease, color 0.2s ease;
+}
+.journey-scroll-cue:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.journey-scroll-cue svg {
+  animation: journey-cue-bob 2.2s ease-in-out infinite;
+}
+@keyframes journey-cue-bob {
+  0%, 100% { transform: translateY(-1px); }
+  50% { transform: translateY(2px); }
+}
+[data-theme="light"] .journey-scroll-cue {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-secondary);
+}
+[data-theme="light"] .journey-scroll-cue:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+.journey-stage.is-scrolled .journey-scroll-cue,
+.journey-stage.is-measuring .journey-scroll-cue {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.journey-stage-details {
+  position: relative;
+  padding: 8px 32px 72px calc(var(--stage-left-inset) + 32px);
+}
+
+@media (max-width: 680px) {
+  /* The list covers most of a phone screen; content runs full width beneath
+     it and the list is collapsed to read it. */
+  .journey-stage.with-sidebar { --stage-left-inset: 0px; }
+  .journey-stage-details { padding: 8px 16px 56px; }
+  .journey-hero .map-container.fullscreen .weather-badge.weather-overlay {
+    right: 14px;
+  }
+  /* The measuring bar takes two rows here and would run into it */
+  .journey-stage.is-measuring .weather-badge.weather-overlay {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-scroll-cue svg { animation: none; }
+}

@@ -10,6 +10,8 @@ const loadApiDocs = () => import('./pages/ApiDocs');
 const loadSettings = () => import('./pages/Settings');
 const loadPairClient = () => import('./pages/PairClient');
 const loadFunStats = () => import('./pages/FunStats');
+const loadRecentlyDeleted = () => import('./pages/RecentlyDeleted');
+const loadMarco = () => import('./pages/Marco');
 
 const Dashboard = lazy(loadDashboard);
 const TopJourneys = lazy(loadTopJourneys);
@@ -18,6 +20,8 @@ const ApiDocs = lazy(loadApiDocs);
 const Settings = lazy(loadSettings);
 const PairClient = lazy(loadPairClient);
 const FunStats = lazy(loadFunStats);
+const RecentlyDeleted = lazy(loadRecentlyDeleted);
+const Marco = lazy(loadMarco);
 
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
@@ -41,6 +45,8 @@ function getSidebarRouteKey(pathname) {
       return 'topjourneys';
     case '/atlas':
       return 'atlas';
+    case '/recently-deleted':
+      return 'recentlyDeleted';
     default:
       return null;
   }
@@ -66,6 +72,10 @@ function preloadRoute(pathname) {
       return loadPairClient();
     case '/funstats':
       return loadFunStats();
+    case '/recently-deleted':
+      return loadRecentlyDeleted();
+    case '/marco':
+      return loadMarco();
     default:
       return loadDashboard();
   }
@@ -81,6 +91,7 @@ export default function App() {
     journeys: false,
     topjourneys: false,
     atlas: false,
+    recentlyDeleted: false,
   });
   const exitTimeoutRef = useRef(null);
   const enterTimeoutRef = useRef(null);
@@ -185,7 +196,7 @@ export default function App() {
     <div className={transitionClass}>
       <Header
         onToggleSidebar={onToggleSidebar}
-        showSearch={displayedPath === '/journeys'}
+        showSearch={displayedPath === '/journeys' || displayedPath === '/recently-deleted'}
         searchValue={searchValue}
         onSearchChange={setSearchValue}
       />
@@ -205,7 +216,12 @@ export default function App() {
               <Route path="/heatmap" element={<Navigate to="/atlas?view=heatmap" replace />} />
               <Route path="/alltime" element={<Navigate to="/atlas" replace />} />
               <Route path="/atlas" element={<Atlas sidebarCollapsed={sidebarCollapsed.atlas} />} />
+              <Route
+                path="/recently-deleted"
+                element={<RecentlyDeleted sidebarCollapsed={sidebarCollapsed.recentlyDeleted} searchValue={searchValue} />}
+              />
               <Route path="/funstats" element={<FunStats />} />
+              <Route path="/marco" element={<Marco />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/pair" element={<PairClient />} />
               <Route path="/api.html" element={<ApiDocs />} />

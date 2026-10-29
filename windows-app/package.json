@@ -1,0 +1,24 @@
+{
+  "name": "journey-windows",
+  "productName": "Journey",
+  "version": "1.0.0",
+  "description": "Journey — the first-class timeline platform, as a native Windows app",
+  "private": true,
+  "main": "src/main/main.js",
+  "author": "Journey",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build:renderer": "node scripts/build-renderer.mjs",
+    "build:icon": "python scripts/make-icon.py",
+    "pack": "npm run build:renderer && electron-builder --win --dir",
+    "dist": "npm run build:renderer && electron-builder --win",
+    "test": "node --test tests/*.test.js",
+    "test:smoke": "electron tests/electron-smoke.js"
+  },
+  "devDependencies": {
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3"
+  }
+}

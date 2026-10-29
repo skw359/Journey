@@ -1,8 +1,14 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useUnits } from '../context/UnitsContext';
 import { formatCompactDurationMs } from '../utils/formatters';
 import { reverseGeocode } from '../api/geocode';
+import { Line, Bar } from 'react-chartjs-2';
+import { Chart as ChartJS, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler, Legend, BarElement } from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
+import USStateMap from '../components/USStateMap';
 import './FunStats.css';
+
+ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler, Legend, BarElement, zoomPlugin);
 
 function formatHour(h) {
   if (h === 0) return '12 AM';
@@ -34,6 +40,98 @@ function formatSigned(value, digits = 1) {
   return value.toFixed(digits);
 }
 
+function getAccentRgba(alpha = 1) {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary').trim();
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.fillStyle = raw;
+  const hex = ctx.fillStyle; // normalised to #rrggbb
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function createTempChartOptions(timeline, expanded = false) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: {
+        top: expanded ? 16 : 12,
+        right: expanded ? 16 : 12,
+        bottom: expanded ? 8 : 4,
+        left: expanded ? 8 : 4,
+      },
+    },
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        labels: {
+          padding: expanded ? 20 : 14,
+          color: 'rgba(255,255,255,0.6)',
+          font: { size: expanded ? 12 : 11 },
+        },
+      },
+      tooltip: {
+        callbacks: {
+          title: (items) => {
+            const idx = items[0]?.dataIndex;
+            if (idx != null && timeline[idx]) {
+              return timeline[idx].name;
+            }
+            return items[0]?.label;
+          },
+        },
+      },
+      zoom: {
+        pan: {
+          enabled: true,
+          mode: 'x',
+          threshold: 2,
+        },
+        zoom: {
+          wheel: { enabled: true, speed: 0.1 },
+          pinch: { enabled: true },
+          drag: {
+            enabled: true,
+            backgroundColor: getAccentRgba(0.15),
+            borderColor: getAccentRgba(0.5),
+            borderWidth: 1,
+            modifierKey: 'shift',
+          },
+          mode: 'x',
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          maxTicksLimit: expanded ? 14 : 8,
+          color: 'rgba(255,255,255,0.5)',
+          font: { size: expanded ? 12 : 11 },
+          maxRotation: 0,
+          padding: expanded ? 8 : 6,
+        },
+        grid: { display: false },
+      },
+      y: {
+        ticks: {
+          color: 'rgba(255,255,255,0.5)',
+          font: { size: expanded ? 12 : 11 },
+          callback: (value) => `${value}\u00B0`,
+          padding: expanded ? 10 : 8,
+          maxTicksLimit: expanded ? 10 : 7,
+        },
+        grid: { color: 'rgba(255,255,255,0.06)' },
+        grace: '10%',
+      },
+    },
+  };
+}
+
 const STATE_NAMES = {
   AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',
   CT:'Connecticut',DE:'Delaware',DC:'D.C.',FL:'Florida',GA:'Georgia',HI:'Hawaii',
@@ -46,14 +144,130 @@ const STATE_NAMES = {
   WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
 };
 
+const BACKFILL_POLL_MS = 3000;
+
+// The backfill job lives on the server; this only mirrors it, so a reload or a
+// second tab picks up a run already in progress.
+function useGeoBackfill(kind, onFinished) {
+  const [status, setStatus] = useState(null);
+  const running = Boolean(status?.job);
+  const onFinishedRef = useRef(onFinished);
+  const wasRunningRef = useRef(false);
+
+  useEffect(() => { onFinishedRef.current = onFinished; }, [onFinished]);
+
+  const request = useCallback((path, method = 'GET') => (
+    fetch(`/api/routes/${path}`, { method, credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(s => { if (s && typeof s.total === 'number') setStatus(s); })
+      .catch(() => {})
+  ), []);
+
+  useEffect(() => { request(`${kind}-status`); }, [kind, request]);
+
+  useEffect(() => {
+    if (!running) return undefined;
+    const timer = setInterval(() => request(`${kind}-status`), BACKFILL_POLL_MS);
+    return () => clearInterval(timer);
+  }, [kind, running, request]);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !running) onFinishedRef.current?.();
+    wasRunningRef.current = running;
+  }, [running]);
+
+  const start = useCallback(() => request(`backfill-${kind}`, 'POST'), [kind, request]);
+  const stop = useCallback(() => request(`backfill-${kind}/stop`, 'POST'), [kind, request]);
+  const reindex = useCallback(() => {
+    if (!window.confirm(`This will recompute ${kind} for all routes. Continue?`)) return;
+    fetch(`/api/routes/reindex-${kind}`, { method: 'POST', credentials: 'include' })
+      .then(r => { if (r.ok) start(); })
+      .catch(() => {});
+  }, [kind, start]);
+
+  return { status, running, start, stop, reindex };
+}
+
+function GeoBackfillStatus({ kind, backfill }) {
+  const { status, running, start, stop, reindex } = backfill;
+  if (!status) return null;
+  const label = kind === 'cities' ? 'Cities' : 'Places';
+  const { job } = status;
+
+  if (!running && status.remaining === 0) {
+    return (
+      <button className="funstats-reindex-btn" onClick={reindex}>
+        Reindex {label}
+      </button>
+    );
+  }
+
+  const current = job?.current;
+  const partial = current?.points > 0 ? current.pointsDone / current.points : 0;
+  const pct = status.total > 0 ? Math.min(100, (status.processed + partial) / status.total * 100) : 0;
+
+  let detail = null;
+  if (job?.stopping) {
+    detail = 'Stopping…';
+  } else if (job?.retryInMs != null) {
+    detail = `Geocoder unreachable, retrying in ${Math.max(1, Math.ceil(job.retryInMs / 1000))}s`;
+  } else if (current) {
+    detail = `${current.name || 'Untitled journey'} · ${current.pointsDone.toLocaleString()} / ${current.points.toLocaleString()} points`;
+  }
+
+  return (
+    <div className="funstats-backfill">
+      <div className="funstats-backfill-status">
+        {running && <span className="funstats-backfill-spinner" />}
+        {running
+          ? `Geocoding ${kind}: ${status.processed.toLocaleString()} / ${status.total.toLocaleString()} routes processed`
+          : `${status.remaining.toLocaleString()} route${status.remaining !== 1 ? 's' : ''} not yet geocoded`
+        }
+      </div>
+      <div className="funstats-challenge-bar-wrap">
+        <div className="funstats-challenge-bar" style={{ width: `${pct}%` }} />
+      </div>
+      {running && (
+        <>
+          {detail && <div className="funstats-backfill-detail">{detail}</div>}
+          <div className="funstats-backfill-note">Runs on the server, so it keeps going if you close this page.</div>
+          {!job.stopping && (
+            <button className="funstats-reindex-btn" onClick={stop}>Stop</button>
+          )}
+        </>
+      )}
+      {!running && (
+        <button className="funstats-backfill-btn" onClick={start}>
+          Compute {label}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function FunStats() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { convertDistance, convertSpeed, distanceUnit, speedUnit } = useUnits();
+  const [isTempChartExpanded, setIsTempChartExpanded] = useState(false);
+  const [tempChartClosing, setTempChartClosing] = useState(false);
+  const { convertDistance, convertSpeed, convertTemperature, distanceUnit, speedUnit, temperatureUnit } = useUnits();
+
+  const openTempChart = () => { setTempChartClosing(false); setIsTempChartExpanded(true); };
+  const closeTempChart = useCallback(() => {
+    setTempChartClosing(true);
+    setTimeout(() => { setIsTempChartExpanded(false); setTempChartClosing(false); }, 250);
+  }, []);
+  const handleTempChartKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openTempChart();
+    }
+  };
 
   const [geoLabels, setGeoLabels] = useState(new Map());
   const geoCacheRef = useRef(new Map());
+  const expandedTempChartRef = useRef(null);
 
   useEffect(() => {
     fetch('/api/fun-stats', { credentials: 'include' })
@@ -62,6 +276,16 @@ export default function FunStats() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const reloadStats = useCallback(() => {
+    fetch('/api/fun-stats', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(stats => { if (stats) setData(stats); })
+      .catch(() => {});
+  }, []);
+
+  const citiesBackfill = useGeoBackfill('cities', reloadStats);
+  const placesBackfill = useGeoBackfill('places', reloadStats);
 
   useEffect(() => {
     if (!data) return;
@@ -106,6 +330,72 @@ export default function FunStats() {
     });
   }, [data]);
 
+  useEffect(() => {
+    if (!isTempChartExpanded) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeTempChart();
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isTempChartExpanded, closeTempChart]);
+
+  const ct = (f) => convertTemperature(f);
+  const tempTimeline = data?.weather?.tempTimeline ?? [];
+
+  // Temperature timeline chart data
+  const tempChartData = useMemo(() => {
+    if (!tempTimeline.length) return null;
+    return {
+      labels: tempTimeline.map(t => {
+        const d = new Date(t.date + 'T00:00:00');
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      }),
+      datasets: [
+        {
+          label: `Temperature (${temperatureUnit})`,
+          data: tempTimeline.map(t => Number(ct(t.temp)?.toFixed(1))),
+          borderColor: getAccentRgba(0.9),
+          backgroundColor: getAccentRgba(0.1),
+          fill: true,
+          tension: 0.3,
+          pointRadius: tempTimeline.length > 60 ? 0 : 2,
+          pointHoverRadius: 4,
+          borderWidth: 1.5,
+        },
+        ...(tempTimeline.some(t => t.feelsLike != null) ? [{
+          label: `Feels Like (${temperatureUnit})`,
+          data: tempTimeline.map(t => t.feelsLike != null ? Number(ct(t.feelsLike)?.toFixed(1)) : null),
+          borderColor: 'rgba(100, 180, 255, 0.7)',
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          borderWidth: 1,
+          borderDash: [4, 3],
+        }] : []),
+      ],
+    };
+  }, [tempTimeline, temperatureUnit]);
+
+  const tempChartOptions = useMemo(() => createTempChartOptions(tempTimeline), [tempTimeline]);
+  const expandedTempChartOptions = useMemo(() => createTempChartOptions(tempTimeline, true), [tempTimeline]);
+
+  // Comfort zone: max bucket for bar scaling
+  const tempBucketMax = data?.weather?.tempBuckets?.length > 0
+    ? Math.max(...data.weather.tempBuckets.map(b => b.count))
+    : 1;
+
   if (loading) {
     return (
       <div id="main-app" className="settings-page">
@@ -145,7 +435,7 @@ export default function FunStats() {
   const cd = (miles) => convertDistance(miles);
   const cs = (mph) => convertSpeed(mph);
   const seasonLabel = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-  const modeLabel = (m) => m === 'drive' ? 'Driving' : m === 'scooter' ? 'Scooter' : 'Walking';
+  const modeLabel = (m) => m === 'drive' ? 'Driving' : m === 'scooter' ? 'Scooter' : m === 'train' ? 'Train' : m === 'metro' ? 'Metro' : 'Walking';
   const habitInsights = data.habitInsights || {};
   const routineExplorerIndex = habitInsights.routineExplorer?.index;
   const routineExplorerLabel = !Number.isFinite(routineExplorerIndex)
@@ -186,6 +476,9 @@ export default function FunStats() {
   const chartMax = data.monthlyChart?.length > 0
     ? Math.max(...data.monthlyChart.map(m => m.distanceMiles))
     : 1;
+  const monthlyChartWidth = data?.monthlyChart?.length
+    ? `max(100%, ${data.monthlyChart.length * 32}px)`
+    : '100%';
 
   // Activity heatmap: build 52-week grid from today
   const heatmapWeeks = [];
@@ -283,10 +576,6 @@ export default function FunStats() {
                 <span className="funstats-profile-value">{cs(data.topSpeed)?.toFixed(0) ?? '--'}<span className="unit">{speedUnit}</span></span>
               </div>
               <div className="funstats-profile-item">
-                <span className="funstats-profile-label">Unique Locations</span>
-                <span className="funstats-profile-value">{data.uniqueLocations.toLocaleString()}</span>
-              </div>
-              <div className="funstats-profile-item">
                 <span className="funstats-profile-label">Avg Journey</span>
                 <span className="funstats-profile-value">{cd(data.avgJourneyDistanceMiles)?.toFixed(1) ?? '--'}<span className="unit">{distanceUnit}</span></span>
               </div>
@@ -311,27 +600,6 @@ export default function FunStats() {
                 <div className="value">{data.funComparisons.moonPercent.toFixed(2)}%</div>
                 <div className="sub">of the way there</div>
               </div>
-              {data.fuelEstimate && (
-                <div className="funstats-stat-card">
-                  <h4>Est. Fuel Used</h4>
-                  <div className="value">{data.fuelEstimate.gallons.toLocaleString()}<span className="unit">gal</span></div>
-                  <div className="sub">~{data.fuelEstimate.co2Kg.toLocaleString()} kg CO2</div>
-                </div>
-              )}
-              {data.fuelEstimate && data.fuelEstimate.co2SavedKg > 0 && (
-                <div className="funstats-stat-card">
-                  <h4>CO2 Saved</h4>
-                  <div className="value">{data.fuelEstimate.co2SavedKg.toLocaleString()}<span className="unit">kg</span></div>
-                  <div className="sub">By walking/scootering</div>
-                </div>
-              )}
-              {data.firstJourney && (
-                <div className="funstats-stat-card">
-                  <h4>First Journey</h4>
-                  <div className="value">{formatDate(data.firstJourney.date)}</div>
-                  <div className="sub">{data.firstJourney.name || 'Your very first trip'}</div>
-                </div>
-              )}
               <div className="funstats-stat-card">
                 <h4>Data Points</h4>
                 <div className="value">{data.totalDataPoints.toLocaleString()}</div>
@@ -345,16 +613,34 @@ export default function FunStats() {
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">States Visited</h2>
               <div className="funstats-states-count">{data.statesVisited.length} <span>/ 50 states</span></div>
-              <div className="funstats-states-list">
-                {data.statesVisited.map(s => (
-                  <span key={s} className="funstats-state-tag">{STATE_NAMES[s] || s}</span>
-                ))}
-              </div>
+              <USStateMap visitedStates={data.statesVisited} />
+            </section>
+          )}
+
+          {/* Cities Passed Through */}
+          {(data.citiesPassed?.length > 0 || citiesBackfill.running || citiesBackfill.status?.remaining > 0) && (
+            <section className="funstats-panel">
+              <h2 className="funstats-panel-title">Cities Passed Through</h2>
+              {data.citiesPassed?.length > 0 && (
+                <div className="funstats-states-count">{data.citiesPassed.length} <span>cities</span></div>
+              )}
+              <GeoBackfillStatus kind="cities" backfill={citiesBackfill} />
+            </section>
+          )}
+
+          {/* Unique Places */}
+          {(data.uniquePlaces?.length > 0 || placesBackfill.running || placesBackfill.status?.remaining > 0) && (
+            <section className="funstats-panel">
+              <h2 className="funstats-panel-title">Unique Places</h2>
+              {data.uniquePlaces?.length > 0 && (
+                <div className="funstats-states-count">{data.uniquePlaces.length} <span>unique places you&apos;ve visited</span></div>
+              )}
+              <GeoBackfillStatus kind="places" backfill={placesBackfill} />
             </section>
           )}
 
           {/* Monthly Distance Chart */}
-          {data.monthlyChart?.length > 1 && (
+          {data.monthlyChart?.length > 0 && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Distance Over Time</h2>
               {data.yoyComparison && (
@@ -374,13 +660,155 @@ export default function FunStats() {
                   <span className="funstats-challenge-pct">{data.monthlyChallenge.percent}%{data.monthlyChallenge.beatLastMonth ? ' — Done!' : ''}</span>
                 </div>
               )}
-              <div className="funstats-barchart">
-                {data.monthlyChart.slice(-24).map((m) => (
-                  <div key={m.month} className="funstats-bar-col" title={`${formatShortMonth(m.month)}: ${cd(m.distanceMiles)?.toFixed(0)} ${distanceUnit}`}>
-                    <div className="funstats-bar" style={{ height: `${Math.max(2, (m.distanceMiles / chartMax) * 100)}%` }} />
-                    <span className="funstats-bar-label">{formatShortMonth(m.month)}</span>
+              <div className="funstats-barchart-scroll">
+                <div className="funstats-barchart" style={{ width: monthlyChartWidth }}>
+                  {data.monthlyChart.map((m) => (
+                    <div key={m.month} className="funstats-bar-col" title={`${formatShortMonth(m.month)}: ${cd(m.distanceMiles)?.toFixed(0)} ${distanceUnit}`}>
+                      <div className="funstats-bar" style={{ height: `${Math.max(2, (m.distanceMiles / chartMax) * 100)}%` }} />
+                      <span className="funstats-bar-label">{formatShortMonth(m.month)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Temperature Over Time */}
+          {tempChartData && tempTimeline.length > 2 && (
+            <section className="funstats-panel">
+              <div className="funstats-panel-heading">
+                <h2 className="funstats-panel-title">Temperature Over Time</h2>
+                <button
+                  type="button"
+                  className="funstats-chart-expand-button"
+                  onClick={openTempChart}
+                >
+                  Expand
+                </button>
+              </div>
+              <div
+                className="funstats-temp-chart-wrap funstats-temp-chart-wrap--interactive"
+                role="button"
+                tabIndex={0}
+                onClick={openTempChart}
+                onKeyDown={handleTempChartKeyDown}
+                aria-label="Open a larger view of the temperature graph"
+              >
+                <Line data={tempChartData} options={tempChartOptions} />
+              </div>
+              <div className="funstats-temp-chart-hint">Tap or click the graph for a larger view.</div>
+            </section>
+          )}
+
+          {/* Weather Overview */}
+          {data.weather && (
+            <section className="funstats-panel">
+              <h2 className="funstats-panel-title">Weather</h2>
+              <div className="funstats-weather-summary">
+                {data.weather.journeysWithWeather} of {data.totalRoutes} journeys have weather data
+              </div>
+              <div className="funstats-stat-grid">
+                <div className="funstats-stat-card">
+                  <h4>Avg Temperature</h4>
+                  <div className="value">{ct(data.weather.avgTemp)?.toFixed(1) ?? '--'}<span className="unit">{temperatureUnit}</span></div>
+                </div>
+                {data.weather.hottestJourney && (
+                  <div className="funstats-stat-card">
+                    <h4>Hottest Journey</h4>
+                    <div className="value">{ct(data.weather.hottestJourney.temp)?.toFixed(1) ?? '--'}<span className="unit">{temperatureUnit}</span></div>
+                    <div className="sub">{data.weather.hottestJourney.name || formatDate(data.weather.hottestJourney.date)}</div>
+                  </div>
+                )}
+                {data.weather.coldestJourney && (
+                  <div className="funstats-stat-card">
+                    <h4>Coldest Journey</h4>
+                    <div className="value">{ct(data.weather.coldestJourney.temp)?.toFixed(1) ?? '--'}<span className="unit">{temperatureUnit}</span></div>
+                    <div className="sub">{data.weather.coldestJourney.name || formatDate(data.weather.coldestJourney.date)}</div>
+                  </div>
+                )}
+                <div className="funstats-stat-card">
+                  <h4>Temperature Range</h4>
+                  <div className="value">{ct(data.weather.tempRange.min)?.toFixed(0)}° – {ct(data.weather.tempRange.max)?.toFixed(0)}°</div>
+                  <div className="sub">{(ct(data.weather.tempRange.max) - ct(data.weather.tempRange.min))?.toFixed(0)}° spread</div>
+                </div>
+                {data.weather.biggestFeelsLikeDiff && (
+                  <div className="funstats-stat-card">
+                    <h4>Biggest Feels-Like Gap</h4>
+                    <div className="value">{ct(data.weather.biggestFeelsLikeDiff.temp)?.toFixed(0)}° felt like {ct(data.weather.biggestFeelsLikeDiff.feelsLike)?.toFixed(0)}°</div>
+                    <div className="sub">{data.weather.biggestFeelsLikeDiff.name || formatDate(data.weather.biggestFeelsLikeDiff.date)}</div>
+                  </div>
+                )}
+                {data.weather.avgWindSpeed != null && (
+                  <div className="funstats-stat-card">
+                    <h4>Avg Wind Speed</h4>
+                    <div className="value">{data.weather.avgWindSpeed}<span className="unit">mph</span></div>
+                  </div>
+                )}
+                {data.weather.windiestJourney && data.weather.windiestJourney.windSpeed > 0 && (
+                  <div className="funstats-stat-card">
+                    <h4>Windiest Journey</h4>
+                    <div className="value">{data.weather.windiestJourney.windSpeed.toFixed(1)}<span className="unit">mph</span></div>
+                    <div className="sub">{data.weather.windiestJourney.name || formatDate(data.weather.windiestJourney.date)}</div>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+
+          {/* Weather Conditions Breakdown */}
+          {data.weather?.conditions?.length > 0 && (
+            <section className="funstats-panel">
+              <h2 className="funstats-panel-title">Weather Conditions</h2>
+              <div className="funstats-conditions-list">
+                {data.weather.conditions.map(c => (
+                  <div key={c.condition} className="funstats-condition-row">
+                    <span className="funstats-condition-label">{c.condition}</span>
+                    <div className="funstats-condition-bar-wrap">
+                      <div
+                        className="funstats-condition-bar"
+                        style={{ width: `${(c.count / data.weather.conditions[0].count) * 100}%` }}
+                      />
+                    </div>
+                    <span className="funstats-condition-count">{c.count}</span>
                   </div>
                 ))}
+              </div>
+            </section>
+          )}
+
+          {/* Comfort Zone */}
+          {data.weather?.tempBuckets?.length > 0 && (
+            <section className="funstats-panel">
+              <h2 className="funstats-panel-title">Comfort Zone</h2>
+              <div className="funstats-temp-histogram">
+                {data.weather.tempBuckets.map(b => (
+                  <div key={b.rangeStart} className="funstats-temp-bucket" title={`${ct(b.rangeStart)?.toFixed(0)}°–${ct(b.rangeStart + 10)?.toFixed(0)}°: ${b.count} journeys`}>
+                    <div className="funstats-temp-bucket-bar" style={{ height: `${Math.max(4, (b.count / tempBucketMax) * 100)}%` }} />
+                    <span className="funstats-temp-bucket-label">{ct(b.rangeStart)?.toFixed(0)}°</span>
+                  </div>
+                ))}
+              </div>
+              <div className="funstats-temp-histogram-sub">Temperature ranges you travel in most</div>
+            </section>
+          )}
+
+          {/* Temperature by Season */}
+          {data.weather?.seasonAvgTemps && Object.values(data.weather.seasonAvgTemps).some(v => v != null) && (
+            <section className="funstats-panel">
+              <h2 className="funstats-panel-title">Temperature by Season</h2>
+              <div className="funstats-stat-grid">
+                {[['Spring', 'spring'], ['Summer', 'summer'], ['Fall', 'fall'], ['Winter', 'winter']].map(([label, key]) => {
+                  const avg = data.weather.seasonAvgTemps[key];
+                  if (avg == null) return null;
+                  return (
+                    <div key={key} className="funstats-stat-card">
+                      <h4>{label}</h4>
+                      <div className="value">{ct(avg)?.toFixed(1) ?? '--'}<span className="unit">{temperatureUnit}</span></div>
+                      <div className="sub">avg temperature</div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -439,11 +867,6 @@ export default function FunStats() {
                   <div className="sub">{data.favoriteDirection.count} journeys headed this way</div>
                 </div>
               )}
-              <div className="funstats-stat-card">
-                <h4>Round Trips</h4>
-                <div className="value">{data.roundTripPercent}%</div>
-                <div className="sub">{data.roundTripCount} journeys back to start</div>
-              </div>
               {data.newTerritory && data.newTerritory.newCellsThisMonth > 0 && (
                 <div className="funstats-stat-card">
                   <h4>New Territory</h4>
@@ -474,18 +897,56 @@ export default function FunStats() {
             </section>
           )}
 
-          {/* Speed Percentiles */}
+          {/* Speed Distribution Chart */}
           {data.speedPercentiles && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Speed Distribution</h2>
-              <div className="funstats-stat-grid">
-                {[['25th %ile', 'p25'], ['Median', 'p50'], ['75th %ile', 'p75'], ['95th %ile', 'p95']].map(([label, key]) => (
-                  <div key={key} className="funstats-stat-card">
-                    <h4>{label}</h4>
-                    <div className="value">{cs(data.speedPercentiles[key])?.toFixed(1) ?? '--'}<span className="unit">{speedUnit}</span></div>
-                    <div className="sub">avg speed</div>
-                  </div>
-                ))}
+              <div style={{ height: 220, position: 'relative' }}>
+                <Bar
+                  data={{
+                    labels: ['25th %ile', 'Median', '75th %ile', '95th %ile'],
+                    datasets: [{
+                      label: `Avg Speed (${speedUnit})`,
+                      data: ['p25', 'p50', 'p75', 'p95'].map(k => cs(data.speedPercentiles[k])?.toFixed(1) ?? 0),
+                      backgroundColor: [
+                        getAccentRgba(0.4),
+                        getAccentRgba(0.6),
+                        getAccentRgba(0.8),
+                        getAccentRgba(1),
+                      ],
+                      borderColor: getAccentRgba(1),
+                      borderWidth: 1,
+                      borderRadius: 4,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        callbacks: {
+                          label: (ctx) => `${ctx.parsed.y} ${speedUnit}`,
+                        },
+                      },
+                    },
+                    scales: {
+                      x: {
+                        ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 11 } },
+                        grid: { display: false },
+                      },
+                      y: {
+                        ticks: {
+                          color: 'rgba(255,255,255,0.5)',
+                          font: { size: 11 },
+                          callback: (v) => `${v} ${speedUnit}`,
+                        },
+                        grid: { color: 'rgba(255,255,255,0.06)' },
+                        beginAtZero: true,
+                      },
+                    },
+                  }}
+                />
               </div>
             </section>
           )}
@@ -624,33 +1085,15 @@ export default function FunStats() {
                   </div>
                 </div>
               )}
-              {habitInsights.roundTripSplit && (
-                <div className="funstats-stat-card">
-                  <h4>Round-Trip Split</h4>
-                  <div className="value">{habitInsights.roundTripSplit.weekendPercent}% wknd / {habitInsights.roundTripSplit.weekdayPercent}% wkday</div>
-                  <div className="sub">{habitInsights.roundTripSplit.weekendCount} weekend and {habitInsights.roundTripSplit.weekdayCount} weekday round trips</div>
-                </div>
-              )}
-              {habitInsights.streakReliability && (
-                <div className="funstats-stat-card">
-                  <h4>Streak Reliability</h4>
-                  <div className="value">{habitInsights.streakReliability.startsPerMonth}/mo</div>
-                  <div className="sub">
-                    {habitInsights.streakReliability.bestMonth
-                      ? `${habitInsights.streakReliability.streakStarts3Plus} starts of 3+ day streaks, best in ${formatMonth(habitInsights.streakReliability.bestMonth.month)}`
-                      : `${habitInsights.streakReliability.streakStarts3Plus} starts of 3+ day streaks`}
-                  </div>
-                </div>
-              )}
             </div>
           </section>
 
           {/* Travel Modes */}
-          {data.modeCounts && (data.modeCounts.drive + data.modeCounts.scooter + data.modeCounts.foot > 0) && (
+          {data.modeCounts && (data.modeCounts.drive + data.modeCounts.scooter + data.modeCounts.foot + (data.modeCounts.train || 0) + (data.modeCounts.metro || 0) > 0) && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Travel Modes</h2>
               <div className="funstats-stat-grid">
-                {['drive', 'scooter', 'foot'].filter(m => data.modeCounts[m] > 0).map(m => (
+                {['drive', 'scooter', 'foot', 'train', 'metro'].filter(m => data.modeCounts[m] > 0).map(m => (
                   <div key={m} className="funstats-stat-card">
                     <h4>{modeLabel(m)}</h4>
                     <div className="value">{data.modeCounts[m]}</div>
@@ -786,24 +1229,6 @@ export default function FunStats() {
             </div>
           </section>
 
-          {/* Bingo Card */}
-          {data.bingoCard?.length === 25 && (
-            <section className="funstats-panel">
-              <h2 className="funstats-panel-title">Travel Bingo</h2>
-              <div className="funstats-bingo-count">{data.bingoCard.filter(c => c.completed).length} / 25</div>
-              <div className="funstats-bingo-grid">
-                {data.bingoCard.map((cell, i) => (
-                  <div
-                    key={i}
-                    className={`funstats-bingo-cell${cell.completed ? ' completed' : ''}`}
-                    title={cell.desc}
-                  >
-                    <span className="funstats-bingo-label">{cell.label}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
 
           {/* Most Visited Locations */}
           {data.clusters?.length > 0 && (
@@ -824,6 +1249,53 @@ export default function FunStats() {
                 })}
               </ul>
             </section>
+          )}
+
+          {isTempChartExpanded && tempChartData && (
+            <div
+              className={`funstats-chart-modal-backdrop${tempChartClosing ? ' funstats-chart-modal-backdrop--closing' : ''}`}
+              role="presentation"
+              onClick={closeTempChart}
+            >
+              <div
+                className="funstats-chart-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="funstats-temp-chart-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="funstats-chart-modal-header">
+                  <div>
+                    <h2 id="funstats-temp-chart-title" className="funstats-chart-modal-title">
+                      Temperature Over Time
+                    </h2>
+                    <p className="funstats-chart-modal-subtitle">
+                      Scroll to zoom. Drag to pan. Shift+drag to select a range.
+                    </p>
+                  </div>
+                  <div className="funstats-chart-modal-actions">
+                    <button
+                      type="button"
+                      className="funstats-chart-modal-close"
+                      onClick={() => expandedTempChartRef.current?.resetZoom()}
+                    >
+                      Reset Zoom
+                    </button>
+                    <button
+                      type="button"
+                      className="funstats-chart-modal-close"
+                      onClick={closeTempChart}
+                      aria-label="Close expanded temperature graph"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+                <div className="funstats-chart-modal-body">
+                  <Line ref={expandedTempChartRef} data={tempChartData} options={expandedTempChartOptions} />
+                </div>
+              </div>
+            </div>
           )}
 
         </div>

@@ -1,0 +1,80 @@
+/* Recently Deleted reuses the Dashboard layout/components; these styles add the
+   "you are viewing deleted journeys" banner and adjust the layout to fit it. */
+
+.trash-page .full-screen-container {
+  position: relative;
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.trash-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(255, 68, 68, 0.12);
+  border-bottom: 1px solid rgba(255, 68, 68, 0.3);
+  color: var(--text-primary);
+  font-size: 0.85em;
+  z-index: 5;
+}
+.trash-banner > svg {
+  color: var(--accent-danger);
+  flex-shrink: 0;
+}
+.trash-banner-text {
+  margin-right: auto;
+}
+.trash-banner-text strong {
+  font-weight: 600;
+}
+[data-theme="light"] .trash-banner {
+  background: rgba(220, 38, 38, 0.08);
+  border-bottom-color: rgba(220, 38, 38, 0.25);
+}
+
+.trash-empty-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-danger);
+  background: transparent;
+  color: var(--accent-danger);
+  font-family: var(--font-family-sans);
+  font-size: 0.95em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.trash-empty-btn:hover {
+  background: var(--accent-danger);
+  color: #fff;
+}
+
+.trash-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 24px;
+}
+.trash-empty-state svg {
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.trash-empty-state h2 {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.trash-empty-state p {
+  margin: 0;
+  max-width: 380px;
+  line-height: 1.5;
+}

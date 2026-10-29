@@ -8,7 +8,8 @@
     "dev": "concurrently \"node server/server.js\" \"cd client && npm run dev\"",
     "build": "cd client && npm run build",
     "migrate:import": "node server/scripts/migrate-import.js",
-    "migrate:export": "node server/scripts/migrate-export.js"
+    "migrate:export": "node server/scripts/migrate-export.js",
+    "test:ai": "node server/ai/tests/run-all.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -17,9 +18,11 @@
     "dotenv": "^17.3.1",
     "express": "^4.17.1",
     "express-session": "^1.19.0",
+    "ffmpeg": "^0.0.4",
     "heic-convert": "^2.1.0",
     "multer": "^1.4.3",
     "pg": "^8.13.0",
+    "sharp": "^0.35.5",
     "unzipper": "^0.10.11"
   },
   "devDependencies": {

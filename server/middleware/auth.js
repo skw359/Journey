@@ -1,4 +1,5 @@
 const { pool } = require('../db');
+const log = require('../utils/logger').scope('auth');
 
 async function isSetup() {
   const { rows } = await pool.query('SELECT 1 FROM users LIMIT 1');
@@ -45,12 +46,19 @@ async function requireAuth(req, res, next) {
         return next();
       }
     } catch (err) {
-      console.error('Token auth error:', err);
+      log.error('Token auth error:', err);
     }
   }
 
   const setup = await isSetup().catch(() => true);
   res.status(401).json({ error: 'Not authenticated', needsSetup: !setup });
+}
+
+// The first account created on this server, which owns server-wide choices like where
+// attachments are stored.
+async function isPrimaryAccount(userId) {
+  const { rows } = await pool.query('SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT 1');
+  return Boolean(userId) && rows[0]?.id === userId;
 }
 
 // Only allows if zero users exist (for initial registration)
@@ -66,4 +74,4 @@ async function setupCheck(req, res, next) {
   }
 }
 
-module.exports = { requireSession, requireAuth, setupCheck };
+module.exports = { requireSession, requireAuth, setupCheck, isPrimaryAccount };

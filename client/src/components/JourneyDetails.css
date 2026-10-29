@@ -1,0 +1,11 @@
+/* The gallery was sized for the old 780px sheet; on a full page let it fill
+   the width with more, smaller tiles. */
+.journey-details .photos-section {
+  margin-top: 12px;
+  padding-top: 28px;
+}
+.journey-details .photos-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  padding: 0;
+}

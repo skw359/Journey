@@ -1,0 +1,233 @@
+/* Two-point distance measuring on the journey map (see utils/routeMeasure.js).
+   The yellow matches the measured line drawn on the map, so the label, the
+   active distance type and the line all read as one thing. */
+:root {
+  --measure-color: #ffc83d;
+  --measure-ink: #141414;
+}
+
+/* Distance label, anchored by an OpenLayers overlay just above the midpoint
+   of whatever is being measured. Never intercepts clicks meant for the route
+   underneath it. */
+.measure-label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 12px 5px;
+  border-radius: 10px;
+  background: rgba(12, 12, 12, 0.86);
+  border: 1.5px solid var(--measure-color);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-family: var(--font-family-sans);
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+.measure-label:empty { display: none; }
+.measure-label::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 9px;
+  height: 9px;
+  background: inherit;
+  border-right: 1.5px solid var(--measure-color);
+  border-bottom: 1.5px solid var(--measure-color);
+  transform: translateX(-50%) rotate(45deg);
+}
+.measure-label-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.measure-label-caption {
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+}
+[data-theme="light"] .measure-label {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #e0a800;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  color: var(--text-primary);
+}
+[data-theme="light"] .measure-label::after {
+  border-color: #e0a800;
+}
+[data-theme="light"] .measure-label-caption { color: var(--text-secondary); }
+
+/* Measuring bar: status, distance-type switch and exit, floating at the
+   bottom of the map. */
+.measure-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 850;
+  display: grid;
+  grid-template-columns: auto auto auto;
+  grid-template-areas: "status toggle close";
+  align-items: center;
+  column-gap: 14px;
+  row-gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 6px 6px 6px 12px;
+  border-radius: 14px;
+  background: rgba(15, 15, 15, 0.8);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-family: var(--font-family-sans);
+  animation: measure-bar-in 0.18s ease-out;
+}
+[data-theme="light"] .measure-bar {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  color: var(--text-primary);
+}
+
+@keyframes measure-bar-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.measure-bar-status {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.measure-bar-text {
+  margin-left: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s ease;
+}
+.measure-bar-status.is-miss .measure-bar-text { color: #ff8a7a; }
+[data-theme="light"] .measure-bar-status.is-miss .measure-bar-text { color: var(--accent-danger); }
+
+.measure-step {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.64rem;
+  font-weight: 700;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.measure-step.done {
+  background: var(--measure-color);
+  border-color: var(--measure-ink);
+  color: var(--measure-ink);
+}
+[data-theme="light"] .measure-step:not(.done) {
+  border-color: rgba(0, 0, 0, 0.25);
+  color: var(--text-secondary);
+}
+
+.measure-mode-toggle {
+  grid-area: toggle;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+[data-theme="light"] .measure-mode-toggle { background: rgba(0, 0, 0, 0.06); }
+
+.measure-mode-btn {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.measure-mode-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.measure-mode-btn.active,
+.measure-mode-btn.active:hover {
+  background: var(--measure-color);
+  color: var(--measure-ink);
+}
+.measure-mode-btn:focus-visible,
+.measure-bar-close:focus-visible {
+  outline: 2px solid var(--measure-color);
+  outline-offset: 1px;
+}
+[data-theme="light"] .measure-mode-btn { color: var(--text-secondary); }
+[data-theme="light"] .measure-mode-btn:hover { color: var(--text-primary); background: rgba(0, 0, 0, 0.05); }
+[data-theme="light"] .measure-mode-btn.active,
+[data-theme="light"] .measure-mode-btn.active:hover {
+  background: var(--measure-color);
+  color: var(--measure-ink);
+}
+
+.measure-mode-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.measure-bar-close {
+  grid-area: close;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.measure-bar-close:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+[data-theme="light"] .measure-bar-close { color: var(--text-secondary); }
+[data-theme="light"] .measure-bar-close:hover { background: rgba(0, 0, 0, 0.06); color: var(--text-primary); }
+
+@media (max-width: 680px) {
+  .measure-bar {
+    width: calc(100% - 24px);
+    box-sizing: border-box;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "status close"
+      "toggle toggle";
+    padding: 6px 6px 8px 12px;
+  }
+  .measure-mode-toggle { margin-right: 2px; }
+  .measure-mode-btn { flex: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .measure-bar { animation: none; }
+}

@@ -3,9 +3,7 @@
 **The first-class timeline platform.**
 
 Journey is a privacy-first travel history and analytics platform that tracks
-where you’ve been and visualizes your movement. Journey allows you to track your adventures, and share your experiences with friends and family. 
-
-Below is a demo to get a gist of what Journey looks like.
+where you’ve been and visualizes your movement.
 
 ![Journey demo](docs/assets/journey-demo.gif)
 
@@ -21,9 +19,6 @@ Below is a demo to get a gist of what Journey looks like.
 
 - Your data stays on your server
 - Zero telemetry, no tracking scripts
-
-## Why Journey Was Created
-I created Journey because I wanted an easy way to visualize where I've been, photos, details, and more about my whereabouts. There are likely similar solutions that exist already but they were either glitchy or too complicated. This seeks to balance that nature. Feel free to fork it for your own needs or suggest things. 
 
 ## Documentation
 

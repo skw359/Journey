@@ -2,16 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import TopLoader from '../components/TopLoader';
 import Sidebar from '../components/Sidebar';
 import FilterBar from '../components/FilterBar';
+import JourneyCard from '../components/JourneyCard';
 import RouteMap from '../components/RouteMap';
-import StatsGrid from '../components/StatsGrid';
-import ElevationChart from '../components/ElevationChart';
-import SpeedChart from '../components/SpeedChart';
-import AccelerationChart from '../components/AccelerationChart';
-import TravelModeBadge from '../components/TravelModeBadge';
+import JourneyTopOverlay from '../components/JourneyTopOverlay';
+import JourneyStage from '../components/JourneyStage';
+import JourneyDetails from '../components/JourneyDetails';
 import FirstRunOnboarding from '../components/FirstRunOnboarding';
 import { fetchRoutes, fetchRouteDetail } from '../api/journeys';
-import { useToast } from '../context/ToastContext';
-import { useUnits } from '../context/UnitsContext';
 import useGeoLabel from '../hooks/useGeoLabel';
 import './TopJourneys.css';
 
@@ -23,16 +20,7 @@ function parseDuration(durationStr) {
   return match ? parseInt(match[1]) * 60 + parseInt(match[2]) : 0;
 }
 
-function getRankBadgeClass(rank) {
-  if (rank === 1) return 'gold';
-  if (rank === 2) return 'silver';
-  if (rank === 3) return 'bronze';
-  return 'default';
-}
-
 export default function TopJourneys({ sidebarCollapsed = false }) {
-  const toast = useToast();
-  const { convertDistance, distanceUnit } = useUnits();
   const [allRoutes, setAllRoutes] = useState([]);
   const [currentRoute, setCurrentRoute] = useState(null);
   const [currentRouteId, setCurrentRouteId] = useState(null);
@@ -40,6 +28,7 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
   const [activeSort, setActiveSort] = useState('distance');
   const [isLoading, setIsLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [measureActive, setMeasureActive] = useState(false);
   const loaderRef = useRef(null);
   const currentRouteIdRef = useRef(currentRouteId);
   const routeCacheRef = useRef(new Map());
@@ -78,9 +67,8 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
     }
   }, []);
 
-  const loadFullDetailForViewport = useCallback(async ({ zoom }) => {
-    const routeId = currentRouteIdRef.current;
-    if (!routeId || zoom < DETAIL_ZOOM_THRESHOLD) return;
+  const loadFullDetail = useCallback(async (routeId) => {
+    if (!routeId) return;
     if (fullDetailRouteIdsRef.current.has(routeId)) return;
     if (detailFetchInFlightRef.current.has(routeId)) return;
 
@@ -100,6 +88,17 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
     }
   }, []);
 
+  const loadFullDetailForViewport = useCallback(({ zoom }) => {
+    if (zoom < DETAIL_ZOOM_THRESHOLD) return;
+    loadFullDetail(currentRouteIdRef.current);
+  }, [loadFullDetail]);
+
+  // Measuring snaps to the recorded track, so it needs every point: the
+  // 100-point preview would put A and B on shortcuts the journey never took.
+  useEffect(() => {
+    if (measureActive && currentRouteId) loadFullDetail(currentRouteId);
+  }, [measureActive, currentRouteId, loadFullDetail]);
+
   useEffect(() => {
     const load = async () => {
       const shouldPreload = localStorage.getItem('preloadData') === 'true';
@@ -111,14 +110,12 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
 
         const sorted = [...routes].sort((a, b) => parseFloat(b.distance) - parseFloat(a.distance));
         if (sorted.length > 0) {
-          // Load top journey first at full resolution
           const topRoute = await fetchRouteDetail(sorted[0].id, { maxPoints: shouldPreload ? 0 : PREVIEW_MAX_POINTS });
           routeCacheRef.current.set(topRoute.id, topRoute);
           if (topRoute.isFullResolution) fullDetailRouteIdsRef.current.add(topRoute.id);
           setCurrentRoute(topRoute);
           setCurrentRouteId(sorted[0].id);
 
-          // Preload remaining routes in the background
           if (shouldPreload && sorted.length > 1) {
             const remaining = sorted.slice(1);
             Promise.all(
@@ -156,12 +153,12 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
   const showFilteredEmptyState = hasAnyRoutes && sortedRoutes.length === 0;
 
   return (
-    <div id="main-app" className="topjourneys-page">
+    <div id="main-app">
       <TopLoader ref={loaderRef} />
 
       <div className="full-screen-container">
         {!showOnboardingEmptyState && (
-          <Sidebar collapsed={sidebarCollapsed}>
+          <Sidebar collapsed={sidebarCollapsed} floating>
             {hasAnyRoutes && <FilterBar active={activeFilter} onChange={setActiveFilter} />}
             {hasAnyRoutes && (
               <div className="sort-options">
@@ -176,71 +173,63 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
                 ))}
               </div>
             )}
-            <div style={{ overflowY: 'auto', flexGrow: 1 }}>
+            <div className="route-list" style={{ overflowY: 'auto', flexGrow: 1 }}>
               {showFilteredEmptyState ? (
                 <p className="topjourneys-empty-filter">No journeys match your current filter.</p>
               ) : (
-                sortedRoutes.map((route, index) => {
-                  const rank = index + 1;
-                  return (
-                    <div
-                      key={route.id}
-                      className={`route-card${route.id === currentRouteId ? ' active' : ''}`}
-                      onClick={() => loadRouteWithAnimation(route.id)}
-                    >
-                      <div className={`rank-badge ${getRankBadgeClass(rank)}`}>{rank}</div>
-                      <div className="route-card-content">
-                        <div className="route-card-name">{route.name}</div>
-                        <div className="route-card-stats">
-                          <span className="route-card-stat">
-                            <strong>{(convertDistance(route.distance) ?? 0).toFixed(1)}</strong> {distanceUnit}
-                          </span>
-                          <span className="route-card-stat"><strong>{route.duration}</strong></span>
-                        </div>
-                        <div className="route-card-badges">
-                          <TravelModeBadge mode={route.travelMode || 'foot'} variant="topjourneys" />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
+                sortedRoutes.map((route, index) => (
+                  <JourneyCard
+                    key={route.id}
+                    route={route}
+                    rank={index + 1}
+                    active={route.id === currentRouteId}
+                    onClick={(id) => loadRouteWithAnimation(id)}
+                  />
+                ))
               )}
             </div>
           </Sidebar>
         )}
 
-        <main className={`details-view-container${showOnboardingEmptyState ? ' onboarding-layout' : ''}`}>
-          {currentRoute && (
-            <div className={`details-header${isLoading ? ' fade-out' : ''}`}>
-              <h2>{currentRoute.name}</h2>
-              {geoLoading ? (
-                <div className="geo-label-skeleton" />
-              ) : geoLabel ? (
-                <div className="geo-label">{geoLabel}</div>
-              ) : null}
-            </div>
-          )}
-          <section className={`main-content${isLoading ? ' fade-out' : ''}${showOnboardingEmptyState ? ' empty-onboarding' : ''}`}>
-            {showOnboardingEmptyState ? (
+        <main className={`details-view-container${showOnboardingEmptyState ? ' onboarding-layout' : ''}${currentRoute && !showOnboardingEmptyState ? ' fullscreen-map' : ''}`}>
+          {showOnboardingEmptyState ? (
+            <section className="main-content empty-onboarding">
               <FirstRunOnboarding />
-            ) : currentRoute && (
-              <>
-                <RouteMap
-                  route={currentRoute}
-                  sidebarCollapsed={sidebarCollapsed}
-                  onViewportChange={loadFullDetailForViewport}
-                />
-                <StatsGrid route={currentRoute} />
-                {currentRoute.profileTimeMs && currentRoute.profileDistMi && (
-                  <div className="graphs-section">
-                    <ElevationChart route={currentRoute} />
-                    <SpeedChart route={currentRoute} />
-                    <AccelerationChart route={currentRoute} />
-                  </div>
-                )}
-              </>
-            )}
-          </section>
+            </section>
+          ) : currentRoute && (
+            <JourneyStage
+              routeId={currentRoute.id}
+              loading={isLoading}
+              sidebarCollapsed={sidebarCollapsed}
+              measureActive={measureActive}
+              hero={(
+                <>
+                  <RouteMap
+                    route={currentRoute}
+                    sidebarCollapsed={sidebarCollapsed}
+                    onViewportChange={loadFullDetailForViewport}
+                    weather={currentRoute.weather}
+                    fullscreen
+                    measureActive={measureActive}
+                    onMeasureActiveChange={setMeasureActive}
+                  />
+
+                  <JourneyTopOverlay
+                    route={currentRoute}
+                    geoLabel={geoLabel}
+                    geoLoading={geoLoading}
+                    measureActive={measureActive}
+                    onToggleMeasure={() => setMeasureActive(prev => !prev)}
+                  />
+                </>
+              )}
+            >
+              <JourneyDetails
+                route={currentRoute}
+                showPhotos={false}
+              />
+            </JourneyStage>
+          )}
         </main>
       </div>
     </div>

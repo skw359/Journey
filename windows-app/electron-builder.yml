@@ -1,0 +1,45 @@
+appId: com.journey.desktop
+productName: Journey
+copyright: Journey
+
+directories:
+  output: dist
+  buildResources: assets
+
+# The renderer bundle + local fonts live under build/ (produced by build:renderer) and
+# must be packaged alongside the main-process source.
+files:
+  - src/**/*
+  - build/**/*
+  - assets/icon.ico
+  - assets/icon.png
+  - package.json
+  - "!**/*.map"
+
+asar: true
+compression: maximum
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+  artifactName: Journey-Setup-${version}.${ext}
+
+# One-click installer (Journey-Setup-x.y.z.exe): installs per-user, drops Start-menu and
+# desktop shortcuts, and launches Journey when finished.
+nsis:
+  oneClick: true
+  perMachine: false
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  runAfterFinish: true
+  shortcutName: Journey
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+
+# Also emit a portable single-exe (no install) for convenience.
+portable:
+  artifactName: Journey-Portable-${version}.${ext}

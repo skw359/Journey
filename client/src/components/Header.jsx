@@ -1,5 +1,5 @@
 import { useLocation, Link } from 'react-router-dom';
-import { Search, Map as MapIcon, User } from 'lucide-react';
+import { Search, User } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLoadingContext } from '../context/LoadingContext';
@@ -9,18 +9,22 @@ const NAV_LINKS = [
   { to: '/journeys', label: 'Dashboard' },
   { to: '/topjourneys', label: 'Top Journeys' },
   { to: '/atlas', label: 'Atlas' },
+  { to: '/recently-deleted', label: 'Recently Deleted' },
   { to: '/funstats', label: 'Fun Stats' },
 ];
 
 export default function Header({ onToggleSidebar, showSearch, searchValue, onSearchChange }) {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, marcoEnabled } = useAuth();
   const { isLoading: dataLoading } = useLoadingContext();
   const searchRef = useRef(null);
   const closeProfileMenuTimeoutRef = useRef(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const canToggleSidebar = typeof onToggleSidebar === 'function';
+  const navLinks = marcoEnabled
+    ? [...NAV_LINKS, { to: '/marco', label: 'Marco' }]
+    : NAV_LINKS;
 
   useEffect(() => {
     if (closeProfileMenuTimeoutRef.current) {
@@ -92,7 +96,7 @@ export default function Header({ onToggleSidebar, showSearch, searchValue, onSea
           style={canToggleSidebar ? { cursor: 'pointer' } : undefined}
         >
           <div className="brand-icon">
-            <MapIcon size={24} />
+            <img src="/logo.png" alt="Journey" width={24} height={24} />
           </div>
           <span className="brand-text">Journey</span>
         </div>
@@ -100,7 +104,7 @@ export default function Header({ onToggleSidebar, showSearch, searchValue, onSea
         <div className="header-separator" />
 
         <nav className="header-nav">
-          {NAV_LINKS.map(link => (
+          {navLinks.map(link => (
             <Link
               key={link.to}
               to={link.to}
@@ -120,7 +124,7 @@ export default function Header({ onToggleSidebar, showSearch, searchValue, onSea
               type="text"
               id="journey-search"
               className={searchFocused ? 'focused' : ''}
-              placeholder=""
+              placeholder="Name or date…"
               autoComplete="off"
               value={searchValue || ''}
               onChange={(e) => onSearchChange?.(e.target.value)}

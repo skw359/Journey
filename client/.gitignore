@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local env (contains the CARTO basemap key)
+.env
+.env.local

@@ -25,6 +25,8 @@
   padding: 20px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
+/* An odd one out on the last row sits centred under the pair above it */
+.stat-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .stat-card h3 { margin: 0 0 8px 0; font-size: 0.9em; font-weight: 500; color: var(--accent-primary); }
 .stat-card p { margin: 0; font-size: 2em; font-weight: 500; color: var(--text-primary); }
 .stat-card .unit { font-size: 0.6em; color: var(--text-primary); font-weight: 400; margin-left: 6px; }

@@ -1,0 +1,653 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Marco (Journey AI) chat page — the Prelude Chat layout, on Journey's colors.
+
+   Every color below is derived from the app-level theme variables
+   (--bg-primary, --accent-primary, …), so the tab follows light/dark — and
+   any future re-theme in App.css — exactly like every other page. In-between
+   shades are mixed from those same variables. All tokens are scoped to
+   .marco-page; nothing leaks out. */
+
+.marco-page {
+  --bg: var(--bg-primary);
+  --surface: var(--bg-secondary);
+  --surface-2: color-mix(in srgb, var(--bg-tertiary) 55%, var(--bg-primary));
+  --surface-3: var(--bg-tertiary);
+  --border: var(--border-color);
+  --border-strong: color-mix(in srgb, var(--border-color) 85%, var(--text-primary));
+  --text: var(--text-primary);
+  --text-2: var(--text-secondary);
+  --muted: var(--text-muted);
+  --accent: var(--accent-primary);
+  --accent-ink: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
+  --accent-soft: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent-primary) 28%, transparent);
+  --code-bg: color-mix(in srgb, var(--bg-tertiary) 35%, var(--bg-primary));
+  --on-accent: #fff; /* Journey's convention: white on the accent, both themes */
+  --danger: var(--accent-danger);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35);
+  --shadow-lg: 0 1px 2px rgba(0, 0, 0, .35), 0 12px 32px -16px rgba(0, 0, 0, .7);
+
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Instrument Sans', var(--font-family-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Colors flip through the app variables themselves; only the shadow weight
+   needs a lighter touch on the light theme. */
+[data-theme='light'] .marco-page {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .06);
+  --shadow-lg: 0 1px 2px rgba(0, 0, 0, .05), 0 10px 28px -14px rgba(0, 0, 0, .25);
+}
+
+.marco-page button,
+.marco-page textarea {
+  font: inherit;
+  color: inherit;
+}
+
+.marco-page button {
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.marco-page :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* The composer card draws its own halo via :focus-within — the textarea
+   inside must not add a second ring. (The scoped rule above outranks the
+   textarea's plain outline:none, so the override must be explicit.) */
+.marco-page .marco-composer textarea:focus-visible {
+  outline: none;
+}
+
+/* ---------- shell ---------- */
+
+.marco-shell {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.marco-wrap {
+  width: 100%;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+/* ---------- topbar ---------- */
+
+.marco-topbar {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* On the empty state the bar dissolves — just the New chat button floats. */
+.marco-topbar--bare {
+  border-bottom-color: transparent;
+}
+
+.marco-topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  height: 54px;
+}
+
+.marco-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.marco-mark svg {
+  display: block;
+}
+
+.marco-mark--lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+}
+
+/* Journey's folded-map logo (public/logo.png), recolored through a mask so
+   it renders in --on-accent inside the mark, exactly like an icon would. */
+.marco-mark-glyph {
+  display: block;
+  background: currentColor;
+  -webkit-mask: url('/logo.png') center / contain no-repeat;
+  mask: url('/logo.png') center / contain no-repeat;
+  width: 15px;
+  height: 13px;
+}
+
+.marco-mark--lg .marco-mark-glyph {
+  width: 25px;
+  height: 21px;
+}
+
+.marco-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+
+.marco-ghost:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* ---------- transcript ---------- */
+
+.marco-stream {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.marco-stream::-webkit-scrollbar { width: 10px; }
+.marco-stream::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid var(--bg);
+  border-radius: 99px;
+}
+
+.marco-stream > .marco-wrap {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.marco-log {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding: 30px 0 12px;
+}
+
+.marco-turn {
+  animation: marco-rise .26s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+@keyframes marco-rise {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+
+.marco-turn--user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.marco-bubble {
+  max-width: 82%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 15px 15px 5px 15px;
+  padding: 10px 15px;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+
+.marco-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* ---------- rendered reply ---------- */
+
+.marco-prose {
+  display: flex;
+  flex-direction: column;
+  gap: .85em;
+  min-width: 0;
+  padding-top: 1px;
+  color: var(--text);
+}
+
+.marco-prose p { margin: 0; overflow-wrap: anywhere; }
+.marco-prose strong { font-weight: 600; }
+
+.marco-prose ul,
+.marco-prose ol {
+  margin: 0;
+  padding-left: 1.35em;
+  display: flex;
+  flex-direction: column;
+  gap: .42em;
+}
+
+.marco-prose li { padding-left: .15em; }
+.marco-prose li::marker { color: var(--muted); }
+.marco-prose ol li::marker { font-variant-numeric: tabular-nums; font-weight: 500; }
+
+.marco-prose code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .855em;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: .09em .34em;
+}
+
+.marco-prose pre {
+  margin: 0;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 13px 15px;
+  overflow-x: auto;
+}
+
+.marco-prose pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.62;
+}
+
+.marco-prose blockquote {
+  margin: 0;
+  padding: 2px 0 2px 16px;
+  border-left: 2px solid var(--accent);
+  font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 18.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.marco-prose blockquote p + p { margin-top: .5em; }
+
+.marco-prose-error { color: var(--danger); }
+
+.marco-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---- live generation: one bar plays thinking spinner, then caret ----
+
+   While Marco thinks, the bar spins in place — each revolution launches
+   fast, progressively brakes, and is nearly motionless as it reaches upright
+   (360° reads as 0°), so the next launch snaps off like a wound spring.
+   Marco.jsx runs the spin one revolution at a time: when the reply starts it
+   simply stops relaunching, the bar rests upright, and the same element
+   becomes the insertion caret that rides along inside the rendered markup. */
+
+.marco-caret {
+  display: inline-block;
+  width: 2.5px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: marco-caret-blink 0.95s steps(2, start) infinite;
+}
+
+@keyframes marco-caret-blink {
+  50% { opacity: 0; }
+}
+
+/* Thinking phase. Deliberately NOT linear — the spring ease is the whole
+   effect. Tuning: harder kick  cubic-bezier(0.06, 0.88, 0.16, 1)
+                   calmer       cubic-bezier(0.16, 0.72, 0.24, 1) */
+.marco-caret-spin {
+  --spin-speed: 1150ms; /* keep in sync with SPIN_MS in Marco.jsx */
+  transform-origin: 50% 50%;
+  animation: marco-spring-spin var(--spin-speed) cubic-bezier(0.1, 0.42, 0.18, 1) 1 forwards;
+  will-change: transform;
+}
+
+@keyframes marco-spring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- empty state: centered hero ----------
+
+   Before the first message there is no transcript — the greeting and the
+   composer sit together in the middle of the screen, chips beneath them.
+   Once a chat starts, the composer lives in the bottom dock instead. */
+
+.marco-hero {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow-y: auto;
+}
+
+.marco-hero-inner {
+  margin: auto; /* centers when it fits, scrolls when it doesn't */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding-top: 12px;
+  padding-bottom: 48px; /* sit the group a touch above true center */
+  animation: marco-rise .3s ease both;
+}
+
+.marco-hero h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3em;
+  font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: clamp(30px, 6vw, 40px);
+  line-height: 1.12;
+  letter-spacing: -.015em;
+  text-wrap: balance;
+  color: var(--text);
+}
+
+/* Journey's map mark (public/logo-map.png). Masked rather than dropped in as
+   an <img> so it takes --accent in both themes, like every other color in this
+   file. Sized in em off the greeting's own type so it tracks the clamp with no
+   extra breakpoints: .76em lands it at about the cap height of Instrument
+   Serif, and the nudge lifts it off the line-box centre, which sits low
+   because of the descender space. Width is height x the art's 1.1034 aspect. */
+.marco-hero-logo {
+  flex: none;
+  width: .839em;
+  height: .76em;
+  background: var(--accent);
+  -webkit-mask: url('/logo-map.png') center / contain no-repeat;
+  mask: url('/logo-map.png') center / contain no-repeat;
+  transform: translateY(-.02em);
+}
+
+.marco-hero .marco-composer {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.marco-hero .marco-chips {
+  margin-top: 8px;
+}
+
+.marco-chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 4px;
+  width: 100%;
+  transition: opacity .15s ease;
+}
+
+/* Faded, not collapsed: the chips hold their space so the composer stays put
+   under the cursor. inert already blocks pointer and keyboard access; the
+   pointer-events line is just cover for a browser that doesn't support it. */
+.marco-chips.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.marco-chip {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--text-2);
+  box-shadow: var(--shadow-sm);
+  transition: border-color .15s ease, transform .15s ease, color .15s ease;
+}
+
+.marco-chip:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.marco-chip:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+/* An odd count leaves the last chip alone in its row — let it breathe. */
+.marco-chip:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+/* ---------- composer ---------- */
+
+.marco-dock {
+  flex: none;
+  position: relative;
+  background: var(--bg);
+  padding-bottom: 16px;
+}
+
+.marco-dock::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -28px;
+  height: 28px;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+}
+
+.marco-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  padding: 8px 8px 8px 15px;
+  box-shadow: var(--shadow-lg);
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+.marco-composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lg), 0 0 0 3px var(--accent-ring);
+}
+
+.marco-composer textarea {
+  flex: 1;
+  border: 0;
+  background: none;
+  resize: none;
+  outline: none;
+  padding: 8px 0;
+  max-height: 180px;
+  line-height: 1.55;
+  overflow-y: auto;
+  caret-color: var(--accent);
+  box-sizing: border-box;
+}
+
+.marco-composer textarea::placeholder { color: var(--muted); }
+
+.marco-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--on-accent);
+  transition: opacity .15s ease, background .15s ease, transform .12s ease;
+}
+
+.marco-send svg { display: block; }
+
+.marco-send:disabled {
+  background: var(--surface-3);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.marco-send:not(:disabled):hover { background: var(--accent-ink); }
+.marco-send:not(:disabled):active { transform: scale(.94); }
+
+.marco-jump {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+  z-index: 2;
+}
+
+.marco-jump.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---------- disabled ("Marco is asleep") ---------- */
+
+.marco-asleep-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.marco-asleep {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  max-width: 26rem;
+  padding: 32px 0;
+  animation: marco-rise .3s ease both;
+}
+
+.marco-asleep .marco-mark--lg { margin-bottom: 12px; }
+
+.marco-asleep h2 {
+  margin: 0;
+  font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -.015em;
+  color: var(--text);
+}
+
+.marco-asleep p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.marco-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 9px 16px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--on-accent);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  transition: background .15s ease;
+}
+
+.marco-cta:hover { background: var(--accent-ink); }
+
+/* ---------- a11y helpers + motion ---------- */
+
+.marco-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marco-turn,
+  .marco-hero-inner,
+  .marco-asleep,
+  .marco-caret,
+  .marco-caret-spin {
+    animation: none;
+  }
+  .marco-chip:hover:not(:disabled) { transform: none; }
+  .marco-jump { transition: none; }
+  .marco-chips { transition: none; }
+}
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 640px) {
+  /* Longhand so the hero keeps its own vertical padding. */
+  .marco-wrap { padding-left: 14px; padding-right: 14px; }
+  .marco-bubble { max-width: 90%; }
+  .marco-log { padding-top: 22px; }
+}
+
+@media (max-width: 560px) {
+  .marco-chips { grid-template-columns: 1fr; }
+  .marco-chip:last-child:nth-child(odd) { grid-column: auto; }
+}

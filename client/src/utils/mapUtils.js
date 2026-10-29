@@ -1,7 +1,25 @@
+// CARTO began requiring an API key on their raster (PNG) basemaps; requests
+// without one come back stamped with an "API key required" watermark. The key
+// is a build-time Vite var, so it is baked into the bundle and IS visible to
+// anyone who opens devtools -- that is the intended model for basemap keys
+// (CARTO ties the key to the domain you registered), the same way Mapbox and
+// Google Maps public tokens work. Do not put anything actually secret here.
+//
+// Set VITE_CARTO_KEY in client/.env (see client/.env.example). Changing it
+// requires a rebuild, since Vite inlines the value at build time.
+const CARTO_KEY = import.meta.env.VITE_CARTO_KEY;
+
+if (!CARTO_KEY && import.meta.env.DEV) {
+  console.warn(
+    '[maps] VITE_CARTO_KEY is not set -- basemap tiles will render with the ' +
+    'CARTO "API key required" watermark. Add it to client/.env and restart Vite.'
+  );
+}
+
 export function getTileUrl(theme) {
-  return theme === 'dark'
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  const style = theme === 'dark' ? 'dark_all' : 'light_all';
+  const url = `https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}{r}.png`;
+  return CARTO_KEY ? `${url}?key=${encodeURIComponent(CARTO_KEY)}` : url;
 }
 
 export function getChartColors(theme) {

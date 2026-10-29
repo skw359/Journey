@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Map as MapIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './Register.css';
@@ -52,7 +51,7 @@ export default function Register() {
       <div className="register-wrapper">
         <div className="form-side">
           <div className="logo">
-            <MapIcon size={18} strokeWidth={2.2} aria-hidden="true" />
+            <img src="/logo.png" alt="" aria-hidden="true" width={18} height={18} />
             <span>Journey</span>
           </div>
 

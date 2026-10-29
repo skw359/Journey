@@ -14,13 +14,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 200px;
+  min-height: 220px;
 }
 
 .funstats-spinner {
   width: 48px;
   height: 48px;
-  border: 3px solid rgba(255,255,255,0.2);
+  border: 3px solid rgba(255, 255, 255, 0.2);
   border-top: 3px solid var(--accent-primary);
   border-radius: 50%;
   animation: spin 1.1s cubic-bezier(0.8, 0.45, 0.6, 0.7) infinite;
@@ -34,35 +34,73 @@
 }
 
 .funstats-empty h2 {
-  color: var(--text-primary);
   margin: 0 0 8px;
+  color: var(--text-primary);
 }
 
-/* Section panels */
 .funstats-panel {
   padding: 24px;
+  margin-bottom: 20px;
   border: 1px solid var(--bg-tertiary);
   border-radius: 12px;
   background: var(--bg-secondary);
-  margin-bottom: 20px;
 }
 
-.funstats-panel-title {
+.funstats-panel-title,
+.funstats-temp-chart-title {
   margin: 0 0 16px;
   font-size: 1.15rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 
-/* ── Hero: Level + Spirit Animal ── */
+.funstats-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.funstats-panel-heading .funstats-panel-title {
+  margin-bottom: 0;
+}
+
+.funstats-chart-expand-button,
+.funstats-chart-modal-close {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.funstats-chart-expand-button:hover,
+.funstats-chart-expand-button:focus-visible,
+.funstats-chart-modal-close:hover,
+.funstats-chart-modal-close:focus-visible {
+  border-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  outline: none;
+}
+
+.funstats-chart-expand-button:hover,
+.funstats-chart-expand-button:focus-visible {
+  transform: translateY(-1px);
+}
+
 .funstats-hero {
   background: var(--bg-secondary);
 }
 
 .funstats-hero-row {
   display: flex;
-  gap: 24px;
   align-items: flex-start;
+  gap: 24px;
 }
 
 .funstats-spirit {
@@ -94,8 +132,8 @@
 
 .funstats-spirit-trait {
   font-size: 0.82rem;
-  color: var(--text-secondary);
   line-height: 1.35;
+  color: var(--text-secondary);
 }
 
 .funstats-level {
@@ -107,6 +145,7 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 12px;
   margin-bottom: 6px;
 }
 
@@ -118,36 +157,55 @@
 
 .funstats-level-xp {
   font-size: 0.82rem;
-  color: var(--text-secondary);
   font-weight: 600;
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+.funstats-level-bar-wrap,
+.funstats-challenge-bar-wrap,
+.funstats-progress-bar-wrap,
+.funstats-condition-bar-wrap {
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
 }
 
 .funstats-level-bar-wrap {
   height: 8px;
-  border-radius: 4px;
-  background: var(--bg-tertiary);
-  overflow: hidden;
 }
 
-.funstats-level-bar {
+.funstats-level-bar,
+.funstats-challenge-bar,
+.funstats-progress-bar {
   height: 100%;
-  border-radius: 4px;
+  border-radius: inherit;
+}
+
+.funstats-level-bar,
+.funstats-challenge-bar {
   background: var(--accent-primary);
-  transition: width 0.5s ease;
+}
+
+.funstats-progress-bar {
+  background: rgba(2, 216, 127, 0.72);
 }
 
 .funstats-level-next {
+  display: block;
+  margin-top: 4px;
   font-size: 0.75rem;
   color: var(--text-secondary);
-  margin-top: 4px;
-  display: block;
 }
 
-/* ── Travel Profile grid ── */
-.funstats-profile-grid {
+.funstats-profile-grid,
+.funstats-stat-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.funstats-profile-grid {
   gap: 12px 24px;
 }
 
@@ -157,7 +215,10 @@
   gap: 2px;
 }
 
-.funstats-profile-label {
+.funstats-profile-label,
+.funstats-stat-card h4,
+.funstats-progress-title,
+.funstats-challenge-label {
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -171,34 +232,23 @@
   color: var(--text-primary);
 }
 
-.funstats-profile-value .unit {
-  font-size: 0.75rem;
+.funstats-profile-value .unit,
+.funstats-stat-card .value .unit {
+  margin-left: 3px;
+  font-size: 0.74rem;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-left: 3px;
-}
-
-/* ── Stat cards grid ── */
-.funstats-stat-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
 }
 
 .funstats-stat-card {
   padding: 14px 16px;
+  border: 1px solid var(--bg-tertiary);
   border-radius: 10px;
   background: var(--bg-primary);
-  border: 1px solid var(--bg-tertiary);
 }
 
 .funstats-stat-card h4 {
   margin: 0 0 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .funstats-stat-card .value {
@@ -207,25 +257,28 @@
   color: var(--text-primary);
 }
 
-.funstats-stat-card .value .unit {
-  font-size: 0.72rem;
-  font-weight: 500;
+.funstats-stat-card .sub,
+.funstats-weather-summary,
+.funstats-temp-chart-hint,
+.funstats-temp-histogram-sub,
+.funstats-cluster-visits,
+.funstats-chart-modal-subtitle,
+.funstats-challenge-pct,
+.funstats-yoy {
+  font-size: 0.8rem;
   color: var(--text-secondary);
-  margin-left: 2px;
 }
 
 .funstats-stat-card .sub {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
-/* ── States ── */
-.funstats-states-count {
+.funstats-states-count,
+.funstats-bingo-count {
+  margin-bottom: 12px;
   font-size: 2rem;
   font-weight: 800;
   color: var(--text-primary);
-  margin-bottom: 12px;
 }
 
 .funstats-states-count span {
@@ -234,23 +287,86 @@
   color: var(--text-secondary);
 }
 
-.funstats-states-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+/* US State Map */
+.us-map-container {
+  position: relative;
+  width: 100%;
+  margin-top: 8px;
 }
 
-.funstats-state-tag {
+.us-map-svg {
+  width: 100%;
+  height: auto;
+}
+
+.us-map-state {
+  fill: var(--bg-tertiary);
+  stroke: var(--bg-secondary);
+  stroke-width: 1;
+  transition: fill 0.15s, stroke 0.15s, stroke-width 0.15s;
+  cursor: default;
+}
+
+.us-map-state.visited {
+  fill: var(--accent-primary);
+  fill-opacity: 0.75;
+  cursor: pointer;
+}
+
+.us-map-state.hovered {
+  stroke: var(--text-primary);
+  stroke-width: 2;
+}
+
+.us-map-state.visited.hovered {
+  fill-opacity: 1;
+}
+
+.us-map-tooltip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
   padding: 4px 10px;
-  border-radius: 6px;
   background: var(--bg-primary);
   border: 1px solid var(--bg-tertiary);
-  font-size: 0.82rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--text-primary);
-  font-weight: 500;
+  pointer-events: none;
 }
 
-/* ── Bar chart ── */
+.us-map-tooltip-check {
+  color: var(--accent-primary);
+}
+
+.funstats-yoy {
+  margin-bottom: 10px;
+}
+
+.funstats-yoy-up {
+  color: rgba(2, 216, 127, 0.85);
+}
+
+.funstats-yoy-down {
+  color: rgba(255, 107, 107, 0.92);
+}
+
+.funstats-challenge {
+  margin-bottom: 14px;
+}
+
+.funstats-challenge-bar-wrap,
+.funstats-progress-bar-wrap {
+  height: 8px;
+  margin-top: 8px;
+}
+
+.funstats-barchart-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
 .funstats-barchart {
   display: flex;
   align-items: flex-end;
@@ -261,194 +377,61 @@
 
 .funstats-bar-col {
   flex: 1;
+  min-width: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  height: 100%;
   justify-content: flex-end;
-  min-width: 0;
+  gap: 6px;
 }
 
 .funstats-bar {
   width: 100%;
   min-height: 2px;
-  background: var(--accent-primary);
-  border-radius: 3px 3px 0 0;
-  transition: height 0.3s ease;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--accent-primary) 0%, color-mix(in srgb, var(--accent-primary) 55%, transparent) 100%);
 }
 
-.funstats-bar-label {
-  font-size: 0.55rem;
+.funstats-bar-label,
+.funstats-temp-bucket-label,
+.funstats-bingo-label {
+  font-size: 0.62rem;
   color: var(--text-secondary);
-  margin-top: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+  text-align: center;
 }
 
-/* ── YoY comparison ── */
-.funstats-yoy {
-  margin-bottom: 8px;
-}
-
-.funstats-yoy-up {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--accent-primary);
-}
-
-.funstats-yoy-down {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--accent-danger, #ff4444);
-}
-
-/* ── Monthly challenge ── */
-.funstats-challenge {
-  margin-bottom: 12px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: var(--bg-primary);
-  border: 1px solid var(--bg-tertiary);
-}
-
-.funstats-challenge-label {
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-  display: block;
-  margin-bottom: 6px;
-}
-
-.funstats-challenge-bar-wrap {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--bg-tertiary);
-  overflow: hidden;
-}
-
-.funstats-challenge-bar {
-  height: 100%;
-  border-radius: 3px;
-  background: var(--accent-primary);
-  transition: width 0.5s ease;
-}
-
-.funstats-challenge-pct {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-  font-weight: 600;
-  margin-top: 4px;
-  display: block;
-}
-
-/* ── Activity heatmap (GitHub-style) ── */
-.funstats-heatmap-scroll {
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.funstats-heatmap {
-  display: flex;
-  gap: 2px;
-  min-width: 0;
-}
-
-.funstats-heatmap-col {
+.funstats-progress-list,
+.funstats-conditions-list,
+.funstats-cluster-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-}
-
-.funstats-heatmap-cell {
-  width: 11px;
-  height: 11px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-/* ── Achievements ── */
-.funstats-achievements {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.funstats-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 20px;
-  background: var(--bg-primary);
-  border: 1px solid var(--bg-tertiary);
-  font-size: 0.85rem;
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.funstats-badge .badge-desc {
-  font-weight: 400;
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-}
-
-/* ── Achievement progress bars ── */
-.funstats-progress-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .funstats-progress-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 10px;
+  background: var(--bg-primary);
 }
 
 .funstats-progress-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-}
-
-.funstats-progress-title {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .funstats-progress-nums {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
-.funstats-progress-bar-wrap {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--bg-tertiary);
-  overflow: hidden;
-}
-
-.funstats-progress-bar {
-  height: 100%;
-  border-radius: 3px;
-  background: var(--accent-primary);
-  transition: width 0.5s ease;
-}
-
-/* ── Bingo card ── */
-.funstats-bingo-count {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
-}
-
 .funstats-bingo-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -457,32 +440,42 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  text-align: center;
   padding: 6px;
-  border-radius: 8px;
-  background: var(--bg-primary);
   border: 1px solid var(--bg-tertiary);
-  transition: background 0.2s, border-color 0.2s;
+  border-radius: 10px;
+  background: var(--bg-primary);
+  text-align: center;
 }
 
 .funstats-bingo-cell.completed {
-  background: rgba(2, 216, 127, 0.12);
   border-color: rgba(2, 216, 127, 0.35);
+  background: rgba(2, 216, 127, 0.16);
 }
 
-.funstats-bingo-label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  line-height: 1.25;
-  word-break: break-word;
+.funstats-heatmap-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 
-.funstats-bingo-cell.completed .funstats-bingo-label {
-  color: var(--accent-primary);
+.funstats-heatmap {
+  display: flex;
+  gap: 4px;
+  min-width: max-content;
 }
 
-/* ── Cluster list ── */
+.funstats-heatmap-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.funstats-heatmap-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+}
+
 .funstats-cluster-list {
   list-style: none;
   margin: 0;
@@ -491,48 +484,201 @@
 
 .funstats-cluster-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--bg-tertiary);
-}
-
-.funstats-cluster-item:last-child {
-  border-bottom: none;
+  padding: 12px 14px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 10px;
+  background: var(--bg-primary);
 }
 
 .funstats-cluster-rank {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background: var(--bg-tertiary);
-  display: flex;
+  border-radius: 999px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
   flex-shrink: 0;
 }
 
 .funstats-cluster-info {
-  flex: 1;
   min-width: 0;
 }
 
 .funstats-cluster-coord {
-  font-size: 0.88rem;
-  color: var(--text-primary);
+  font-size: 0.92rem;
   font-weight: 600;
+  color: var(--text-primary);
+}
+
+.funstats-temp-chart-wrap {
+  position: relative;
+  height: 280px;
+}
+
+.funstats-temp-chart-wrap--interactive {
+  border-radius: 12px;
+  cursor: zoom-in;
+  outline: none;
+}
+
+.funstats-temp-chart-wrap--interactive:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 45%, transparent);
+}
+
+.funstats-temp-chart-wrap canvas {
+  border-radius: 12px;
+}
+
+@keyframes funstats-modal-fade-in {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to   { opacity: 1; backdrop-filter: blur(14px); }
+}
+
+@keyframes funstats-modal-fade-out {
+  from { opacity: 1; backdrop-filter: blur(14px); }
+  to   { opacity: 0; backdrop-filter: blur(0); }
+}
+
+.funstats-chart-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(7, 10, 18, 0.82);
+  backdrop-filter: blur(14px);
+  animation: funstats-modal-fade-in 0.25s ease both;
+}
+
+.funstats-chart-modal-backdrop--closing {
+  animation: funstats-modal-fade-out 0.25s ease both;
+}
+
+.funstats-chart-modal {
+  width: min(1400px, 96%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: var(--bg-secondary);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.funstats-chart-modal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.funstats-chart-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.funstats-chart-modal-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.funstats-chart-modal-body {
+  position: relative;
+  min-height: clamp(360px, 70vh, 760px);
+}
+
+.funstats-weather-summary {
+  margin-bottom: 14px;
+}
+
+.funstats-condition-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.funstats-condition-label {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.funstats-condition-bar-wrap {
+  flex: 1;
+  height: 8px;
+}
+
+.funstats-condition-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(2, 216, 127, 0.6);
+  transition: width 0.3s ease;
+}
+
+.funstats-condition-count {
+  width: 32px;
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-.funstats-cluster-visits {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
+.funstats-temp-histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 100px;
 }
 
-/* ── Responsive ── */
+.funstats-temp-bucket {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.funstats-temp-bucket-bar {
+  width: 100%;
+  min-height: 4px;
+  border-radius: 3px 3px 0 0;
+  background: color-mix(in srgb, var(--accent-primary) 65%, transparent);
+  transition: height 0.3s ease;
+}
+
+.funstats-temp-histogram-sub {
+  margin-top: 8px;
+  text-align: center;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 720px) {
   .funstats-main {
     padding: 20px 14px;
@@ -542,17 +688,27 @@
     padding: 18px;
   }
 
-  .funstats-hero-row {
+  .funstats-panel-heading,
+  .funstats-chart-modal-header,
+  .funstats-hero-row,
+  .funstats-level-header,
+  .funstats-progress-header {
     flex-direction: column;
-    gap: 16px;
+    align-items: stretch;
   }
 
-  .funstats-profile-grid {
-    grid-template-columns: 1fr;
+  .funstats-chart-expand-button,
+  .funstats-chart-modal-close {
+    align-self: flex-start;
   }
 
+  .funstats-profile-grid,
   .funstats-stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .funstats-barchart {
+    height: 84px;
   }
 
   .funstats-bingo-grid {
@@ -560,10 +716,111 @@
   }
 
   .funstats-bingo-label {
-    font-size: 0.58rem;
+    font-size: 0.56rem;
   }
 
-  .funstats-barchart {
-    height: 80px;
+  .funstats-heatmap-cell {
+    width: 10px;
+    height: 10px;
   }
+
+  .funstats-temp-chart-wrap {
+    height: 220px;
+  }
+
+  .funstats-chart-modal-backdrop {
+    padding: 12px;
+  }
+
+  .funstats-chart-modal {
+    padding: 16px;
+  }
+
+  .funstats-chart-modal-body {
+    min-height: min(62vh, 460px);
+  }
+
+  .funstats-temp-histogram {
+    height: 70px;
+  }
+
+  .funstats-condition-label {
+    width: 60px;
+    font-size: 0.75rem;
+  }
+}
+
+/* Cities backfill */
+.funstats-backfill {
+  margin-top: 12px;
+}
+
+.funstats-backfill-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.funstats-backfill-detail {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.funstats-backfill-note {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
+.funstats-backfill-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--bg-tertiary);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 1.1s cubic-bezier(0.8, 0.45, 0.6, 0.7) infinite;
+  flex-shrink: 0;
+}
+
+.funstats-backfill-btn {
+  margin-top: 10px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent-primary);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.funstats-backfill-btn:hover {
+  opacity: 0.85;
+}
+
+.funstats-reindex-btn {
+  margin-top: 10px;
+  padding: 5px 14px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.funstats-reindex-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
 }

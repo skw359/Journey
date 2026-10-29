@@ -6,10 +6,12 @@ import {
   convertDistanceFromMiles,
   convertElevationFromMeters,
   convertSpeedFromMph,
+  convertTemperatureFromF,
   getAccelerationUnitLabel,
   getDistanceUnitLabel,
   getElevationUnitLabel,
   getSpeedUnitLabel,
+  getTemperatureUnitLabel,
   isMetricPreference,
   normalizeUnitPreference,
 } from '../utils/units';
@@ -35,11 +37,13 @@ export function UnitsProvider({ children }) {
     speedUnit: getSpeedUnitLabel(unitPreference),
     elevationUnit: getElevationUnitLabel(unitPreference),
     accelerationUnit: getAccelerationUnitLabel(unitPreference),
+    temperatureUnit: getTemperatureUnitLabel(unitPreference),
     setUnitPreference,
     convertDistance: (value) => convertDistanceFromMiles(value, unitPreference),
     convertSpeed: (value) => convertSpeedFromMph(value, unitPreference),
     convertElevation: (value) => convertElevationFromMeters(value, unitPreference),
     convertAcceleration: (value) => convertAccelerationFromFtPerSec2(value, unitPreference),
+    convertTemperature: (value) => convertTemperatureFromF(value, unitPreference),
   }), [isMetric, setUnitPreference, unitPreference]);
 
   return (

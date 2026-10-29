@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const { pool } = require('../db');
 const { PUBLIC_URL } = require('../config');
+const log = require('../utils/logger').scope('pairing');
 
 // GET /api/pairing/tokens
 router.get('/tokens', async (req, res) => {
@@ -13,7 +14,7 @@ router.get('/tokens', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    console.error('List pairing tokens error:', err);
+    log.error('List pairing tokens error:', err);
     res.status(500).json({ error: 'Failed to list tokens' });
   }
 });
@@ -32,7 +33,7 @@ router.post('/tokens', async (req, res) => {
 
     res.status(201).json({ id, token, label, created_at: new Date().toISOString() });
   } catch (err) {
-    console.error('Create pairing token error:', err);
+    log.error('Create pairing token error:', err);
     res.status(500).json({ error: 'Failed to create token' });
   }
 });
@@ -49,7 +50,7 @@ router.delete('/tokens/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error('Revoke pairing token error:', err);
+    log.error('Revoke pairing token error:', err);
     res.status(500).json({ error: 'Failed to revoke token' });
   }
 });
@@ -79,7 +80,7 @@ router.get('/qr-data', async (req, res) => {
     const serverUrl = PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
     res.json({ serverUrl, token });
   } catch (err) {
-    console.error('QR data error:', err);
+    log.error('QR data error:', err);
     res.status(500).json({ error: 'Failed to generate QR data' });
   }
 });
