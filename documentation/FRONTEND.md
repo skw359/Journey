@@ -118,6 +118,11 @@ Key features:
 - route click-through into dashboard
 - detail route refresh in high zoom bounds
 
+Rendering notes:
+
+- journey lines use an `ol/layer/VectorImage` layer: lines are drawn into one image when the view settles and pans/zooms only transform it, instead of re-stroking every line each frame
+- hover and click hit testing is geometric (distance to line/marker in map units), not `map.forEachFeatureAtPixel`, whose per-feature `getImageData` readbacks stalled the page for seconds over dense overview data
+
 ## `Settings` (`/settings`)
 
 Key features:
