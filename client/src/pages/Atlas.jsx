@@ -4,7 +4,6 @@ import OlMap from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import VectorImageLayer from 'ol/layer/VectorImage';
 import HeatmapLayer from 'ol/layer/Heatmap';
 import XYZ from 'ol/source/XYZ';
 import VectorSource from 'ol/source/Vector';
@@ -16,6 +15,7 @@ import Polygon from 'ol/geom/Polygon';
 import { Style, Stroke, Circle as CircleStyle, Fill, Text } from 'ol/style';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { boundingExtent, buffer as bufferExtent, containsExtent } from 'ol/extent';
+import { wrapX } from 'ol/coordinate';
 import { easeOut } from 'ol/easing';
 import Overlay from 'ol/Overlay';
 import { getUid } from 'ol/util';
@@ -27,6 +27,7 @@ import { TILE_ATTRIBUTION } from '../utils/mapUtils';
 import { fetchAllTimeMapData, fetchHeatmapGrid } from '../api/journeys';
 import { computeFilteredStats } from '../utils/travelStats';
 import { createBuildingProbe } from '../utils/buildingProbe';
+import { createRouteLinesLayer } from '../utils/routeLinesLayer';
 import './Atlas.css';
 
 const HEATMAP_GRADIENT = ['#2454ff', '#2be86f', '#f4ef39', '#ff9d2e', '#ff4a2a'];
@@ -40,10 +41,18 @@ const DETAIL_POINT_BUDGET = 150000;
 // Detail is only worth a request when each route gets meaningfully more points
 // than the base download already provided.
 const DETAIL_MIN_GAIN = 2;
-// Pointer slop, in screen pixels, for hovering and clicking lines and markers.
-const HIT_TOLERANCE_PX = 3;
-// Start/end marker circle radius plus its stroke.
-const MARKER_RADIUS_PX = 6;
+
+// How far from a journey or marker, in pixels, the pointer may be and still hit it.
+const HIT_TOLERANCE = 3;
+// Antialiasing paints about half a pixel past a shape's nominal edge, and the
+// pointer is on a shape wherever it is painted, as with OL's pixel hit test.
+const EDGE_SOFTNESS = 0.5;
+// Marker and cluster circle sizes, shared by their styles and the hit test.
+const MARKER_RADIUS = 5;
+const MARKER_STROKE = 1;
+const CLUSTER_STROKE = 2;
+const CLUSTER_MAX_RADIUS = 20;
+const clusterRadius = (size) => Math.min(CLUSTER_MAX_RADIUS, 12 + Math.log(size) * 3);
 
 function tileUrlsFromTemplate(template) {
   const cleaned = template.replace('{r}', '');
@@ -182,33 +191,13 @@ export default function Atlas({ sidebarCollapsed = false }) {
 
     const routeSource = new VectorSource();
     routeSourceRef.current = routeSource;
-    // ol calls the style fn once per feature per layer re-render, so cache by the
-    // only inputs that vary instead of allocating two objects per route per redraw.
-    const routeStyleCache = new Map();
-    const routeStyle = (feature) => {
-      const color = feature.get('color') || '#02d87f';
-      const width = lineWidthRef.current;
-      const key = `${color}|${width}`;
-      let style = routeStyleCache.get(key);
-      if (!style) {
-        style = new Style({ stroke: new Stroke({ color, width }) });
-        routeStyleCache.set(key, style);
-      }
-      return style;
-    };
-
-    // Every journey line is drawn into one image when the view settles, and
-    // pans/zooms just move that image. A plain VectorLayer re-strokes every
-    // line on every frame of an interaction, and because the layer is
-    // translucent it also redraws them into a scratch canvas and blits that
-    // full-screen each frame; together those dominated the frame budget once
-    // a few thousand journeys were on screen. imageRatio renders a margin
-    // past the viewport so a pan does not reveal blank edges before moveend.
-    const routeLayer = new VectorImageLayer({
+    // Journeys draw on the GPU (see routeLinesLayer.js), which keeps panning
+    // and zooming smooth however many are in view. It has no hit detection of
+    // its own; forEachAtlasFeatureAt below tests the geometry instead.
+    const routeLayer = createRouteLinesLayer({
       source: routeSource,
-      style: routeStyle,
+      lineWidth: lineWidthRef.current,
       opacity: opacityRef.current,
-      imageRatio: 1.5,
     });
     routeLayerRef.current = routeLayer;
 
@@ -222,9 +211,9 @@ export default function Atlas({ sidebarCollapsed = false }) {
       if (!style) {
         style = new Style({
           image: new CircleStyle({
-            radius: 5,
+            radius: MARKER_RADIUS,
             fill: new Fill({ color }),
-            stroke: new Stroke({ color: '#ffffff', width: 1 }),
+            stroke: new Stroke({ color: '#ffffff', width: MARKER_STROKE }),
           }),
         });
         markerStyleCache.set(color, style);
@@ -249,9 +238,9 @@ export default function Atlas({ sidebarCollapsed = false }) {
         if (!style) {
           style = new Style({
             image: new CircleStyle({
-              radius: Math.min(20, 12 + Math.log(size) * 3),
+              radius: clusterRadius(size),
               fill: new Fill({ color: 'rgba(2, 216, 127, 0.85)' }),
-              stroke: new Stroke({ color: '#ffffff', width: 2 }),
+              stroke: new Stroke({ color: '#ffffff', width: CLUSTER_STROKE }),
             }),
             text: new Text({
               text: String(size),
@@ -313,52 +302,64 @@ export default function Atlas({ sidebarCollapsed = false }) {
 
     const tooltipEl = tooltipRef.current;
 
-    // Hit testing is done against the geometries rather than with
-    // map.forEachFeatureAtPixel. ol's canvas hit detection redraws every
-    // feature whose extent (padded by the 100px render buffer) covers the
-    // pointer and reads it back with getImageData, one readback per feature.
-    // Long journeys have huge extents, so at overview zoom a single pointer
-    // move meant thousands of GPU readbacks and multi-second stalls. Distance
-    // to the geometry gives the same answer with plain arithmetic.
-    const nearestWithin = (source, coordinate, maxDist, radiusOf) => {
-      let best = null;
-      let bestDist = Infinity;
-      const extent = bufferExtent(boundingExtent([coordinate]), maxDist);
-      source.forEachFeatureIntersectingExtent(extent, (feature) => {
-        const p = feature.getGeometry().getClosestPoint(coordinate);
-        const dist = Math.hypot(p[0] - coordinate[0], p[1] - coordinate[1]);
-        if (dist <= (radiusOf ? radiusOf(feature) : maxDist) && dist < bestDist) {
-          best = feature;
-          bestDist = dist;
-        }
-      });
-      return best;
-    };
-
-    // Same precedence as the layer stack: clusters and markers sit above lines.
-    const hitAtCoordinate = (coordinate) => {
-      const resolution = map.getView().getResolution();
-      const tolerance = HIT_TOLERANCE_PX * resolution;
-      let cluster = null;
-      let marker = null;
-      if (clusterLayer.getVisible()) {
-        const hit = nearestWithin(clusterSource, coordinate, (20 + HIT_TOLERANCE_PX) * resolution, (feature) => {
-          const size = feature.get('features').length;
-          const radius = size === 1 ? MARKER_RADIUS_PX : Math.min(20, 12 + Math.log(size) * 3);
-          return radius * resolution + tolerance;
+    // Hit testing measures against geometry rather than rendered pixels. OL's
+    // canvas hit detection redrew every candidate and read it back with
+    // getImageData, which over dense areas cost hundreds of milliseconds per
+    // pointer move, and the GPU journey layer has no pixels to read back.
+    // Calls `callback` with each journey, marker and cluster within
+    // HIT_TOLERANCE pixels of `coordinate`, in the order forEachFeatureAtPixel
+    // visits them: features under the pointer first (topmost layer, then
+    // topmost feature), then near misses, nearest first. Returns the first
+    // truthy callback result. The building probe's outline is never hit.
+    const scratchPoint = [0, 0];
+    const forEachAtlasFeatureAt = (coordinate, callback) => {
+      const view = map.getView();
+      const resolution = view.getResolution();
+      if (!resolution) return undefined;
+      // World copies repeat the same features, so test the original world.
+      const [x, y] = wrapX(coordinate.slice(), view.getProjection());
+      const under = [];
+      const near = [];
+      // `gapOf` gives the pixel distance from the pointer to the feature's
+      // drawn edge: 0 when under it, Infinity when out of reach.
+      const collect = (layer, source, reachPx, gapOf) => {
+        if (!layer.getVisible()) return;
+        const reach = reachPx * resolution;
+        const hits = [];
+        source.forEachFeatureInExtent([x - reach, y - reach, x + reach, y + reach], (feature) => {
+          const gap = gapOf(feature);
+          if (gap <= HIT_TOLERANCE) hits.push({ feature, gap, order: Number(getUid(feature)) });
         });
-        const inner = hit?.get('features');
-        if (inner?.length > 1) cluster = hit;
-        else if (inner?.[0].get('tooltipKind')) marker = inner[0];
-      } else if (markerLayer.getVisible()) {
-        marker = nearestWithin(markerSource, coordinate, MARKER_RADIUS_PX * resolution + tolerance, null);
-        if (marker && !marker.get('tooltipKind')) marker = null;
+        // Features are drawn in creation order, so the highest uid is on top.
+        hits.sort((a, b) => b.order - a.order);
+        for (const hit of hits) (hit.gap > 0 ? near : under).push(hit);
+      };
+      const circleGap = (feature, radius) => {
+        const [fx, fy] = feature.getGeometry().getCoordinates();
+        return Math.max(0, Math.hypot(fx - x, fy - y) / resolution - radius);
+      };
+
+      const markerEdge = MARKER_RADIUS + MARKER_STROKE / 2 + EDGE_SOFTNESS;
+      const clusterEdge = (size) => clusterRadius(size) + CLUSTER_STROKE / 2 + EDGE_SOFTNESS;
+      collect(clusterLayer, clusterSource, clusterEdge(Infinity) + HIT_TOLERANCE, (feature) => {
+        const size = feature.get('features').length;
+        return circleGap(feature, size > 1 ? clusterEdge(size) : markerEdge);
+      });
+      collect(markerLayer, markerSource, markerEdge + HIT_TOLERANCE, (feature) => circleGap(feature, markerEdge));
+      const lineEdge = lineWidthRef.current / 2 + EDGE_SOFTNESS;
+      const maxSq = ((lineEdge + HIT_TOLERANCE) * resolution) ** 2;
+      collect(routeLayer, routeSource, lineEdge + HIT_TOLERANCE, (feature) => {
+        const sq = feature.getGeometry().closestPointXY(x, y, scratchPoint, maxSq);
+        return sq < maxSq ? Math.max(0, Math.sqrt(sq) / resolution - lineEdge) : Infinity;
+      });
+
+      // Stable, so equally near features keep their layer and draw order.
+      near.sort((a, b) => a.gap - b.gap);
+      for (const hit of under.concat(near)) {
+        const result = callback(hit.feature);
+        if (result) return result;
       }
-      let route = null;
-      if (!cluster && !marker && routeLayer.getVisible()) {
-        route = nearestWithin(routeSource, coordinate, (lineWidthRef.current / 2) * resolution + tolerance, null);
-      }
-      return { cluster, marker, route };
+      return undefined;
     };
 
     // Tooltip markup is built on hover rather than stored on every feature.
@@ -379,8 +380,8 @@ export default function Atlas({ sidebarCollapsed = false }) {
       return null;
     };
 
-    // pointermove fires far faster than we can usefully redraw, so coalesce to
-    // at most one hit test per animation frame.
+    // pointermove fires far faster than the screen can show the result, so
+    // coalesce to at most one hit test per animation frame.
     let pointerFrame = 0;
     let pendingPointer = null;
     let lastTooltipHtml = null;
@@ -425,11 +426,35 @@ export default function Atlas({ sidebarCollapsed = false }) {
         return;
       }
 
-      const { cluster: hoveredCluster, marker, route } = hitAtCoordinate(pending.coordinate);
-      const foundFeature = marker || route;
-      const foundCoord = marker ? marker.getGeometry().getCoordinates() : null;
-      const isLine = Boolean(route);
-      const isInteractive = Boolean(hoveredCluster || foundFeature);
+      let foundFeature = null;
+      let foundCoord = null;
+      let isLine = false;
+      let hoveredCluster = null;
+      let isInteractive = false;
+      forEachAtlasFeatureAt(pending.coordinate, (feature) => {
+        const inner = feature.get('features');
+        if (inner && inner.length > 1) {
+          hoveredCluster = feature;
+          isInteractive = true;
+          return true;
+        }
+        if (feature.get('tooltipKind')) {
+          foundFeature = feature;
+          isLine = feature.getGeometry()?.getType() === 'LineString';
+          if (!isLine) foundCoord = feature.getGeometry().getCoordinates();
+          isInteractive = true;
+          return true;
+        }
+        if (inner && inner.length === 1) {
+          if (inner[0].get('tooltipKind')) {
+            foundFeature = inner[0];
+            foundCoord = inner[0].getGeometry().getCoordinates();
+            isInteractive = true;
+            return true;
+          }
+        }
+        return false;
+      });
 
       if (hoveredCluster) {
         // Rebuild the hull only when the hovered cluster actually changes.
@@ -465,24 +490,28 @@ export default function Atlas({ sidebarCollapsed = false }) {
     };
 
     const onPointerMove = (evt) => {
-      pendingPointer = { pixel: evt.pixel, coordinate: evt.coordinate, dragging: evt.dragging };
+      pendingPointer = { coordinate: evt.coordinate, dragging: evt.dragging };
       if (!pointerFrame) pointerFrame = requestAnimationFrame(runHitTest);
     };
     map.on('pointermove', onPointerMove);
 
-    // What of the Atlas's own is under this coordinate? Markers carry no
-    // routeId, so a click on one falls through to the journey line beneath.
+    // What of the Atlas's own is under this coordinate?
     const hitAtlasFeature = (coordinate) => {
-      if (mapModeRef.current === 'heatmap') return { routeId: null, clusterFeatures: null };
-      const { cluster, route } = hitAtCoordinate(coordinate);
-      if (cluster) return { routeId: null, clusterFeatures: cluster.get('features') };
-      let routeId = route?.get('routeId') ?? null;
-      if (!routeId && routeLayer.getVisible()) {
-        const resolution = map.getView().getResolution();
-        const tolerance = (lineWidthRef.current / 2 + HIT_TOLERANCE_PX) * resolution;
-        routeId = nearestWithin(routeSource, coordinate, tolerance, null)?.get('routeId') ?? null;
-      }
-      return { routeId, clusterFeatures: null };
+      let routeId = null;
+      let clusterFeatures = null;
+      forEachAtlasFeatureAt(coordinate, (feature) => {
+        const inner = feature.get('features');
+        if (inner && inner.length > 1) { clusterFeatures = inner; return true; }
+        if (inner && inner.length === 1) {
+          const innerId = inner[0].get('routeId');
+          if (innerId) { routeId = innerId; return true; }
+          return false;
+        }
+        const id = feature.get('routeId');
+        if (id) { routeId = id; return true; }
+        return false;
+      });
+      return { routeId, clusterFeatures };
     };
 
     // The pointer event of the last click a cluster or route consumed.
@@ -558,6 +587,10 @@ export default function Atlas({ sidebarCollapsed = false }) {
       buildingProbe.destroy();
       buildingProbeRef.current = null;
       map.setTarget(null);
+      // Unlike canvas layers, WebGL layers keep their GL context until disposed,
+      // and browsers only allow a handful of contexts alive at once.
+      routeLayer.dispose();
+      heatmapLayer.dispose();
       mapInstanceRef.current = null;
     };
   }, []);
@@ -724,8 +757,8 @@ export default function Atlas({ sidebarCollapsed = false }) {
   const routeColor = (route, span, byDate) => {
     if (!byDate) return '#02d87f';
     const t = new Date(route.startTime).getTime();
-    // Whole degrees keep the style cache bounded at 241 entries; 1deg of hue is
-    // not distinguishable on screen.
+    // Whole degrees keep it to 241 distinct colors, all of which fit in ol's
+    // parsed-color cache; 1deg of hue is not distinguishable on screen.
     const hue = Math.round(((t - span.dateMin) / span.dateRange) * 240);
     return `hsl(${hue}, 80%, 55%)`;
   };
@@ -882,11 +915,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
   }, [opacity]);
 
   useEffect(() => {
-    const routeSource = routeSourceRef.current;
-    if (!routeSource) return;
-    // Coalesce slider drags into a single restyle per frame.
-    const frame = requestAnimationFrame(() => routeSource.changed());
-    return () => cancelAnimationFrame(frame);
+    routeLayerRef.current?.setLineWidth(lineWidth);
   }, [lineWidth]);
 
   // Recoloring rewrites one property on existing features rather than rebuilding.
