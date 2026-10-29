@@ -15,6 +15,7 @@ import Polygon from 'ol/geom/Polygon';
 import { Style, Stroke, Circle as CircleStyle, Fill, Text } from 'ol/style';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { boundingExtent, buffer as bufferExtent, containsExtent } from 'ol/extent';
+import { wrapX } from 'ol/coordinate';
 import { easeOut } from 'ol/easing';
 import Overlay from 'ol/Overlay';
 import { getUid } from 'ol/util';
@@ -26,6 +27,7 @@ import { TILE_ATTRIBUTION } from '../utils/mapUtils';
 import { fetchAllTimeMapData, fetchHeatmapGrid } from '../api/journeys';
 import { computeFilteredStats } from '../utils/travelStats';
 import { createBuildingProbe } from '../utils/buildingProbe';
+import { createRouteLinesLayer } from '../utils/routeLinesLayer';
 import './Atlas.css';
 
 const HEATMAP_GRADIENT = ['#2454ff', '#2be86f', '#f4ef39', '#ff9d2e', '#ff4a2a'];
@@ -39,6 +41,18 @@ const DETAIL_POINT_BUDGET = 150000;
 // Detail is only worth a request when each route gets meaningfully more points
 // than the base download already provided.
 const DETAIL_MIN_GAIN = 2;
+
+// How far from a journey or marker, in pixels, the pointer may be and still hit it.
+const HIT_TOLERANCE = 3;
+// Antialiasing paints about half a pixel past a shape's nominal edge, and the
+// pointer is on a shape wherever it is painted, as with OL's pixel hit test.
+const EDGE_SOFTNESS = 0.5;
+// Marker and cluster circle sizes, shared by their styles and the hit test.
+const MARKER_RADIUS = 5;
+const MARKER_STROKE = 1;
+const CLUSTER_STROKE = 2;
+const CLUSTER_MAX_RADIUS = 20;
+const clusterRadius = (size) => Math.min(CLUSTER_MAX_RADIUS, 12 + Math.log(size) * 3);
 
 function tileUrlsFromTemplate(template) {
   const cleaned = template.replace('{r}', '');
@@ -177,24 +191,12 @@ export default function Atlas({ sidebarCollapsed = false }) {
 
     const routeSource = new VectorSource();
     routeSourceRef.current = routeSource;
-    // ol calls the style fn once per feature per layer re-render, so cache by the
-    // only inputs that vary instead of allocating two objects per route per redraw.
-    const routeStyleCache = new Map();
-    const routeStyle = (feature) => {
-      const color = feature.get('color') || '#02d87f';
-      const width = lineWidthRef.current;
-      const key = `${color}|${width}`;
-      let style = routeStyleCache.get(key);
-      if (!style) {
-        style = new Style({ stroke: new Stroke({ color, width }) });
-        routeStyleCache.set(key, style);
-      }
-      return style;
-    };
-
-    const routeLayer = new VectorLayer({
+    // Journeys draw on the GPU (see routeLinesLayer.js), which keeps panning
+    // and zooming smooth however many are in view. It has no hit detection of
+    // its own; forEachAtlasFeatureAt below tests the geometry instead.
+    const routeLayer = createRouteLinesLayer({
       source: routeSource,
-      style: routeStyle,
+      lineWidth: lineWidthRef.current,
       opacity: opacityRef.current,
     });
     routeLayerRef.current = routeLayer;
@@ -209,9 +211,9 @@ export default function Atlas({ sidebarCollapsed = false }) {
       if (!style) {
         style = new Style({
           image: new CircleStyle({
-            radius: 5,
+            radius: MARKER_RADIUS,
             fill: new Fill({ color }),
-            stroke: new Stroke({ color: '#ffffff', width: 1 }),
+            stroke: new Stroke({ color: '#ffffff', width: MARKER_STROKE }),
           }),
         });
         markerStyleCache.set(color, style);
@@ -236,9 +238,9 @@ export default function Atlas({ sidebarCollapsed = false }) {
         if (!style) {
           style = new Style({
             image: new CircleStyle({
-              radius: Math.min(20, 12 + Math.log(size) * 3),
+              radius: clusterRadius(size),
               fill: new Fill({ color: 'rgba(2, 216, 127, 0.85)' }),
-              stroke: new Stroke({ color: '#ffffff', width: 2 }),
+              stroke: new Stroke({ color: '#ffffff', width: CLUSTER_STROKE }),
             }),
             text: new Text({
               text: String(size),
@@ -300,11 +302,65 @@ export default function Atlas({ sidebarCollapsed = false }) {
 
     const tooltipEl = tooltipRef.current;
 
-    // Hit testing only ever needs the interactive vector layers; skipping the
-    // tile and heatmap layers avoids their hit-detection work entirely.
-    const hoverLayerFilter = (layer) => (
-      layer === routeLayer || layer === markerLayer || layer === clusterLayer
-    );
+    // Hit testing measures against geometry rather than rendered pixels. OL's
+    // canvas hit detection redrew every candidate and read it back with
+    // getImageData, which over dense areas cost hundreds of milliseconds per
+    // pointer move, and the GPU journey layer has no pixels to read back.
+    // Calls `callback` with each journey, marker and cluster within
+    // HIT_TOLERANCE pixels of `coordinate`, in the order forEachFeatureAtPixel
+    // visits them: features under the pointer first (topmost layer, then
+    // topmost feature), then near misses, nearest first. Returns the first
+    // truthy callback result. The building probe's outline is never hit.
+    const scratchPoint = [0, 0];
+    const forEachAtlasFeatureAt = (coordinate, callback) => {
+      const view = map.getView();
+      const resolution = view.getResolution();
+      if (!resolution) return undefined;
+      // World copies repeat the same features, so test the original world.
+      const [x, y] = wrapX(coordinate.slice(), view.getProjection());
+      const under = [];
+      const near = [];
+      // `gapOf` gives the pixel distance from the pointer to the feature's
+      // drawn edge: 0 when under it, Infinity when out of reach.
+      const collect = (layer, source, reachPx, gapOf) => {
+        if (!layer.getVisible()) return;
+        const reach = reachPx * resolution;
+        const hits = [];
+        source.forEachFeatureInExtent([x - reach, y - reach, x + reach, y + reach], (feature) => {
+          const gap = gapOf(feature);
+          if (gap <= HIT_TOLERANCE) hits.push({ feature, gap, order: Number(getUid(feature)) });
+        });
+        // Features are drawn in creation order, so the highest uid is on top.
+        hits.sort((a, b) => b.order - a.order);
+        for (const hit of hits) (hit.gap > 0 ? near : under).push(hit);
+      };
+      const circleGap = (feature, radius) => {
+        const [fx, fy] = feature.getGeometry().getCoordinates();
+        return Math.max(0, Math.hypot(fx - x, fy - y) / resolution - radius);
+      };
+
+      const markerEdge = MARKER_RADIUS + MARKER_STROKE / 2 + EDGE_SOFTNESS;
+      const clusterEdge = (size) => clusterRadius(size) + CLUSTER_STROKE / 2 + EDGE_SOFTNESS;
+      collect(clusterLayer, clusterSource, clusterEdge(Infinity) + HIT_TOLERANCE, (feature) => {
+        const size = feature.get('features').length;
+        return circleGap(feature, size > 1 ? clusterEdge(size) : markerEdge);
+      });
+      collect(markerLayer, markerSource, markerEdge + HIT_TOLERANCE, (feature) => circleGap(feature, markerEdge));
+      const lineEdge = lineWidthRef.current / 2 + EDGE_SOFTNESS;
+      const maxSq = ((lineEdge + HIT_TOLERANCE) * resolution) ** 2;
+      collect(routeLayer, routeSource, lineEdge + HIT_TOLERANCE, (feature) => {
+        const sq = feature.getGeometry().closestPointXY(x, y, scratchPoint, maxSq);
+        return sq < maxSq ? Math.max(0, Math.sqrt(sq) / resolution - lineEdge) : Infinity;
+      });
+
+      // Stable, so equally near features keep their layer and draw order.
+      near.sort((a, b) => a.gap - b.gap);
+      for (const hit of under.concat(near)) {
+        const result = callback(hit.feature);
+        if (result) return result;
+      }
+      return undefined;
+    };
 
     // Tooltip markup is built on hover rather than stored on every feature.
     const buildTooltipHtml = (feature) => {
@@ -324,9 +380,8 @@ export default function Atlas({ sidebarCollapsed = false }) {
       return null;
     };
 
-    // pointermove fires far faster than we can usefully redraw, and every
-    // forEachFeatureAtPixel does a getImageData readback per candidate feature,
-    // so coalesce to at most one hit test per animation frame.
+    // pointermove fires far faster than the screen can show the result, so
+    // coalesce to at most one hit test per animation frame.
     let pointerFrame = 0;
     let pendingPointer = null;
     let lastTooltipHtml = null;
@@ -376,7 +431,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
       let isLine = false;
       let hoveredCluster = null;
       let isInteractive = false;
-      map.forEachFeatureAtPixel(pending.pixel, (feature) => {
+      forEachAtlasFeatureAt(pending.coordinate, (feature) => {
         const inner = feature.get('features');
         if (inner && inner.length > 1) {
           hoveredCluster = feature;
@@ -399,7 +454,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
           }
         }
         return false;
-      }, { hitTolerance: 3, layerFilter: hoverLayerFilter });
+      });
 
       if (hoveredCluster) {
         // Rebuild the hull only when the hovered cluster actually changes.
@@ -435,17 +490,16 @@ export default function Atlas({ sidebarCollapsed = false }) {
     };
 
     const onPointerMove = (evt) => {
-      pendingPointer = { pixel: evt.pixel, coordinate: evt.coordinate, dragging: evt.dragging };
+      pendingPointer = { coordinate: evt.coordinate, dragging: evt.dragging };
       if (!pointerFrame) pointerFrame = requestAnimationFrame(runHitTest);
     };
     map.on('pointermove', onPointerMove);
 
-    // What of the Atlas's own is under this pixel? hoverLayerFilter keeps the
-    // building probe's outline layer out of the hit test.
-    const hitAtlasFeature = (pixel) => {
+    // What of the Atlas's own is under this coordinate?
+    const hitAtlasFeature = (coordinate) => {
       let routeId = null;
       let clusterFeatures = null;
-      map.forEachFeatureAtPixel(pixel, (feature) => {
+      forEachAtlasFeatureAt(coordinate, (feature) => {
         const inner = feature.get('features');
         if (inner && inner.length > 1) { clusterFeatures = inner; return true; }
         if (inner && inner.length === 1) {
@@ -456,7 +510,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
         const id = feature.get('routeId');
         if (id) { routeId = id; return true; }
         return false;
-      }, { hitTolerance: 3, layerFilter: hoverLayerFilter });
+      });
       return { routeId, clusterFeatures };
     };
 
@@ -467,7 +521,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
     let consumedClick = null;
 
     const onMapClick = (evt) => {
-      const { routeId, clusterFeatures } = hitAtlasFeature(evt.pixel);
+      const { routeId, clusterFeatures } = hitAtlasFeature(evt.coordinate);
       consumedClick = (routeId || clusterFeatures) ? evt.originalEvent : null;
 
       if (clusterFeatures) {
@@ -499,7 +553,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
     // unchanged; this only runs when the click landed on bare map.
     const onSingleClick = (evt) => {
       if (evt.originalEvent === consumedClick) return;
-      const { routeId, clusterFeatures } = hitAtlasFeature(evt.pixel);
+      const { routeId, clusterFeatures } = hitAtlasFeature(evt.coordinate);
       if (routeId || clusterFeatures) return;
       buildingProbe.probe(evt.coordinate);
     };
@@ -533,6 +587,10 @@ export default function Atlas({ sidebarCollapsed = false }) {
       buildingProbe.destroy();
       buildingProbeRef.current = null;
       map.setTarget(null);
+      // Unlike canvas layers, WebGL layers keep their GL context until disposed,
+      // and browsers only allow a handful of contexts alive at once.
+      routeLayer.dispose();
+      heatmapLayer.dispose();
       mapInstanceRef.current = null;
     };
   }, []);
@@ -699,8 +757,8 @@ export default function Atlas({ sidebarCollapsed = false }) {
   const routeColor = (route, span, byDate) => {
     if (!byDate) return '#02d87f';
     const t = new Date(route.startTime).getTime();
-    // Whole degrees keep the style cache bounded at 241 entries; 1deg of hue is
-    // not distinguishable on screen.
+    // Whole degrees keep it to 241 distinct colors, all of which fit in ol's
+    // parsed-color cache; 1deg of hue is not distinguishable on screen.
     const hue = Math.round(((t - span.dateMin) / span.dateRange) * 240);
     return `hsl(${hue}, 80%, 55%)`;
   };
@@ -857,11 +915,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
   }, [opacity]);
 
   useEffect(() => {
-    const routeSource = routeSourceRef.current;
-    if (!routeSource) return;
-    // Coalesce slider drags into a single restyle per frame.
-    const frame = requestAnimationFrame(() => routeSource.changed());
-    return () => cancelAnimationFrame(frame);
+    routeLayerRef.current?.setLineWidth(lineWidth);
   }, [lineWidth]);
 
   // Recoloring rewrites one property on existing features rather than rebuilding.

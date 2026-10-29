@@ -174,6 +174,12 @@ Key features:
 - hover segments enabled conditionally by zoom to balance UX/performance
 - map invalidation after sidebar collapse/expand to avoid layout artifacts
 
+`Atlas` journey lines:
+
+- drawn by a WebGL2 layer (`client/src/utils/routeLinesLayer.js`) that uploads each journey once, so panning and zooming only change shader uniforms; falls back to OpenLayers' canvas renderer where WebGL2 is unavailable
+- keeps Douglas-Peucker copies of every journey for zoomed-out views, each within half a pixel of the full line at the zooms it is drawn
+- hover and click hit-test the source geometry directly (`forEachAtlasFeatureAt` in `Atlas.jsx`), not rendered pixels
+
 Large route warning:
 
 - threshold-based toast surfaced when route points are high
