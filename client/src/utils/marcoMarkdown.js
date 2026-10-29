@@ -14,7 +14,7 @@ function inline(s) {
   return esc(s)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/(^|[\s(\[])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    .replace(/(^|[\s([])\*([^*\n]+)\*/g, '$1<em>$2</em>');
 }
 
 export function renderMarkdown(src) {

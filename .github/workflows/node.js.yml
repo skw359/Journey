@@ -43,7 +43,7 @@ jobs:
       run: npm run test:ai
 
   client:
-    name: Client build (Node ${{ matrix.node-version }})
+    name: Client lint + build (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
@@ -64,6 +64,7 @@ jobs:
         cache: 'npm'
         cache-dependency-path: client/package-lock.json
     - run: npm ci
+    - run: npm run lint
     - run: npm run build
     - name: Upload client build
       if: matrix.node-version == '22.x'

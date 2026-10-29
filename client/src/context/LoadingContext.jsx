@@ -24,6 +24,7 @@ export function LoadingProvider({ children }) {
       }
       if (!visible) {
         shownAtRef.current = Date.now();
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors an external store with a min-display timer
         setVisible(true);
       }
     } else if (visible) {

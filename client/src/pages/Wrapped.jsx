@@ -9,9 +9,74 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 const MODE_COLORS = { drive: '#3498db', scooter: '#f1c40f', foot: '#2ecc71', train: '#e74c3c', metro: '#1abc9c', other: '#95a5a6' };
 
+function processData(routes) {
+  let totalMiles = 0, totalSeconds = 0, totalPhotos = 0;
+  let maxDist = 0, maxDistName = '', maxSpeed = 0;
+  const monthlyDistanceMap = {};
+  const modeDist = { foot: 0, scooter: 0, drive: 0, train: 0, metro: 0, other: 0 };
+
+  routes.forEach(r => {
+    const dist = parseFloat(r.distance) || 0;
+    totalMiles += dist;
+    totalPhotos += (r.photoCount || 0);
+
+    let dur = 0;
+    if (r.startTime && r.endTime) {
+      const t1 = new Date(r.startTime).getTime();
+      const t2 = new Date(r.endTime).getTime();
+      if (!isNaN(t1) && !isNaN(t2)) dur = (t2 - t1) / 1000;
+    }
+    if (!isNaN(dur) && dur > 0) totalSeconds += dur;
+
+    const start = new Date(r.startTime);
+    if (!isNaN(start.getTime())) {
+      const key = `${start.getFullYear()}-${start.getMonth()}`;
+      if (!monthlyDistanceMap[key]) monthlyDistanceMap[key] = 0;
+      monthlyDistanceMap[key] += dist;
+    }
+
+    if (dist > maxDist) { maxDist = dist; maxDistName = r.name || 'Untitled Trip'; }
+    const speed = parseFloat(r.avgSpeed) || 0;
+    if (speed > maxSpeed) maxSpeed = speed;
+
+    const m = Object.prototype.hasOwnProperty.call(modeDist, r.travelMode) ? r.travelMode : 'other';
+    modeDist[m] += dist;
+  });
+
+  let dateRangeText = 'Time Unknown';
+  if (routes.length > 0 && routes[0].startTime) {
+    const startYear = new Date(routes[0].startTime).getFullYear();
+    const endYear = new Date(routes[routes.length - 1].startTime).getFullYear();
+    dateRangeText = startYear === endYear ? `${startYear}` : `${startYear} - ${endYear}`;
+  }
+
+  const chartLabels = [], chartData = [];
+  const firstDate = new Date(routes[0].startTime);
+  const lastDate = new Date(routes[routes.length - 1].startTime);
+  let current = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+  const end = new Date(lastDate.getFullYear(), lastDate.getMonth(), 1);
+  while (current <= end) {
+    const key = `${current.getFullYear()}-${current.getMonth()}`;
+    const monthName = current.toLocaleString('default', { month: 'short' });
+    const yearShort = current.getFullYear().toString().substr(2);
+    chartLabels.push(`${monthName} '${yearShort}`);
+    chartData.push(monthlyDistanceMap[key] || 0);
+    current.setMonth(current.getMonth() + 1);
+  }
+
+  const earthPct = (totalMiles / 24901) * 100;
+
+  const modes = Object.keys(modeDist).filter(m => modeDist[m] > 0).sort((a, b) => modeDist[b] - modeDist[a]);
+
+  return {
+    totalMiles, totalSeconds, totalPhotos, totalCount: routes.length,
+    maxDist, maxDistName, maxSpeed, dateRangeText, earthPct,
+    chartLabels, chartData, modeDist, modes, totalDistCalc: totalMiles || 1,
+  };
+}
+
 export default function Wrapped() {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [curtainUp, setCurtainUp] = useState(false);
   const chartInnerRef = useRef(null);
 
@@ -19,7 +84,7 @@ export default function Wrapped() {
     const load = async () => {
       try {
         const allRoutes = await fetchRoutes();
-        if (allRoutes.length === 0) { setLoading(false); return; }
+        if (allRoutes.length === 0) return;
         allRoutes.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
         const processed = processData(allRoutes);
         setData(processed);
@@ -28,72 +93,6 @@ export default function Wrapped() {
     };
     load();
   }, []);
-
-  function processData(routes) {
-    let totalMiles = 0, totalSeconds = 0, totalPhotos = 0;
-    let maxDist = 0, maxDistName = '', maxSpeed = 0;
-    const monthlyDistanceMap = {};
-    const modeDist = { foot: 0, scooter: 0, drive: 0, train: 0, metro: 0, other: 0 };
-
-    routes.forEach(r => {
-      const dist = parseFloat(r.distance) || 0;
-      totalMiles += dist;
-      totalPhotos += (r.photoCount || 0);
-
-      let dur = 0;
-      if (r.startTime && r.endTime) {
-        const t1 = new Date(r.startTime).getTime();
-        const t2 = new Date(r.endTime).getTime();
-        if (!isNaN(t1) && !isNaN(t2)) dur = (t2 - t1) / 1000;
-      }
-      if (!isNaN(dur) && dur > 0) totalSeconds += dur;
-
-      const start = new Date(r.startTime);
-      if (!isNaN(start.getTime())) {
-        const key = `${start.getFullYear()}-${start.getMonth()}`;
-        if (!monthlyDistanceMap[key]) monthlyDistanceMap[key] = 0;
-        monthlyDistanceMap[key] += dist;
-      }
-
-      if (dist > maxDist) { maxDist = dist; maxDistName = r.name || 'Untitled Trip'; }
-      const speed = parseFloat(r.avgSpeed) || 0;
-      if (speed > maxSpeed) maxSpeed = speed;
-
-      const m = Object.prototype.hasOwnProperty.call(modeDist, r.travelMode) ? r.travelMode : 'other';
-      modeDist[m] += dist;
-    });
-
-    let dateRangeText = 'Time Unknown';
-    if (routes.length > 0 && routes[0].startTime) {
-      const startYear = new Date(routes[0].startTime).getFullYear();
-      const endYear = new Date(routes[routes.length - 1].startTime).getFullYear();
-      dateRangeText = startYear === endYear ? `${startYear}` : `${startYear} - ${endYear}`;
-    }
-
-    const chartLabels = [], chartData = [];
-    const firstDate = new Date(routes[0].startTime);
-    const lastDate = new Date(routes[routes.length - 1].startTime);
-    let current = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
-    const end = new Date(lastDate.getFullYear(), lastDate.getMonth(), 1);
-    while (current <= end) {
-      const key = `${current.getFullYear()}-${current.getMonth()}`;
-      const monthName = current.toLocaleString('default', { month: 'short' });
-      const yearShort = current.getFullYear().toString().substr(2);
-      chartLabels.push(`${monthName} '${yearShort}`);
-      chartData.push(monthlyDistanceMap[key] || 0);
-      current.setMonth(current.getMonth() + 1);
-    }
-
-    const earthPct = (totalMiles / 24901) * 100;
-
-    const modes = Object.keys(modeDist).filter(m => modeDist[m] > 0).sort((a, b) => modeDist[b] - modeDist[a]);
-
-    return {
-      totalMiles, totalSeconds, totalPhotos, totalCount: routes.length,
-      maxDist, maxDistName, maxSpeed, dateRangeText, earthPct,
-      chartLabels, chartData, modeDist, modes, totalDistCalc: totalMiles || 1,
-    };
-  }
 
   const chartInnerWidth = data?.chartLabels?.length > 12
     ? `${Math.max(100, data.chartLabels.length * 6)}%`

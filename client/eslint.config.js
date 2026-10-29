@@ -24,6 +24,10 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // Provider + hook modules; the hook export only costs a full reload on edit
+      'react-refresh/only-export-components': ['error', {
+        allowExportNames: ['useAuth', 'useLoadingContext', 'useTheme', 'useToast', 'useUnits'],
+      }],
     },
   },
 ])

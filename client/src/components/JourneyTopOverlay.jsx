@@ -1,5 +1,6 @@
 import { Footprints, Bike, Car, Plane, TrainFront, TrainFrontTunnel, Pencil, Merge, Trash2, Undo2, RotateCcw, Ruler, MapPin, Route, Clock, Gauge, Zap } from 'lucide-react';
-import { getTravelModeIcon, getTravelModeLabel } from './TravelModeBadge';
+import { TravelModeIcon } from './TravelModeBadge';
+import { getTravelModeLabel } from '../utils/travelModes';
 import { useUnits } from '../context/UnitsContext';
 import { formatJourneyDateTime } from '../utils/formatters';
 import './JourneyTopOverlay.css';
@@ -48,7 +49,6 @@ export default function JourneyTopOverlay({
   if (!route) return null;
 
   const mode = route.travelMode || 'foot';
-  const ModeIcon = getTravelModeIcon(mode);
   const modeLabel = getTravelModeLabel(mode);
 
   const distance = convertDistance(route.distance);
@@ -120,12 +120,12 @@ export default function JourneyTopOverlay({
                 onClick={onToggleTravelModeDropdown}
                 title="Change travel mode"
               >
-                <ModeIcon size={14} strokeWidth={1.8} />
+                <TravelModeIcon mode={mode} size={14} strokeWidth={1.8} />
                 <span>{modeLabel}</span>
               </button>
             ) : (
               <span className={`jto-mode-label ${mode} jto-mode-label-static`}>
-                <ModeIcon size={14} strokeWidth={1.8} />
+                <TravelModeIcon mode={mode} size={14} strokeWidth={1.8} />
                 <span>{modeLabel}</span>
               </span>
             )}

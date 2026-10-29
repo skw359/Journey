@@ -350,7 +350,7 @@ export default function FunStats() {
   }, [isTempChartExpanded, closeTempChart]);
 
   const ct = (f) => convertTemperature(f);
-  const tempTimeline = data?.weather?.tempTimeline ?? [];
+  const tempTimeline = useMemo(() => data?.weather?.tempTimeline ?? [], [data]);
 
   // Temperature timeline chart data
   const tempChartData = useMemo(() => {
@@ -363,7 +363,7 @@ export default function FunStats() {
       datasets: [
         {
           label: `Temperature (${temperatureUnit})`,
-          data: tempTimeline.map(t => Number(ct(t.temp)?.toFixed(1))),
+          data: tempTimeline.map(t => Number(convertTemperature(t.temp)?.toFixed(1))),
           borderColor: getAccentRgba(0.9),
           backgroundColor: getAccentRgba(0.1),
           fill: true,
@@ -374,7 +374,7 @@ export default function FunStats() {
         },
         ...(tempTimeline.some(t => t.feelsLike != null) ? [{
           label: `Feels Like (${temperatureUnit})`,
-          data: tempTimeline.map(t => t.feelsLike != null ? Number(ct(t.feelsLike)?.toFixed(1)) : null),
+          data: tempTimeline.map(t => t.feelsLike != null ? Number(convertTemperature(t.feelsLike)?.toFixed(1)) : null),
           borderColor: 'rgba(100, 180, 255, 0.7)',
           backgroundColor: 'transparent',
           fill: false,
@@ -386,7 +386,7 @@ export default function FunStats() {
         }] : []),
       ],
     };
-  }, [tempTimeline, temperatureUnit]);
+  }, [tempTimeline, temperatureUnit, convertTemperature]);
 
   const tempChartOptions = useMemo(() => createTempChartOptions(tempTimeline), [tempTimeline]);
   const expandedTempChartOptions = useMemo(() => createTempChartOptions(tempTimeline, true), [tempTimeline]);

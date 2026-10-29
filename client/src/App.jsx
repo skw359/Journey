@@ -113,6 +113,7 @@ export default function App() {
     const displayedPage = getPageKey(displayLocation);
     if (currentPage === displayedPage) {
       if (getLocationKey(location) !== getLocationKey(displayLocation)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- same page, new query: swap without a transition
         setDisplayLocation(location);
       }
       return;
