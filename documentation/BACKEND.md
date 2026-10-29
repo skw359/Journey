@@ -38,6 +38,7 @@ Request flow (`server/app.js`):
 - `DATABASE_URL` (required): PostgreSQL connection string
 - `SESSION_SECRET` (required in production): session signing secret
 - `PUBLIC_URL` (optional): externally reachable HTTPS URL used for pairing QR output
+- `GEOCODE_BASE_URL` (optional): base URL of the reverse geocoder used for cities/places passed and, via `/api/geocode/lookup` and `/api/geocode/building`, the web client's place labels; unset turns geocoding off
 - `PORT` (optional): backend port, default `3003`
 - `MIN_ROUTE_MILES` (optional): minimum distance threshold for accepted/surfaced journeys, default `0.25`
 - `MAX_VIDEO_UPLOAD_MB` (optional): max size of one uploaded video; unset or `0` (the default) means no limit

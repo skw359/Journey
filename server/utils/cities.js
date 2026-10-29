@@ -1,4 +1,4 @@
-const GEOCODE_BASE = 'https://origin.mdoan.com';
+const { GEOCODE_BASE_URL } = require('../config');
 const GEOCODE_TIMEOUT_MS = 8000;
 // This many network/5xx failures in a row means the geocoder went down mid-route.
 const MAX_CONSECUTIVE_FAILURES = 10;
@@ -19,6 +19,8 @@ const MAX_CONSECUTIVE_FAILURES = 10;
  */
 async function computeCitiesPassed(coordinates, { signal, onProgress, cache = new Map() } = {}) {
     if (!Array.isArray(coordinates) || coordinates.length < 2) return [];
+    // No geocoder configured: treated like one that is down, so a later backfill retries.
+    if (!GEOCODE_BASE_URL) return null;
 
     let okResponses = 0;
     let failures = 0;
@@ -29,7 +31,7 @@ async function computeCitiesPassed(coordinates, { signal, onProgress, cache = ne
         if (cache.has(key)) return cache.get(key);
 
         try {
-            const res = await fetch(`${GEOCODE_BASE}/city?lat=${lat}&lon=${lon}`, {
+            const res = await fetch(`${GEOCODE_BASE_URL}/city?lat=${lat}&lon=${lon}`, {
                 signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
             });
             // 4xx is the geocoder rejecting this point (bad coords), not the geocoder being down.

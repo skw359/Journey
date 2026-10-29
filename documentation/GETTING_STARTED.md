@@ -96,6 +96,7 @@ Create `.env` in `/var/www/journey`:
 DATABASE_URL=postgres://journey_user:CHANGE_ME_STRONG_PASSWORD@127.0.0.1:5432/journey_db
 SESSION_SECRET=REPLACE_WITH_A_LONG_RANDOM_SECRET
 PUBLIC_URL=https://journey.example.com
+GEOCODE_BASE_URL=https://geocoder.example.com
 PORT=3003
 MIN_ROUTE_MILES=0.25
 ```

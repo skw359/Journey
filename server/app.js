@@ -95,6 +95,9 @@ app.use('/api/routes', requireAuth, journeysRouter);
 // Flight import (protected)
 app.use('/api/flights', requireSession, flightsRouter);
 
+// Reverse geocoding for the web client, forwarded to GEOCODE_BASE_URL (protected)
+app.use('/api/geocode', requireSession, require('./routes/geocode'));
+
 // Fun stats (protected)
 app.use('/api', requireSession, funstatsRouter);
 

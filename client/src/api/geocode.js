@@ -1,4 +1,6 @@
-const RG_BASE = 'https://origin.mdoan.com';
+// The server forwards these to its configured geocoder (GEOCODE_BASE_URL), so
+// the geocoder's address never ships in the browser bundle.
+const RG_BASE = '/api/geocode';
 
 // A click-to-identify probe is a foreground interaction: if the geocoder is
 // slow the popup must give up and say so rather than hang open on a spinner.

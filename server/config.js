@@ -16,6 +16,8 @@ const CLIENT_DIST = path.join(PROJECT_ROOT, 'client', 'dist');
 const PORT = parseInt(process.env.PORT, 10) || 3003;
 const MIN_ROUTE_MILES = parseFloat(process.env.MIN_ROUTE_MILES || "0.25");
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '') || undefined;
+// Reverse geocoder (/city, /place, /lookup, /building). Unset turns geocoding off.
+const GEOCODE_BASE_URL = (process.env.GEOCODE_BASE_URL || '').replace(/\/+$/, '') || undefined;
 
 // Video uploads (converted to H.264 MP4 with ffmpeg for browser playback).
 // Optional per-video cap in MB; unset or 0 means any size.
@@ -32,6 +34,7 @@ module.exports = {
     AVATARS_DIR,
     CLIENT_DIST,
     PORT,
+    GEOCODE_BASE_URL,
     MIN_ROUTE_MILES,
     PUBLIC_URL,
     MAX_VIDEO_UPLOAD_MB,
