@@ -221,19 +221,6 @@ body {
   user-select: text;
 }
 
-.leaflet-control-attribution {
-  background: var(--bg-primary) !important;
-  color: var(--text-secondary) !important;
-  opacity: 0.8;
-}
-.leaflet-control-attribution a { color: var(--accent-primary) !important; }
-.leaflet-control-fullscreen a {
-  background-color: var(--bg-tertiary) !important;
-  color: var(--text-primary) !important;
-  border-radius: 4px;
-}
-.leaflet-control-fullscreen a:hover { background-color: var(--bg-secondary) !important; }
-
 .map-container {
   position: relative;
   background-color: var(--bg-secondary);
@@ -261,12 +248,6 @@ body {
 .map-container.fullscreen .weather-badge.weather-overlay {
   top: 16px;
   left: 60px;
-}
-
-.map-container.fullscreen .leaflet-top.leaflet-left {
-  top: 96px;
-  left: auto;
-  right: 14px;
 }
 
 /* "Use ⌘ + scroll to zoom" — flashed when a plain wheel tries to zoom */

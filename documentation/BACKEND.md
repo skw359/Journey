@@ -8,9 +8,10 @@ Journey backend is an Express + PostgreSQL service that handles:
 - journey ingestion and processing
 - per-user tenant isolation in PostgreSQL
 - journey/media CRUD
-- all-time map and heatmap aggregations
+- all-time map and heatmap aggregations (from per-journey derived data)
 - client pairing token management
-- runtime database reconfiguration
+- invite-only accounts and admin-only server settings
+- streaming exports (NDJSON, GPX, GeoJSON)
 
 Primary runtime entrypoints:
 
@@ -21,22 +22,33 @@ Primary runtime entrypoints:
 
 Startup flow (`server/server.js`):
 
-1. Load `.env`
-2. Initialize schema via `initSchema()`
-3. Backfill missing `travel_mode` values based on `avg_speed`
-4. Start HTTP server on `PORT` (default `3003`)
+1. Load `.env`; refuse to start without `DATABASE_URL`
+2. `initSchema()`: global tables, then pending versioned migrations (global and per account)
+3. Resolve `SESSION_SECRET` (required when `NODE_ENV=production`; otherwise generated once and kept in `app_config`)
+4. Backfill missing `travel_mode` values with `detectTravelMode()` (the same thresholds as uploads)
+5. Link upload archives saved before journeys recorded them (once per account)
+6. Media storage, Trash sweep (every 6 h), media conversions, geocoding backfills
+7. Listen on `PORT` (default `3003`); then fill in wind directions and build missing derived data in the background
+8. `SIGTERM`/`SIGINT`: stop accepting connections, finish derived-data work, close the pool
 
-Request flow (`server/app.js`):
+Request flow (`server/app.js`, built by `createApp({ sessionSecret })`):
 
-1. Parse JSON (`express.json`)
-2. Session middleware (`express-session` + `connect-pg-simple`)
-3. Serve static frontend (from `client/dist` if present)
-4. Route dispatch to feature routers
+1. Security headers (`nosniff`, `X-Frame-Options`, `Referrer-Policy`) and a per-route body deadline
+2. Parse JSON (`express.json`)
+3. Session middleware (`express-session` + `connect-pg-simple`)
+4. Serve static frontend (from `client/dist` if present)
+5. Route dispatch to feature routers; unknown `/api/*` paths answer JSON `404`; errors answer JSON, never a stack trace
 
 ## Environment Variables
 
-- `DATABASE_URL` (required): PostgreSQL connection string
-- `SESSION_SECRET` (required in production): session signing secret
+- `DATABASE_URL` (required): PostgreSQL connection string. This is the only way to choose the database; changing it needs a restart
+- `SESSION_SECRET` (required when `NODE_ENV=production`): session signing secret, 32+ random characters
+- `TRUST_PROXY` (optional): Express `trust proxy`. Default `1` (one reverse proxy in front, e.g. nginx). Use `false` when Journey faces the internet directly, or the proxy's address(es)
+- `JOURNEY_DATA_DIR` (optional): parent folder of `photos/`, `uploads/` and `avatars/`; default the project folder
+- `DB_STATEMENT_TIMEOUT_MS` (optional): Postgres statement timeout, default `30000` (`0` disables)
+- `DB_POOL_MAX` (optional): pool size, default `10`
+- `MAX_JOURNEY_UPLOAD_MB` / `MAX_JOURNEY_CSV_MB` / `MAX_JOURNEY_ROWS` (optional): journey upload limits, defaults `100` / `1024` / `2000000`
+- `PAIRING_TOKEN_IDLE_DAYS` (optional): a paired device unused this long must pair again, default `180`
 - `PUBLIC_URL` (optional): externally reachable HTTPS URL used for pairing QR output
 - `GEOCODE_BASE_URL` (optional): base URL of the reverse geocoder used for cities/places passed and, via `/api/geocode/lookup` and `/api/geocode/building`, the web client's place labels; unset turns geocoding off
 - `PORT` (optional): backend port, default `3003`
@@ -50,22 +62,33 @@ Request flow (`server/app.js`):
 
 Session auth:
 
-- cookie name: `journey.sid`
+- cookie name: `journey.sid`, `HttpOnly`, `SameSite=Lax`, `Secure` whenever the request arrived over HTTPS (`secure: 'auto'`, so set `TRUST_PROXY` correctly behind a proxy)
+- a new session id is issued at every sign-in (prevents session fixation)
 - server-side session store table: `session`
 - used by `requireSession`
 
+Accounts:
+
+- the first account is created freely and becomes the **admin** (`users.is_admin`); every later account needs an invite
+- invites (`invites` table) are single-use links that expire after 1–30 days (default 7). Only a SHA-256 hash of the token is stored, so a link is shown once, when created. The invite is used up in the same transaction that creates the account, and first-run registration takes an advisory lock, so two simultaneous sign-ups can't both become the first account
+- passwords need at least 8 characters; bcrypt cost 12
+- sign-in is rate limited per address (30 attempts / 15 min) and per account (10 failures / 15 min); registration per address (10 / hour). Unknown usernames take as long as wrong passwords
+- the admin can list, promote, demote and delete accounts; there is always at least one admin
+
+Server-wide settings (database info, weather provider, FlightAware key, Marco/Ollama, attachment storage, invites, accounts) require the admin. Per-account preferences (units, avatar, pairing) don't.
+
 Session or bearer auth:
 
-- `requireAuth` accepts either:
-  - valid session cookie
-  - `Authorization: Bearer <pairing_token>`
-- used for mobile/client upload and photo routes
+- `requireAuth` accepts either a valid session cookie or `Authorization: Bearer <pairing_token>`
+- pairing tokens are stored as SHA-256 hashes and returned only when created (the pairing QR code). A new token must be used within 15 minutes; a token unused for `PAIRING_TOKEN_IDLE_DAYS` stops working
+- with a pairing token, `/api/routes/*` allows only listing, viewing, renaming, setting the travel mode and moving a journey to Recently Deleted; photo and chunked-upload routes and `/upload` are allowed. Trash management, combining, point edits, backfills, exports, settings and Marco need a web session
 
 ## Storage Layout
 
 Configured in `server/config.js`:
 
 - `uploads/`: temporary zip upload files
+- `uploads/archive/<userId>/`: the original zip of every accepted upload (see Data lifecycle)
 - `photos/`: route photos and videos stored on this PC (`.mp4` + `.jpg` poster), per-user subdirectory
 - in-progress photo and video conversions are written to `<OS temp dir>/journey-media` (outside synced folders) and cleared on startup
 - `avatars/`: user avatars
@@ -89,7 +112,7 @@ location uses the same layout, so the stored names (`<userId>/<hex>.jpg`) never 
   - A Postgres advisory lock keeps the server and the script from moving at the same time.
   - When a move finishes, empty folders are pruned and an emptied earlier drive is forgotten.
 - External drives are listed from Windows' storage API (`server/utils/drives.js`). USB disks report as "Fixed", so drives are picked by bus type (USB/SD/MMC/1394, not the boot or system disk). Drives Windows says need repair can't be chosen.
-- Changing the location is limited to the primary (first) account.
+- Changing the location is limited to the admin.
 
 Moving from the command line (stop the server first; the script refuses while it's listening):
 
@@ -101,26 +124,55 @@ Moving from the command line (stop the server first; the script refuses while it
 
 Core/global tables:
 
-- `users`
+- `users` (with `is_admin`)
 - `session`
-- `pairing_tokens`
+- `pairing_tokens` (`token_hash`, `pending_until`)
+- `invites`
 - `app_config`
+- `schema_migrations` (scope + name of every migration applied)
 - legacy shared: `routes`, `waypoints`, `photos`
 
 Tenant model:
 
 - each user has a dedicated schema: `tenant_<sha256(userId)[:24]>`
 - each tenant schema has:
-  - `routes`
-  - `waypoints`
-  - `photos`
-- queries are scoped by setting `search_path` in `withTenantClient()`
+  - `routes`, `waypoints`, `photos`
+  - `trashed_journeys` (Recently Deleted), `journey_backups` (combine undo data)
+  - `route_derived`, `heat_cells`, `tenant_state` (derived data, below)
+- queries are scoped by setting `search_path` in `withTenantClient()`; a client whose `RESET search_path` fails is destroyed instead of returned to the pool
+
+Migrations:
+
+- `server/db.js` keeps an ordered list of global and per-tenant migrations; each scope's pending ones run once, in one transaction, under an advisory lock, and are recorded in `schema_migrations`
+- add schema changes as a new migration at the end of `GLOBAL_MIGRATIONS` or `TENANT_MIGRATIONS`
+
+Derived data (`server/utils/journeyDerived.js`):
+
+- `route_derived` holds, per journey: point count, bounding box, recorded time span, extreme points, the 100-point Atlas overview, a simplified detail line (Douglas–Peucker, ~2 m), US states, and its heatmap cells at all six zoom levels
+- `heat_cells` is the per-account heatmap grid: for each level and cell, how many journeys passed through and how many GPS points they recorded. Triggers add a journey's cells when its derived row is inserted and subtract them when it is deleted, so the grid stays exact
+- a trigger on `routes` deletes the derived row when a journey's track, times, distance or visibility change; rows are rebuilt on demand by the requests that need them and in the background after writes and at startup. Bump `VERSION` there when the derived output changes
+- `tenant_state.data_version` moves with every change to `routes` and keys the Fun Stats cache
 
 Legacy migration:
 
 - startup ensures tenant schemas for users
 - legacy shared-table rows can be moved into tenant schemas
-- migration utility is also exposed through auth route (`POST /api/auth/migrate`)
+- migration utility is also exposed through auth route (`POST /api/auth/migrate`, admin only)
+
+## Data lifecycle
+
+- Deleting a journey moves it to Recently Deleted (`trashed_journeys`) for 7 days; then it is hard-deleted (expiry sweep every 6 hours, or when Trash is listed). Permanent delete and Empty Trash hard-delete immediately
+- A hard delete removes the Trash entry, its photo and video files and thumbnails, its raw upload archive(s) (`archive_names`, deleted when no journey or Trash entry still refers to them), and the combine backups of that journey, including nested ones
+- Combining keeps the originals in `journey_backups` until the combined journey is hard-deleted; undo-combine restores them
+- Deleting an account drops its schema and deletes its sessions, pairing tokens, avatar, photos and videos, and its whole `uploads/archive/<userId>/` folder
+- Upload archives saved before this tracking existed are linked to their journeys once at startup (by recording time). `npm run archive:prune` lists archives that belong to nothing (dry run); `npm run archive:prune -- --apply` deletes them. It keeps an archive whose recording overlaps a journey, Trash entry or combined journey's source (within an hour), since a journey whose first points were dropped on upload doesn't match its archive by start time; it also keeps archives under a day old and unreadable ones
+
+## Weather privacy and outbound requests
+
+- Weather is fetched for the **city** a journey starts in, never its exact start point. `resolveWeatherLocation()` asks the configured geocoder (`GEOCODE_BASE_URL`, your own service) for the start's city; if its reply includes `city_lat`/`city_lon` (or `city_center: { lat, lon }`) that point is used, otherwise the city's point comes from Open-Meteo's geocoding search, which is sent only the city name (same-named places are told apart by country, state and distance). Without a city (rural, at sea, geocoder down or not configured) weather uses the center of the 0.1° grid cell (~11 km)
+- The resolved city and point are stored on the journey (`weather_city`, `weather_lat`, `weather_lon`) and reused by soundings and backfills. Weather is cached in memory by place and hour
+- Custom providers receive that point in `{lat}`/`{lon}` and the name in `{city}`; their URL must be `http(s)`
+- Other outbound requests: CARTO basemap tiles (from the browser; they reveal which map areas are viewed), FlightAware (flight number/airports, only with an API key), the geocoder (`GEOCODE_BASE_URL`), and Ollama for Marco (the admin-configured URL)
 
 ## API Surface
 
@@ -128,8 +180,19 @@ Legacy migration:
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/ping` | none | Health check (`pong`) |
-| `GET` | `/database` | session | Export current tenant journeys as JSON |
+| `GET` | `/ping` | none | Event-loop health check (`pong`); never touches the database |
+| `GET` | `/health` | none | `{ status, database }`; `503` when the database is unreachable |
+| `GET` | `/database` | session | Raw dump of the account's journeys as one JSON array, streamed (any size) |
+
+## Export
+
+Mounted at `/api/export` and guarded by `requireSession`.
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| `GET` | `/api/export/journeys` | session | Every journey as newline-delimited JSON (gzip when accepted): a `header` line, one `journey` line each, an `end` line with the count |
+| `GET` | `/api/export/journeys/:id.gpx` | session | One journey as GPX 1.1 (track points with time and elevation, waypoints) |
+| `GET` | `/api/export/journeys/:id.geojson` | session | One journey as a GeoJSON FeatureCollection (`coordTimes` included) |
 
 ## Auth
 
@@ -137,28 +200,60 @@ Mounted at `/api/auth`.
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/status` | none | Setup/auth status + user snapshot |
-| `POST` | `/register` | none | Creates account, starts session |
-| `POST` | `/login` | none | Validates credentials, starts session |
+| `GET` | `/status` | none | Setup/auth status, user snapshot (`isAdmin`), `registration`: `first-run` or `invite-only` |
+| `GET` | `/invite?token=` | none | Whether an invite link can still be used (rate limited) |
+| `POST` | `/register` | none | `{ username, password, firstName?, lastName?, invite? }`; the first account, or with a valid invite. Starts a session |
+| `POST` | `/login` | none | Validates credentials, starts a new session (rate limited) |
 | `POST` | `/logout` | session | Destroys session |
-| `DELETE` | `/account` | session | Deletes user account + tenant data + files |
-| `POST` | `/migrate` | session | Migrates legacy data (primary account only) |
-| `POST` | `/avatar` | session | Upload JPG avatar (max 5MB) |
-| `GET` | `/avatar/:filename` | none | Serves avatar file by filename |
+| `DELETE` | `/account` | session | Deletes the account and everything it owns (the only admin can't while other accounts exist) |
+| `POST` | `/migrate` | admin | Migrates legacy data |
+| `POST` | `/avatar` | session | Upload a JPG/PNG/WebP avatar (max 8 MB); it is decoded and re-encoded as a JPEG |
+| `GET` | `/avatar/:filename` | none | Serves an avatar, always as `image/jpeg` with `nosniff` (the iOS app loads it without credentials) |
+
+## Admin
+
+Mounted at `/api/admin`; session and admin only.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/admin/invites` | Invites with status (`pending`/`used`/`expired`/`revoked`) |
+| `POST` | `/api/admin/invites` | `{ note?, expiresInDays? }` -> the invite with its `url`, shown once |
+| `DELETE` | `/api/admin/invites/:id` | Revoke an unused invite |
+| `GET` | `/api/admin/users` | Accounts |
+| `PATCH` | `/api/admin/users/:id` | `{ isAdmin }` |
+| `DELETE` | `/api/admin/users/:id` | Delete another account and everything it owns |
 
 ## Journeys
 
-Mounted at `/api/routes` and guarded by `requireSession`.
+Mounted at `/api/routes` and guarded by `requireAuth` (pairing tokens are limited as described above).
+
+Visible journeys are those at least `MIN_ROUTE_MILES` long plus shorter ones restored from Trash (`force_visible`); the list, maps, heatmap, Fun Stats and Marco all use this one rule (`server/utils/visibility.js`).
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/api/routes` | session | List summaries (`distance >= MIN_ROUTE_MILES`) |
-| `GET` | `/api/routes/:id` | session | Detail route; supports `?maxPoints=` downsampling |
-| `PATCH` | `/api/routes/:id/name` | session | Rename journey |
-| `PATCH` | `/api/routes/:id/travel-mode` | session | Set travel mode (`foot|scooter|drive|train|metro|flight`) |
+| `GET` | `/api/routes` | session or token | List summaries of visible journeys |
+| `GET` | `/api/routes/:id` | session or token | Detail route; supports `?maxPoints=` downsampling |
+| `PATCH` | `/api/routes/:id/name` | session or token | Rename journey (max 200 characters) |
+| `PATCH` | `/api/routes/:id/travel-mode` | session or token | Set travel mode (`foot|scooter|drive|train|metro|flight`) |
 | `PATCH` | `/api/routes/:id/waypoints/:wpId` | session | Rename waypoint label |
-| `DELETE` | `/api/routes/:id` | session | Delete journey + associated photo files |
-| `DELETE` | `/api/routes/:id/points/:index` | session | Delete one profile point and recompute stats |
+| `DELETE` | `/api/routes/:id` | session or token | Move the journey to Recently Deleted (files kept for a restore) |
+| `DELETE` | `/api/routes/:id/points/:index` | session | Delete one point and recompute every statistic |
+| `POST` | `/api/routes/:id/points/delete` | session | `{ indices: [...] }`: delete several points at once |
+| `POST` | `/api/routes/combine` | session | `{ journeyIds, name? }`: merge 2–50 journeys into the earliest, points interleaved by time |
+| `POST` | `/api/routes/:id/undo-combine` | session | `{ force? }`: split a combined journey back up (see below) |
+| `GET` | `/api/routes/trash` | session | Recently Deleted (expired entries are purged first) |
+| `GET` | `/api/routes/trash/:trashId` | session | One trashed journey in full |
+| `POST` | `/api/routes/trash/:trashId/restore` | session | Restore; `409` if a journey with that id (or recording) already exists, and the entry stays in Trash |
+| `DELETE` | `/api/routes/trash/:trashId` | session | Hard-delete one entry |
+| `DELETE` | `/api/routes/trash` | session | Empty Trash |
+
+Point deletion and statistics (`server/utils/journeyStats.js`, shared by upload, point deletion, combine and flight import):
+
+- automatic GPS outlier filtering is intentionally off (it can't tell a GPS spike from a flight), so deleting points is how bad points are fixed
+- after a deletion, distance, duration, start/end, speeds and elevation are recomputed from the remaining points with the upload's rules: distance only counts steps forward in time, elevation gain/loss ignores steps of 0.5 m or less. A speed the upload derived from the distance to a deleted point is derived again from the new previous point
+- the journey row is locked for the edit; indices must be whole numbers in range; profiles that don't line up with the coordinates are refused (`409`)
+
+Undo-combine keeps changes made after combining: photos added later go to the earliest journey, deleted photos stay deleted, renamed waypoints keep their names. If points were deleted from the combined journey since, undo answers `409` (`code: edited_since_combine`) unless `force: true`.
 
 ## Upload
 
@@ -171,8 +266,9 @@ Mounted at `/upload` and guarded by `requireAuth` (session or bearer token).
 Input:
 
 - `multipart/form-data`
-- field `journey`: zip archive containing CSV file(s)
+- field `journey`: a zip containing exactly one CSV (`__MACOSX`/`._*` entries are ignored); at most `MAX_JOURNEY_UPLOAD_MB`, the CSV at most `MAX_JOURNEY_CSV_MB` and `MAX_JOURNEY_ROWS` rows, read within 60 s
 - optional field `source`: `iphone` or `watch`
+- optional field `recordingId`: the device's id for this recording (the iOS app sends its upload queue item's UUID)
 
 Parsed CSV columns:
 
@@ -186,10 +282,13 @@ Parsed CSV columns:
 
 Behavior:
 
-- rejects unrealistically large speed spikes
-- computes distance, duration, elevation gain/loss, profile arrays, waypoints
-- auto-detects travel mode from average speed
-- enforces minimum distance threshold (`MIN_ROUTE_MILES`)
+- a malformed upload (not a zip, no CSV, several CSVs, corrupt data, over a limit) answers `400`/`408`/`413` and leaves nothing behind
+- rows without a usable time and position are skipped; rows out of time order are put back in order; exact repeated rows are dropped
+- speed spikes are **not** filtered (that would drop flights); delete bad points instead
+- computes distance, duration, elevation gain/loss, profile arrays, waypoints; auto-detects travel mode from average speed
+- uploads are idempotent: the same `recordingId`, or the same recorded content from a client that sends none, returns the journey already stored with `200` and `duplicate: true` instead of saving it again (also for uploads that went to Recently Deleted)
+- journeys below `MIN_ROUTE_MILES` (or with too little data) go to Recently Deleted so they can be restored
+- the original zip is kept in `uploads/archive/` and recorded on the journey (see Data lifecycle)
 
 ## Photos
 
@@ -249,8 +348,14 @@ Mounted at `/api` and guarded by `requireSession`.
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | `GET` | `/api/alltime-map-data` | session | Route lines + summary stats, supports `maxPoints` and `bounds` |
-| `GET` | `/api/all-points` | session | Flattened point stream with optional date filtering |
-| `GET` | `/api/heatmap-grid` | session | Grid-aggregated heatmap cells for current view/date |
+| `GET` | `/api/heatmap-grid` | session | Heatmap cells for a view: `zoom`, `bounds`, optional `start`/`end` (ISO or epoch ms) |
+| `GET` | `/api/fun-stats` | session | Fun Stats, cached until the account's journeys (or the date) change |
+
+All of these read `route_derived`/`heat_cells` rather than every recorded point:
+
+- `alltime-map-data` without `bounds` and `maxPoints=100` (the Atlas's first load) returns each journey's stored overview, identical to sampling the full track. With `bounds`, only journeys whose bounding box meets the view are read; those within `maxPoints` are sent exactly as recorded, longer ones as their simplified line (thinned to `maxPoints` if needed). `maxPoints=0` sends every point
+- `heatmap-grid` cells are `[lat, lon, journeys, samples]`: how many journeys passed through the cell and how many GPS points they recorded there; `totalPoints` is the sum of samples in view. Without dates it reads `heat_cells`; with dates, journeys wholly inside the range use their stored cells and journeys crossing a boundary are counted point by point using recorded timestamps
+- Fun Stats clusters journey starts with DBSCAN over a spatial grid (same clusters as a full scan) and finds the furthest point from home exactly, reading only journeys whose bounding box could hold a farther point
 
 ## Pairing
 
@@ -258,10 +363,10 @@ Mounted at `/api/pairing` and guarded by `requireSession`.
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/api/pairing/tokens` | session | List active pairing tokens |
-| `POST` | `/api/pairing/tokens` | session | Create token |
+| `GET` | `/api/pairing/tokens` | session | Paired devices (`status`: `active`, or `pending` until first use); lapsed and long-unused tokens are removed |
+| `POST` | `/api/pairing/tokens` | session | Create a token: `{ id, token, label, serverUrl, expiresAt }`. The token is returned only here (the QR code) and must be used within 15 minutes |
 | `DELETE` | `/api/pairing/tokens/:id` | session | Revoke token |
-| `GET` | `/api/pairing/qr-data` | session | Returns `{ serverUrl, token }` for QR payload |
+| `GET` | `/api/pairing/qr-data` | session | Removed (`410`): tokens can't be shown again |
 
 ## Settings
 
@@ -269,16 +374,21 @@ Mounted at `/api/settings` and guarded by `requireSession`.
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/api/settings/database` | session | Read persisted DB config metadata |
-| `POST` | `/api/settings/database/test` | session | Validate DB connection |
-| `PUT` | `/api/settings/database` | session | Save config + reconnect global pool |
-| `GET` | `/api/settings/storage` | session | Database size, this account's share, photo count/bytes and where photos are stored |
+| `GET`/`PUT` | `/api/settings/units` | session | Unit preference |
+| `GET` | `/api/settings/database` | admin | Host, port, database and user from `DATABASE_URL` (read-only) |
+| `GET` | `/api/settings/storage` | session | This account's database share, photo count/bytes and where photos are stored; the admin also gets the whole database size |
+| `GET` | `/api/settings/weather` | session | `weather_enabled` and `weather_sounding_enabled`; the admin also gets the provider settings (API key masked) |
+| `PUT` | `/api/settings/weather` | admin | `{ enabled?, provider?, apiKey?, customUrl?, soundingEnabled? }`; custom URLs must be `http(s)` |
+| `GET` | `/api/settings/weather/sounding?routeId=` | session | Pressure-level sounding at the journey's start city and time (cached on the journey) |
+| `GET`/`PUT` | `/api/settings/flights` | session / admin | FlightAware key (`configured` for other accounts) |
 | `GET` | `/api/settings/attachment-storage` | session | Attachment location, files still waiting elsewhere, move progress, `canManage` |
-| `GET` | `/api/settings/attachment-storage/drives` | session | External drives (`?refresh=1` rescans; takes ~2 s) plus this PC's free space |
-| `GET` | `/api/settings/attachment-storage/plan` | primary account | `?target=internal\|<volumeId>`: files, bytes and space a move needs |
-| `PUT` | `/api/settings/attachment-storage` | primary account | `{ target: { kind: 'internal' } \| { kind: 'drive', volumeId } }`: switch location and move files there |
-| `POST` | `/api/settings/attachment-storage/pause` | primary account | Pause a move (files already moved stay put) |
-| `POST` | `/api/settings/attachment-storage/resume` | primary account | Resume, or retry after an error |
+| `GET` | `/api/settings/attachment-storage/drives` | admin | External drives (`?refresh=1` rescans; takes ~2 s) plus this PC's free space |
+| `GET` | `/api/settings/attachment-storage/plan` | admin | `?target=internal\|<volumeId>`: files, bytes and space a move needs |
+| `PUT` | `/api/settings/attachment-storage` | admin | `{ target: { kind: 'internal' } \| { kind: 'drive', volumeId } }`: switch location and move files there |
+| `POST` | `/api/settings/attachment-storage/pause` | admin | Pause a move (files already moved stay put) |
+| `POST` | `/api/settings/attachment-storage/resume` | admin | Resume, or retry after an error |
+
+The database connection can no longer be changed at runtime: it comes only from `DATABASE_URL`, and the old stored `db_*` settings (including a plaintext password) are removed by a migration.
 
 ## Journey AI (Marco)
 
@@ -291,9 +401,9 @@ Postgres and formatted server-side. See `server/ai/README.md` for the design.
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/api/ask/config` | session | Current settings (`enabled`, `url`, `model`) |
-| `PUT` | `/api/ask/config` | session | Save settings; enabling requires a valid URL |
-| `POST` | `/api/ask/config/test` | session | Probe Ollama: reachable? model pulled? tools capability? |
+| `GET` | `/api/ask/config` | session | Current settings (`enabled`, `url`, `model`) for the admin; `enabled` only for other accounts |
+| `PUT` | `/api/ask/config` | admin | Save settings; enabling requires a valid `http(s)` URL |
+| `POST` | `/api/ask/config/test` | admin | Probe Ollama: reachable? model pulled? tools capability? |
 | `POST` | `/api/ask` | session | Body `{ question, timeZone }` → `{ answer, meta }`; add `stream: true` for Server-Sent Events (`stage`/`token`/`replace`/`done`/`error`) so the client renders the answer as it generates |
 
 Configuration lives in `app_config` (no environment variables):
@@ -318,15 +428,50 @@ Root `package.json` scripts:
 - `npm start` -> run backend
 - `npm run dev` -> backend + Vite dev server
 - `npm run build` -> build frontend (`client/dist`)
-- `npm run migrate:import` -> import `database.json` into DB
-- `npm run migrate:export` -> export DB to `database-export.json`
+- `npm test` -> Marco suite and server tests (needs `TEST_DATABASE_URL`, see Testing)
 - `npm run test:ai` -> offline test suite for Journey AI (Marco)
+- `npm run test:server` -> server tests against a throwaway PostgreSQL database
+- `npm run migrate:import` -> import `database.json` into the legacy tables (assigned to the first account on its first sign-in)
+- `npm run migrate:export` -> export every account's journeys to `exports/<username>-<date>.ndjson` (`JOURNEY_EXPORT_DIR` overrides the folder)
+- `npm run archive:prune` -> list upload archives that belong to nothing (keeping any whose recording overlaps a journey); add `-- --apply` to delete them
 
 Script files:
 
 - `server/scripts/migrate-import.js`
 - `server/scripts/migrate-export.js`
+- `server/scripts/prune-archives.js`
 - `server/scripts/move-attachments.js` (moves photos and videos between this PC and external drives; see Attachment storage)
+
+## Backup and restore
+
+Journey's data is the PostgreSQL database plus files on disk. A complete backup is:
+
+1. The database: `pg_dump --format=custom --file=journey-$(date +%F).dump "$DATABASE_URL"`
+2. The media folder: `photos/` (or the `journey` folder on the external drive chosen in Attachment storage)
+3. `avatars/` and, if you want the original uploads, `uploads/archive/`
+4. The root `.env` (keep it private)
+
+Restore onto a fresh server:
+
+1. Create an empty database and user (see `GETTING_STARTED.md`), then `pg_restore --no-owner --dbname="$DATABASE_URL" journey-YYYY-MM-DD.dump`
+2. Copy `photos/`, `avatars/` and `uploads/archive/` back into the Journey folder (or `JOURNEY_DATA_DIR`)
+3. Start Journey; migrations bring an older dump up to date, and derived map data is rebuilt in the background
+
+Copying the files while the server is stopped (or right after the dump) keeps them consistent with the database. For a portable copy of one account's journeys instead, use Settings → Your Data → Export Journeys (NDJSON) or `npm run migrate:export`.
+
+## Testing
+
+- `npm run test:ai`: Marco, offline (no database, no Ollama)
+- `npm run test:server`: integration tests in `server/tests/` (`node:test`). Set `TEST_DATABASE_URL` to a PostgreSQL server where the tests may create databases, e.g. `postgres://postgres:postgres@localhost:5432/postgres`; each test file creates its own `journey_test_*` database and a temp data folder, and never reads `.env`. Without `TEST_DATABASE_URL` they are skipped
+  - `unit`: statistics against the original upload algorithm, grid DBSCAN against a full scan, the furthest-point bound
+  - `auth`: invite-only registration, the first-run race, the admin-only settings matrix, cross-account isolation, sessions, rate limits, pairing tokens, avatars, account deletion
+  - `upload`: malformed zips, limits, duplicates and retries, ordering, archives
+  - `journeys`: point deletion (the spike case), concurrency, very long journeys, combine/undo-combine, restore conflicts, the hard-delete lifecycle
+  - `maps`: Atlas output, viewport requests, heatmap cells against a full scan (all zoom levels and date ranges), visibility, Fun Stats values against a full scan, caching
+  - `weather`: the exact start point never reaches a third party
+  - `export`: NDJSON, GPX, GeoJSON, `/database`, `migrate:export`
+  - `perf`: latency and event-loop blocking budgets with 300k points (`PERF_JOURNEYS`, `PERF_POINTS` to scale up)
+- CI runs both against a PostgreSQL service container, plus `npm audit --omit=dev --audit-level=high` for the server and client
 
 ## Console Logging
 
@@ -379,10 +524,11 @@ with `JOURNEY_LOG_STYLE`.
 
 ## Operational Notes
 
-- App trusts reverse proxy headers (`app.set('trust proxy', true)`).
-- Session cookie is currently configured with `secure: false`; if you require HTTPS-only cookies, update session cookie config accordingly.
-- In production, `PUBLIC_URL` should be HTTPS and match your public domain for pairing UX.
-- Route + map endpoints are filtered by `MIN_ROUTE_MILES`.
+- `TRUST_PROXY` (default one hop) decides which `X-Forwarded-*` headers are believed: the client address used for rate limits, and whether the request was HTTPS (`Secure` cookies). Set it to `false` without a reverse proxy.
+- Request timeouts are per route: headers must arrive within 60 s; request bodies within 60 s (15 min for `/upload`); photo/video uploads have no overall limit but drop connections idle for 5 minutes.
+- Postgres statements time out after `DB_STATEMENT_TIMEOUT_MS` (30 s); migrations and account deletion lift the limit for their own transaction.
+- In production, `PUBLIC_URL` should be HTTPS and match your public domain for pairing and invite links.
+- `GET /health` checks the database; `/ping` checks only that the process answers.
 
 ## Extension Guide
 
@@ -390,6 +536,6 @@ When adding a backend feature:
 
 1. Add route/module in `server/routes/`
 2. Mount it in `server/app.js` with proper auth middleware
-3. Add/adjust DB schema in `initSchema()` and tenant schema creation path
+3. Add schema changes as a new migration in `server/db.js` (`GLOBAL_MIGRATIONS` or `TENANT_MIGRATIONS`)
 4. Keep tenant scoping via `withTenantClient()` or `queryTenant()`
-5. Update `documentation/FRONTEND.md` if client flow changes
+5. Add tests under `server/tests/` and update `documentation/FRONTEND.md` if client flow changes

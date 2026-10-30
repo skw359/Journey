@@ -28,6 +28,20 @@ jobs:
         # sharp 0.35 needs >= 20.9, Vite 7 needs >= 20.19
         node-version: [20.x, 22.x]
 
+    # Integration tests create and drop their own databases on this server.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
     - uses: actions/checkout@v4
     - name: Use Node.js ${{ matrix.node-version }}
@@ -41,9 +55,15 @@ jobs:
       run: git ls-files 'server/*.js' 'windows-app/src/*.js' 'windows-app/scripts/*.mjs' 'windows-app/tests/*.js' | xargs -n1 node --check
     - name: Marco test suite (offline)
       run: npm run test:ai
+    - name: Server tests (PostgreSQL)
+      run: npm run test:server
+      env:
+        TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    - name: Audit production dependencies
+      run: npm audit --omit=dev --audit-level=high
 
   client:
-    name: Client lint + build (Node ${{ matrix.node-version }})
+    name: Client lint + test + build (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
@@ -65,7 +85,10 @@ jobs:
         cache-dependency-path: client/package-lock.json
     - run: npm ci
     - run: npm run lint
+    - run: npm test
     - run: npm run build
+    - name: Audit production dependencies
+      run: npm audit --omit=dev --audit-level=high
     - name: Upload client build
       if: matrix.node-version == '22.x'
       uses: actions/upload-artifact@v4

@@ -1,12 +1,15 @@
 const crypto = require('crypto');
 const { Pool } = require('pg');
+const { DB_STATEMENT_TIMEOUT_MS, DB_POOL_MAX } = require('./config');
 
-let _pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-const pool = new Proxy({}, {
-  get(_, prop) {
-    return typeof _pool[prop] === 'function' ? _pool[prop].bind(_pool) : _pool[prop];
-  }
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: DB_POOL_MAX,
+  ...(DB_STATEMENT_TIMEOUT_MS ? { statement_timeout: DB_STATEMENT_TIMEOUT_MS } : {}),
+});
+// Without a listener, an idle client's connection error crashes the process.
+pool.on('error', (err) => {
+  require('./utils/logger').scope('database').error('idle connection error', err);
 });
 
 const ensuredTenantSchemas = new Set();
@@ -63,9 +66,153 @@ function tenantSchemaForUser(userId) {
   return `tenant_${digest}`;
 }
 
-async function createTenantTables(dbClient, schema) {
+// Migrations per scope ('global' or a tenant schema), recorded in schema_migrations and
+// applied in one transaction under an advisory lock.
+
+const MIGRATION_LOCK_NAMESPACE = 72_311;
+
+async function runMigrations(scope, migrations, context) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SET LOCAL statement_timeout = 0');
+    await client.query('SELECT pg_advisory_xact_lock($1, hashtext($2))', [MIGRATION_LOCK_NAMESPACE, scope]);
+    const { rows } = await client.query('SELECT name FROM schema_migrations WHERE scope = $1', [scope]);
+    const applied = new Set(rows.map((row) => row.name));
+    const ran = [];
+    for (const migration of migrations) {
+      if (applied.has(migration.name)) continue;
+      await migration.up(client, context);
+      await client.query('INSERT INTO schema_migrations (scope, name) VALUES ($1, $2)', [scope, migration.name]);
+      ran.push(migration.name);
+    }
+    await client.query('COMMIT');
+    return ran;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Shared trigger functions, redefined on every boot; TG_TABLE_SCHEMA picks the tenant.
+const TRIGGER_FUNCTIONS = `
+  -- Keys cached per-tenant results (Fun Stats); commits with the data change.
+  CREATE OR REPLACE FUNCTION public.journey_bump_data_version() RETURNS trigger
+  LANGUAGE plpgsql AS $fn$
+  BEGIN
+    EXECUTE format('UPDATE %I.tenant_state SET data_version = data_version + 1', TG_TABLE_SCHEMA);
+    RETURN NULL;
+  END $fn$;
+
+  CREATE OR REPLACE FUNCTION public.journey_derived_stale() RETURNS trigger
+  LANGUAGE plpgsql AS $fn$
+  BEGIN
+    EXECUTE format('DELETE FROM %I.route_derived WHERE route_id = $1', TG_TABLE_SCHEMA) USING NEW.id;
+    RETURN NULL;
+  END $fn$;
+
+  -- heat_cells = sum of visible journeys' cells. route_derived rows are only inserted or
+  -- deleted, never updated.
+  CREATE OR REPLACE FUNCTION public.journey_heat_add() RETURNS trigger
+  LANGUAGE plpgsql AS $fn$
+  BEGIN
+    IF NEW.visible AND cardinality(NEW.heat_level) > 0 THEN
+      EXECUTE format($q$
+        INSERT INTO %I.heat_cells AS h (level, lat_idx, lon_idx, samples, journeys)
+        SELECT u.l, u.a, u.o, u.s, 1
+        FROM unnest($1::smallint[], $2::int[], $3::int[], $4::int[]) AS u(l, a, o, s)
+        ORDER BY 1, 2, 3
+        ON CONFLICT (level, lat_idx, lon_idx)
+        DO UPDATE SET samples = h.samples + EXCLUDED.samples, journeys = h.journeys + 1
+      $q$, TG_TABLE_SCHEMA) USING NEW.heat_level, NEW.heat_lat, NEW.heat_lon, NEW.heat_samples;
+    END IF;
+    RETURN NULL;
+  END $fn$;
+
+  CREATE OR REPLACE FUNCTION public.journey_heat_sub() RETURNS trigger
+  LANGUAGE plpgsql AS $fn$
+  BEGIN
+    IF OLD.visible AND cardinality(OLD.heat_level) > 0 THEN
+      -- Lock in key order (as inserts do) so concurrent updates can't deadlock.
+      EXECUTE format($q$
+        SELECT 1 FROM %I.heat_cells h
+        JOIN unnest($1::smallint[], $2::int[], $3::int[]) AS u(l, a, o)
+          ON h.level = u.l AND h.lat_idx = u.a AND h.lon_idx = u.o
+        ORDER BY h.level, h.lat_idx, h.lon_idx
+        FOR UPDATE OF h
+      $q$, TG_TABLE_SCHEMA) USING OLD.heat_level, OLD.heat_lat, OLD.heat_lon;
+      EXECUTE format($q$
+        UPDATE %I.heat_cells h SET samples = h.samples - u.s, journeys = h.journeys - 1
+        FROM unnest($1::smallint[], $2::int[], $3::int[], $4::int[]) AS u(l, a, o, s)
+        WHERE h.level = u.l AND h.lat_idx = u.a AND h.lon_idx = u.o
+      $q$, TG_TABLE_SCHEMA) USING OLD.heat_level, OLD.heat_lat, OLD.heat_lon, OLD.heat_samples;
+      EXECUTE format($q$
+        DELETE FROM %I.heat_cells h
+        USING unnest($1::smallint[], $2::int[], $3::int[]) AS u(l, a, o)
+        WHERE h.level = u.l AND h.lat_idx = u.a AND h.lon_idx = u.o AND h.journeys <= 0
+      $q$, TG_TABLE_SCHEMA) USING OLD.heat_level, OLD.heat_lat, OLD.heat_lon;
+    END IF;
+    RETURN NULL;
+  END $fn$;
+`;
+
+const GLOBAL_MIGRATIONS = [
+  {
+    // Invite-only accounts; the first account becomes admin.
+    name: '2026-10-29-admin-and-invites',
+    async up(db) {
+      await db.query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
+        CREATE TABLE IF NOT EXISTS invites (
+          id TEXT PRIMARY KEY,
+          token_hash TEXT UNIQUE NOT NULL,
+          created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          expires_at TIMESTAMPTZ NOT NULL,
+          used_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+          used_at TIMESTAMPTZ,
+          revoked_at TIMESTAMPTZ,
+          note TEXT
+        );
+      `);
+      await db.query(`
+        UPDATE users SET is_admin = TRUE
+        WHERE id = (SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT 1)
+          AND NOT EXISTS (SELECT 1 FROM users WHERE is_admin)
+      `);
+    },
+  },
+  {
+    // Store pairing tokens as SHA-256 hashes; existing tokens keep working.
+    name: '2026-10-29-hashed-pairing-tokens',
+    async up(db) {
+      await db.query(`
+        ALTER TABLE pairing_tokens ADD COLUMN IF NOT EXISTS token_hash TEXT;
+        ALTER TABLE pairing_tokens ADD COLUMN IF NOT EXISTS pending_until TIMESTAMPTZ;
+        ALTER TABLE pairing_tokens ALTER COLUMN token DROP NOT NULL;
+        UPDATE pairing_tokens SET token_hash = encode(sha256(convert_to(token, 'UTF8')), 'hex')
+          WHERE token IS NOT NULL AND token_hash IS NULL;
+        UPDATE pairing_tokens SET token = NULL WHERE token IS NOT NULL;
+        DROP INDEX IF EXISTS idx_pairing_tokens_token;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_pairing_tokens_token_hash ON pairing_tokens(token_hash);
+      `);
+    },
+  },
+  {
+    // The runtime DB switch is gone; DATABASE_URL is the only source.
+    name: '2026-10-29-drop-runtime-database-settings',
+    async up(db) {
+      await db.query("DELETE FROM app_config WHERE key IN ('db_host', 'db_port', 'db_name', 'db_user', 'db_password')");
+    },
+  },
+];
+
+function tenantBaseline(schema) {
   const qSchema = quoteIdent(schema);
-  await dbClient.query(`
+  return `
     CREATE SCHEMA IF NOT EXISTS ${qSchema};
 
     CREATE TABLE IF NOT EXISTS ${qSchema}.routes (
@@ -188,40 +335,172 @@ async function createTenantTables(dbClient, schema) {
 
     CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_trashed_journeys_deleted_at`)}
       ON ${qSchema}.trashed_journeys(deleted_at);
-  `);
+  `;
 }
 
-async function ensureTenantSchema(userId, dbClient = pool) {
-  const schema = tenantSchemaForUser(userId);
-  if (dbClient === pool && ensuredTenantSchemas.has(schema)) {
-    return schema;
-  }
+const TENANT_MIGRATIONS = [
+  {
+    name: '0000-baseline',
+    async up(db, { schema }) {
+      await db.query(tenantBaseline(schema));
+    },
+  },
+  {
+    // Archive ownership, upload idempotency keys, city-level weather location.
+    name: '2026-10-29-upload-lifecycle',
+    async up(db, { schema }) {
+      const q = quoteIdent(schema);
+      await db.query(`
+        ALTER TABLE ${q}.routes ADD COLUMN IF NOT EXISTS archive_names TEXT[];
+        ALTER TABLE ${q}.routes ADD COLUMN IF NOT EXISTS client_upload_id TEXT;
+        ALTER TABLE ${q}.routes ADD COLUMN IF NOT EXISTS content_fingerprint TEXT;
+        ALTER TABLE ${q}.routes ADD COLUMN IF NOT EXISTS weather_city TEXT;
+        ALTER TABLE ${q}.routes ADD COLUMN IF NOT EXISTS weather_lat DOUBLE PRECISION;
+        ALTER TABLE ${q}.routes ADD COLUMN IF NOT EXISTS weather_lon DOUBLE PRECISION;
+        CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_uq_routes_client_upload_id`)}
+          ON ${q}.routes(client_upload_id) WHERE client_upload_id IS NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_uq_routes_content_fingerprint`)}
+          ON ${q}.routes(content_fingerprint) WHERE content_fingerprint IS NOT NULL;
 
-  await createTenantTables(dbClient, schema);
-  if (dbClient === pool) {
-    ensuredTenantSchemas.add(schema);
-  }
+        ALTER TABLE ${q}.trashed_journeys ADD COLUMN IF NOT EXISTS archive_names TEXT[];
+        ALTER TABLE ${q}.trashed_journeys ADD COLUMN IF NOT EXISTS client_upload_id TEXT;
+        ALTER TABLE ${q}.trashed_journeys ADD COLUMN IF NOT EXISTS content_fingerprint TEXT;
+        CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_trash_client_upload_id`)}
+          ON ${q}.trashed_journeys(client_upload_id) WHERE client_upload_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_trash_content_fingerprint`)}
+          ON ${q}.trashed_journeys(content_fingerprint) WHERE content_fingerprint IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_backups_combined`)}
+          ON ${q}.journey_backups(combined_journey_id);
+        ALTER TABLE ${q}.journey_backups ADD COLUMN IF NOT EXISTS combined_signature TEXT;
+      `);
+    },
+  },
+  {
+    // Per-journey derived data for maps, heatmap and Fun Stats.
+    name: '2026-10-29-derived-geometry',
+    async up(db, { schema }) {
+      const q = quoteIdent(schema);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS ${q}.tenant_state (
+          id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),
+          data_version BIGINT NOT NULL DEFAULT 0
+        );
+        INSERT INTO ${q}.tenant_state (id) VALUES (TRUE) ON CONFLICT DO NOTHING;
+
+        CREATE TABLE IF NOT EXISTS ${q}.route_derived (
+          route_id TEXT PRIMARY KEY REFERENCES ${q}.routes(id) ON DELETE CASCADE,
+          version SMALLINT NOT NULL,
+          min_miles DOUBLE PRECISION NOT NULL,
+          visible BOOLEAN NOT NULL,
+          point_count INTEGER NOT NULL,
+          valid_points INTEGER NOT NULL,
+          min_lat DOUBLE PRECISION,
+          min_lon DOUBLE PRECISION,
+          max_lat DOUBLE PRECISION,
+          max_lon DOUBLE PRECISION,
+          t_min BIGINT,
+          t_max BIGINT,
+          extremes JSONB,
+          overview JSONB,
+          detail JSONB,
+          states TEXT[] NOT NULL DEFAULT '{}',
+          heat_off INTEGER[] NOT NULL,
+          heat_level SMALLINT[] NOT NULL,
+          heat_lat INTEGER[] NOT NULL,
+          heat_lon INTEGER[] NOT NULL,
+          heat_samples INTEGER[] NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_route_derived_bbox`)}
+          ON ${q}.route_derived(min_lat, max_lat, min_lon, max_lon);
+
+        CREATE TABLE IF NOT EXISTS ${q}.heat_cells (
+          level SMALLINT NOT NULL,
+          lat_idx INTEGER NOT NULL,
+          lon_idx INTEGER NOT NULL,
+          samples BIGINT NOT NULL,
+          journeys INTEGER NOT NULL,
+          PRIMARY KEY (level, lat_idx, lon_idx)
+        );
+
+        DROP TRIGGER IF EXISTS routes_derived_stale ON ${q}.routes;
+        CREATE TRIGGER routes_derived_stale
+          AFTER UPDATE OF coordinates, profile_time_ms, start_time, end_time, distance, force_visible
+          ON ${q}.routes FOR EACH ROW EXECUTE FUNCTION public.journey_derived_stale();
+
+        DROP TRIGGER IF EXISTS routes_data_version ON ${q}.routes;
+        CREATE TRIGGER routes_data_version
+          AFTER INSERT OR UPDATE OR DELETE ON ${q}.routes
+          FOR EACH STATEMENT EXECUTE FUNCTION public.journey_bump_data_version();
+
+        DROP TRIGGER IF EXISTS route_derived_heat_add ON ${q}.route_derived;
+        CREATE TRIGGER route_derived_heat_add
+          AFTER INSERT ON ${q}.route_derived FOR EACH ROW EXECUTE FUNCTION public.journey_heat_add();
+
+        DROP TRIGGER IF EXISTS route_derived_heat_sub ON ${q}.route_derived;
+        CREATE TRIGGER route_derived_heat_sub
+          AFTER DELETE ON ${q}.route_derived FOR EACH ROW EXECUTE FUNCTION public.journey_heat_sub();
+      `);
+    },
+  },
+];
+
+async function createTenantTables(schema) {
+  return runMigrations(schema, TENANT_MIGRATIONS, { schema });
+}
+
+// A one-off task recorded like a migration; runs inside the recording transaction.
+async function runOnce(scope, name, task) {
+  const [ran] = await runMigrations(scope, [{ name, up: task }], {});
+  return Boolean(ran);
+}
+
+function forgetTenantSchema(userId) {
+  ensuredTenantSchemas.delete(tenantSchemaForUser(userId));
+}
+
+async function ensureTenantSchema(userId) {
+  const schema = tenantSchemaForUser(userId);
+  if (ensuredTenantSchemas.has(schema)) return schema;
+  await createTenantTables(schema);
+  ensuredTenantSchemas.add(schema);
   return schema;
 }
 
+// search_path is per connection: reset it on release, and destroy the client if that fails.
 async function withTenantClient(userId, callback) {
   const schema = await ensureTenantSchema(userId);
   const client = await pool.connect();
+  let releaseError;
   try {
     await client.query('SELECT set_config($1, $2, false)', ['search_path', `${schema},public`]);
     return await callback(client);
   } finally {
     try {
       await client.query('RESET search_path');
-    } catch {
-      // Ignore reset failures; connection will be recycled by pool.
+    } catch (err) {
+      releaseError = err;
     }
-    client.release();
+    client.release(releaseError);
   }
 }
 
 async function queryTenant(userId, text, params = []) {
   return withTenantClient(userId, (client) => client.query(text, params));
+}
+
+async function withTenantTransaction(userId, callback) {
+  return withTenantClient(userId, async (client) => {
+    await client.query('BEGIN');
+    try {
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    }
+  });
 }
 
 function buildLegacyRouteFilter(includeUnassigned) {
@@ -233,7 +512,7 @@ function buildLegacyRouteFilter(includeUnassigned) {
 async function migrateLegacyDataForUser(userId, options = {}) {
   const includeUnassigned = options.includeUnassigned === true;
   const purgeLegacy = options.purgeLegacy === true;
-  const schema = tenantSchemaForUser(userId);
+  const schema = await ensureTenantSchema(userId);
   const qSchema = quoteIdent(schema);
   const legacyRouteFilter = buildLegacyRouteFilter(includeUnassigned);
   const routeColumnList = ROUTE_COLUMNS.join(', ');
@@ -242,7 +521,6 @@ async function migrateLegacyDataForUser(userId, options = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await ensureTenantSchema(userId, client);
 
     const insertedRoutes = await client.query(`
       INSERT INTO ${qSchema}.routes (${routeColumnList})
@@ -282,7 +560,6 @@ async function migrateLegacyDataForUser(userId, options = {}) {
     }
 
     await client.query('COMMIT');
-    ensuredTenantSchemas.add(schema);
 
     return {
       migratedRoutes: insertedRoutes.rowCount,
@@ -296,15 +573,15 @@ async function migrateLegacyDataForUser(userId, options = {}) {
   }
 }
 
-async function reconnect(connStr) {
-  await _pool.end();
-  _pool = new Pool({ connectionString: connStr });
-  ensuredTenantSchemas.clear();
-  await initSchema();
-}
-
 async function initSchema() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      scope TEXT NOT NULL,
+      name TEXT NOT NULL,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (scope, name)
+    );
+
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
@@ -432,7 +709,6 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_waypoints_route_id ON waypoints(route_id);
     CREATE INDEX IF NOT EXISTS idx_photos_route_id ON photos(route_id);
     CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
-    CREATE INDEX IF NOT EXISTS idx_pairing_tokens_token ON pairing_tokens(token);
   `);
 
   await pool.query(`
@@ -529,6 +805,9 @@ async function initSchema() {
 
   await pool.query('CREATE INDEX IF NOT EXISTS idx_routes_user_id ON routes(user_id)');
 
+  await pool.query(TRIGGER_FUNCTIONS);
+  await runMigrations('global', GLOBAL_MIGRATIONS, {});
+
   const { rows: users } = await pool.query('SELECT id FROM users');
   for (const user of users) {
     await ensureTenantSchema(user.id);
@@ -573,6 +852,7 @@ function toApiRoute(row, waypoints, photos) {
       condition: row.weather_condition,
       description: row.weather_description,
       icon: row.weather_icon,
+      location: row.weather_city || null,
     } : null,
   };
 }
@@ -636,14 +916,17 @@ function toApiPhoto(row) {
 module.exports = {
   pool,
   initSchema,
-  reconnect,
+  quoteIdent,
   toApiRoute,
   toApiSummary,
   toApiWaypoint,
   toApiPhoto,
   tenantSchemaForUser,
   ensureTenantSchema,
+  forgetTenantSchema,
+  runOnce,
   withTenantClient,
+  withTenantTransaction,
   queryTenant,
   migrateLegacyDataForUser,
 };

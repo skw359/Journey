@@ -267,22 +267,6 @@ export async function fetchAllTimeMapData(params = {}) {
   return res.json();
 }
 
-export async function fetchAllPoints(params = {}) {
-  const query = new URLSearchParams();
-  if (params.start) query.set('start', params.start);
-  if (params.end) query.set('end', params.end);
-  if (params.countOnly) query.set('countOnly', '1');
-  const res = await apiFetch(`${API_BASE}/all-points?${query}`);
-  if (!res.ok) throw new Error('Failed to fetch all points');
-  return res.json();
-}
-
-export async function fetchHeatmapData() {
-  const res = await apiFetch(`${API_BASE}/heatmap-data`);
-  if (!res.ok) throw new Error('Failed to fetch heatmap data');
-  return res.json();
-}
-
 export async function combineJourneys(journeyIds, name) {
   const res = await apiFetch(`${API_BASE}/routes/combine`, {
     method: 'POST',
@@ -296,13 +280,18 @@ export async function combineJourneys(journeyIds, name) {
   return res.json();
 }
 
-export async function undoCombine(routeId) {
+// force: undo even though points were deleted from the combined journey since.
+export async function undoCombine(routeId, { force = false } = {}) {
   const res = await apiFetch(`${API_BASE}/routes/${routeId}/undo-combine`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to undo combine');
+    const error = new Error(err.error || 'Failed to undo combine');
+    error.code = err.code;
+    throw error;
   }
   return res.json();
 }

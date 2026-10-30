@@ -1,16 +1,29 @@
 const express = require('express');
-const { Pool } = require('pg');
 const router = express.Router();
-const { pool, reconnect, queryTenant, tenantSchemaForUser } = require('../db');
-const { clearConfigCache, fetchSounding } = require('../utils/weather');
+const { pool, queryTenant, tenantSchemaForUser } = require('../db');
+const { clearConfigCache, soundingForRoute } = require('../utils/weather');
 const { clearConfigCache: clearFlightConfigCache } = require('../utils/flight');
 const mediaStorage = require('../utils/mediaStorage');
 const mediaMove = require('../utils/mediaMove');
 const { listExternalDrives } = require('../utils/drives');
-const { isPrimaryAccount } = require('../middleware/auth');
+const { isAdmin, requireAdmin } = require('../middleware/auth');
+const { assertHttpUrl, OutboundUrlError } = require('../utils/outboundUrl');
 const log = require('../utils/logger').scope('settings');
 
+// Server-wide settings require the admin; per-account preferences don't.
+
 const UNIT_PREFERENCES = new Set(['imperial', 'metric']);
+const MASK = '••••••••';
+
+async function saveConfig(entries) {
+  for (const [key, value] of entries) {
+    await pool.query(
+      `INSERT INTO app_config (key, value, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [key, value]
+    );
+  }
+}
 
 // GET /api/settings/units
 router.get('/units', async (req, res) => {
@@ -55,84 +68,35 @@ router.put('/units', async (req, res) => {
   }
 });
 
-// GET /api/settings/database
-router.get('/database', async (req, res) => {
+// GET /api/settings/database — read-only; the connection comes from DATABASE_URL.
+router.get('/database', requireAdmin, (req, res) => {
   try {
-    const { rows } = await pool.query(
-      "SELECT key, value FROM app_config WHERE key IN ('db_host', 'db_port', 'db_name', 'db_user', 'db_password')"
-    );
-    const config = {};
-    for (const row of rows) {
-      config[row.key] = row.key === 'db_password' ? '••••••••' : row.value;
-    }
-    res.json(config);
-  } catch (err) {
-    log.error('Get database config error:', err);
-    res.status(500).json({ error: 'Failed to get database config' });
-  }
-});
-
-// PUT /api/settings/database
-router.put('/database', async (req, res) => {
-  try {
-    const { host, port, database, username, password } = req.body;
-
-    if (!host || !database || !username) {
-      return res.status(400).json({ error: 'Host, database, and username are required' });
-    }
-
-    const connStr = `postgres://${encodeURIComponent(username)}:${encodeURIComponent(password || '')}@${host}:${port || 5432}/${database}`;
-
-    // Test connection first
-    const testPool = new Pool({ connectionString: connStr, connectionTimeoutMillis: 5000 });
-    try {
-      await testPool.query('SELECT 1');
-    } catch (err) {
-      await testPool.end();
-      return res.status(400).json({ error: `Connection failed: ${err.message}` });
-    }
-    await testPool.end();
-
-    // Save to app_config
-    const entries = [
-      ['db_host', host],
-      ['db_port', String(port || 5432)],
-      ['db_name', database],
-      ['db_user', username],
-      ['db_password', password || ''],
-    ];
-
-    for (const [key, value] of entries) {
-      await pool.query(
-        `INSERT INTO app_config (key, value, updated_at) VALUES ($1, $2, NOW())
-         ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
-        [key, value]
-      );
-    }
-
-    // Reconnect
-    await reconnect(connStr);
-
-    res.json({ success: true, message: 'Database connection updated' });
-  } catch (err) {
-    log.error('Update database config error:', err);
-    res.status(500).json({ error: 'Failed to update database config' });
+    const url = new URL(process.env.DATABASE_URL || '');
+    res.json({
+      db_host: url.hostname,
+      db_port: url.port || '5432',
+      db_name: url.pathname.replace(/^\//, '') || 'postgres',
+      db_user: decodeURIComponent(url.username || ''),
+      source: 'DATABASE_URL',
+    });
+  } catch {
+    res.json({ source: 'DATABASE_URL' });
   }
 });
 
 // GET /api/settings/storage
-// Whole-database size (the same figure psql's pg_database_size reports) plus how
-// much of it is this account's tenant schema. Photos live on disk, not in
-// Postgres, so their total comes from the photos table's recorded file sizes.
+// This account's usage; the admin also sees the whole database (pg_database_size).
+// Photo totals come from the photos table's recorded sizes.
 router.get('/storage', async (req, res) => {
   try {
+    const admin = await isAdmin(req.userId);
     const [database, tenant, counts] = await Promise.all([
-      pool.query(`
+      admin ? pool.query(`
         SELECT current_database() AS name,
                pg_database_size(current_database()) AS bytes,
                pg_size_pretty(pg_database_size(current_database())) AS pretty,
                current_setting('server_version') AS version
-      `),
+      `) : null,
       pool.query(`
         SELECT COALESCE(SUM(pg_total_relation_size(c.oid)), 0) AS bytes
         FROM pg_class c
@@ -146,17 +110,18 @@ router.get('/storage', async (req, res) => {
       `),
     ]);
 
-    const db = database.rows[0];
     const usage = counts.rows[0];
+    const accountBytes = Number(tenant.rows[0].bytes);
+    const db = database?.rows[0];
     res.json({
-      database: {
+      database: db ? {
         name: db.name,
         bytes: Number(db.bytes),
         pretty: db.pretty,
         version: String(db.version).split(' ')[0],
-      },
+      } : { name: null, bytes: accountBytes, pretty: null, version: null },
       account: {
-        bytes: Number(tenant.rows[0].bytes),
+        bytes: accountBytes,
         journeys: Number(usage.journeys),
       },
       photos: {
@@ -172,18 +137,8 @@ router.get('/storage', async (req, res) => {
 });
 
 async function attachmentStorageStatus(userId) {
-  const [storage, canManage] = await Promise.all([mediaStorage.status(), isPrimaryAccount(userId)]);
+  const [storage, canManage] = await Promise.all([mediaStorage.status(), isAdmin(userId)]);
   return { canManage, ...storage, move: mediaMove.status() };
-}
-
-async function requirePrimary(req, res, next) {
-  try {
-    if (await isPrimaryAccount(req.userId)) return next();
-    res.status(403).json({ error: 'Only the primary account can change where attachments are stored' });
-  } catch (err) {
-    log.error('Primary account check error:', err);
-    res.status(500).json({ error: 'Failed to check account' });
-  }
 }
 
 // GET /api/settings/attachment-storage
@@ -199,7 +154,7 @@ router.get('/attachment-storage', async (req, res) => {
 
 // GET /api/settings/attachment-storage/drives?refresh=1
 // External drives Windows can see. Slow (~2 s), so the page asks for it separately.
-router.get('/attachment-storage/drives', async (req, res) => {
+router.get('/attachment-storage/drives', requireAdmin, async (req, res) => {
   try {
     const [drives, internal] = await Promise.all([
       listExternalDrives({ refresh: req.query.refresh === '1' }),
@@ -213,7 +168,7 @@ router.get('/attachment-storage/drives', async (req, res) => {
 });
 
 // GET /api/settings/attachment-storage/plan?target=internal|<volumeId> — what a move would involve
-router.get('/attachment-storage/plan', requirePrimary, async (req, res) => {
+router.get('/attachment-storage/plan', requireAdmin, async (req, res) => {
   try {
     const target = req.query.target === 'internal'
       ? { kind: 'internal' }
@@ -228,7 +183,7 @@ router.get('/attachment-storage/plan', requirePrimary, async (req, res) => {
 
 // PUT /api/settings/attachment-storage  { target: { kind: 'internal' } | { kind: 'drive', volumeId } }
 // New uploads go to the new location at once; existing files move there in the background.
-router.put('/attachment-storage', requirePrimary, async (req, res) => {
+router.put('/attachment-storage', requireAdmin, async (req, res) => {
   try {
     await mediaMove.interrupt();
     await mediaStorage.selectLocation(req.body?.target);
@@ -243,7 +198,7 @@ router.put('/attachment-storage', requirePrimary, async (req, res) => {
 });
 
 // POST /api/settings/attachment-storage/pause — files already moved stay where they are
-router.post('/attachment-storage/pause', requirePrimary, async (req, res) => {
+router.post('/attachment-storage/pause', requireAdmin, async (req, res) => {
   try {
     await mediaMove.pause();
     res.json(await attachmentStorageStatus(req.userId));
@@ -254,7 +209,7 @@ router.post('/attachment-storage/pause', requirePrimary, async (req, res) => {
 });
 
 // POST /api/settings/attachment-storage/resume — also retries after an error
-router.post('/attachment-storage/resume', requirePrimary, async (req, res) => {
+router.post('/attachment-storage/resume', requireAdmin, async (req, res) => {
   try {
     await mediaMove.resume();
     res.json(await attachmentStorageStatus(req.userId));
@@ -264,33 +219,7 @@ router.post('/attachment-storage/resume', requirePrimary, async (req, res) => {
   }
 });
 
-// POST /api/settings/database/test
-router.post('/database/test', async (req, res) => {
-  try {
-    const { host, port, database, username, password } = req.body;
-
-    if (!host || !database || !username) {
-      return res.status(400).json({ error: 'Host, database, and username are required' });
-    }
-
-    const connStr = `postgres://${encodeURIComponent(username)}:${encodeURIComponent(password || '')}@${host}:${port || 5432}/${database}`;
-
-    const testPool = new Pool({ connectionString: connStr, connectionTimeoutMillis: 5000 });
-    try {
-      const { rows } = await testPool.query('SELECT version()');
-      await testPool.end();
-      res.json({ success: true, version: rows[0].version });
-    } catch (err) {
-      await testPool.end();
-      res.status(400).json({ success: false, error: err.message });
-    }
-  } catch (err) {
-    log.error('Test database connection error:', err);
-    res.status(500).json({ error: 'Failed to test connection' });
-  }
-});
-
-// GET /api/settings/weather
+// GET /api/settings/weather — provider details only for the admin.
 router.get('/weather', async (req, res) => {
     try {
         const { rows } = await pool.query(
@@ -305,12 +234,19 @@ router.get('/weather', async (req, res) => {
         };
         for (const row of rows) {
             if (row.key === 'weather_api_key') {
-                config[row.key] = row.value ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '';
+                config[row.key] = row.value ? MASK : '';
             } else {
                 config[row.key] = row.value;
             }
         }
-        res.json(config);
+        if (!(await isAdmin(req.userId))) {
+            return res.json({
+                weather_enabled: config.weather_enabled,
+                weather_sounding_enabled: config.weather_sounding_enabled,
+                canManage: false,
+            });
+        }
+        res.json({ ...config, canManage: true });
     } catch (err) {
         log.error('Get weather config error:', err);
         res.status(500).json({ error: 'Failed to get weather config' });
@@ -318,77 +254,58 @@ router.get('/weather', async (req, res) => {
 });
 
 // PUT /api/settings/weather
-router.put('/weather', async (req, res) => {
+router.put('/weather', requireAdmin, async (req, res) => {
     try {
-        const { enabled, provider, apiKey, customUrl, soundingEnabled } = req.body;
+        const { enabled, provider, apiKey, customUrl, soundingEnabled } = req.body || {};
 
         const validProviders = ['open-meteo', 'openweather', 'custom'];
         if (provider && !validProviders.includes(provider)) {
             return res.status(400).json({ error: 'Invalid provider' });
         }
-
-        const entries = [];
-        if (enabled !== undefined) entries.push(['weather_enabled', String(enabled)]);
-        if (provider) entries.push(['weather_provider', provider]);
-        if (apiKey !== undefined) entries.push(['weather_api_key', apiKey]);
-        if (customUrl !== undefined) entries.push(['weather_custom_url', customUrl]);
-        if (soundingEnabled !== undefined) entries.push(['weather_sounding_enabled', String(soundingEnabled)]);
-
-        for (const [key, value] of entries) {
-            await pool.query(
-                `INSERT INTO app_config (key, value, updated_at) VALUES ($1, $2, NOW())
-                 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
-                [key, value]
-            );
+        if (apiKey !== undefined && (typeof apiKey !== 'string' || apiKey.length > 512)) {
+            return res.status(400).json({ error: 'Invalid API key' });
         }
 
+        let url = customUrl;
+        if (typeof customUrl === 'string' && customUrl.trim()) {
+            url = assertHttpUrl(customUrl, { label: 'The custom weather URL' });
+        } else if (customUrl !== undefined) {
+            url = '';
+        }
+        if (provider === 'custom' && !url) {
+            const { rows } = await pool.query("SELECT value FROM app_config WHERE key = 'weather_custom_url'");
+            if (!rows[0]?.value) return res.status(400).json({ error: 'The custom provider needs a URL' });
+        }
+
+        const entries = [];
+        if (enabled !== undefined) entries.push(['weather_enabled', String(enabled === true || enabled === 'true')]);
+        if (provider) entries.push(['weather_provider', provider]);
+        if (apiKey !== undefined) entries.push(['weather_api_key', apiKey]);
+        if (url !== undefined) entries.push(['weather_custom_url', url]);
+        if (soundingEnabled !== undefined) entries.push(['weather_sounding_enabled', String(soundingEnabled === true || soundingEnabled === 'true')]);
+
+        await saveConfig(entries);
         clearConfigCache();
         res.json({ success: true, message: 'Weather settings updated' });
     } catch (err) {
+        if (err instanceof OutboundUrlError) return res.status(400).json({ error: err.message });
         log.error('Update weather config error:', err);
         res.status(500).json({ error: 'Failed to update weather config' });
     }
 });
 
-// GET /api/settings/weather/sounding
+// GET /api/settings/weather/sounding?routeId=… (location resolved server-side)
 router.get('/weather/sounding', async (req, res) => {
     try {
-        const { lat, lon, time, routeId } = req.query;
-        if (!lat || !lon || !time) {
-            return res.status(400).json({ error: 'lat, lon, and time are required' });
+        const routeId = typeof req.query.routeId === 'string' ? req.query.routeId : '';
+        if (!routeId) {
+            return res.status(400).json({ error: 'routeId is required' });
         }
 
-        // Check cache if routeId provided
-        if (routeId && req.userId) {
-            const { rows } = await queryTenant(
-                req.userId,
-                'SELECT sounding_data FROM routes WHERE id = $1',
-                [routeId]
-            );
-            if (rows.length > 0 && rows[0].sounding_data != null) {
-                return res.json(rows[0].sounding_data);
-            }
-        }
-
-        const sounding = await fetchSounding(
-            parseFloat(lat),
-            parseFloat(lon),
-            time
-        );
-        if (!sounding) {
-            return res.status(404).json({ error: 'No sounding data available' });
-        }
-
-        // Cache the result fire-and-forget
-        if (routeId && req.userId) {
-            queryTenant(
-                req.userId,
-                'UPDATE routes SET sounding_data = $1 WHERE id = $2',
-                [JSON.stringify(sounding), routeId]
-            ).catch(err => log.error('Failed to cache sounding data:', err));
-        }
-
-        res.json(sounding);
+        const result = await soundingForRoute(req.userId, routeId);
+        if (result.status === 'not_found') return res.status(404).json({ error: 'Journey not found' });
+        if (!result.sounding) return res.status(404).json({ error: 'No sounding data available' });
+        res.json(result.sounding);
     } catch (err) {
         log.error('Sounding fetch error:', err);
         res.status(500).json({ error: 'Failed to fetch sounding data' });
@@ -401,15 +318,11 @@ router.get('/flights', async (req, res) => {
         const { rows } = await pool.query(
             "SELECT key, value FROM app_config WHERE key IN ('flightaware_api_key')"
         );
-        const config = {
-            flightaware_api_key: '',
-        };
-        for (const row of rows) {
-            if (row.key === 'flightaware_api_key') {
-                config[row.key] = row.value ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '';
-            }
+        const configured = Boolean(rows.find((row) => row.key === 'flightaware_api_key')?.value);
+        if (!(await isAdmin(req.userId))) {
+            return res.json({ configured, canManage: false });
         }
-        res.json(config);
+        res.json({ flightaware_api_key: configured ? MASK : '', configured, canManage: true });
     } catch (err) {
         log.error('Get flight config error:', err);
         res.status(500).json({ error: 'Failed to get flight config' });
@@ -417,16 +330,15 @@ router.get('/flights', async (req, res) => {
 });
 
 // PUT /api/settings/flights
-router.put('/flights', async (req, res) => {
+router.put('/flights', requireAdmin, async (req, res) => {
     try {
-        const { apiKey } = req.body;
+        const { apiKey } = req.body || {};
 
         if (apiKey !== undefined) {
-            await pool.query(
-                `INSERT INTO app_config (key, value, updated_at) VALUES ($1, $2, NOW())
-                 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
-                ['flightaware_api_key', apiKey]
-            );
+            if (typeof apiKey !== 'string' || apiKey.length > 512) {
+                return res.status(400).json({ error: 'Invalid API key' });
+            }
+            await saveConfig([['flightaware_api_key', apiKey]]);
         }
 
         clearFlightConfigCache();

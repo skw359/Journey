@@ -40,7 +40,7 @@ const { todayInZone, rangeLabel, addDays } = require('./periods');
  * Visibility filter matching GET /api/routes exactly: a journey Marco counts
  * is a journey the dashboard shows.
  */
-const VISIBLE = '(distance >= $1 OR force_visible = TRUE)';
+const VISIBLE = require('../utils/visibility').visibleSql('$1');
 
 /**
  * Sum of per-journey moving time, from the recorded timestamps rather than

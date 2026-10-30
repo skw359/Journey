@@ -7,22 +7,19 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
     "chartjs-plugin-zoom": "^2.2.0",
-    "leaflet": "^1.9.4",
-    "leaflet-fullscreen": "^1.0.2",
-    "leaflet.heat": "^0.2.0",
-    "leaflet.markercluster": "^1.5.3",
     "lucide-react": "^0.563.0",
     "ol": "^10.9.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.13.0",
+    "react-router-dom": "^7.18.4",
     "topojson-client": "^3.1.0"
   },
   "devDependencies": {

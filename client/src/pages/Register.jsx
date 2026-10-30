@@ -1,11 +1,19 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { checkInvite } from '../api/auth';
 import './Register.css';
 
+const MIN_PASSWORD_LENGTH = 8;
+
 export default function Register() {
-  const { register } = useAuth();
+  const { register, registration } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const invite = searchParams.get('invite') || '';
+  const needsInvite = registration !== 'first-run';
+  // 'checking' | 'valid' | 'invalid' | 'missing'
+  const [inviteState, setInviteState] = useState(() => (!needsInvite ? 'valid' : invite ? 'checking' : 'missing'));
   const [username, setUsername] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -14,12 +22,21 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!needsInvite || !invite) return undefined;
+    let cancelled = false;
+    checkInvite(invite)
+      .then(({ valid }) => { if (!cancelled) setInviteState(valid ? 'valid' : 'invalid'); })
+      .catch(() => { if (!cancelled) setInviteState('invalid'); });
+    return () => { cancelled = true; };
+  }, [needsInvite, invite]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (password.length < 4) {
-      setError('Password must be at least 4 characters.');
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
     if (password !== confirmPassword) {
@@ -34,6 +51,7 @@ export default function Register() {
         password,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        invite: needsInvite ? invite : undefined,
       });
     } catch (err) {
       setError(err.message);
@@ -57,9 +75,16 @@ export default function Register() {
 
           <div className="header-text">
             <h1>Create Account</h1>
-            <p></p>
+            <p>{!needsInvite ? 'This first account administers the server.' : ''}</p>
           </div>
 
+          {inviteState !== 'valid' ? (
+            <div className="register-error" role="alert">
+              {inviteState === 'checking' && 'Checking your invite…'}
+              {inviteState === 'missing' && 'Journey accounts are invite-only. Ask the server admin for an invite link.'}
+              {inviteState === 'invalid' && 'This invite link has expired, was already used, or was revoked. Ask the server admin for a new one.'}
+            </div>
+          ) : (
           <form className="register-form" onSubmit={handleSubmit}>
             {error && <div className="register-error" role="alert">{error}</div>}
 
@@ -120,10 +145,10 @@ export default function Register() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"
-                  placeholder="At least 4 characters"
+                  placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                   disabled={loading}
                   required
-                  minLength={4}
+                  minLength={MIN_PASSWORD_LENGTH}
                 />
               </div>
             </div>
@@ -148,6 +173,7 @@ export default function Register() {
               {loading ? 'Creating account...' : 'Create Account'}
             </button>
           </form>
+          )}
 
           <p className="register-switch">
             Already have an account?

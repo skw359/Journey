@@ -15,6 +15,7 @@ import JourneyDetails from '../components/JourneyDetails';
 import FlightImportModal from '../components/FlightImportModal';
 import DateSearchChip from '../components/DateSearchChip';
 import { fetchRoutes, fetchRouteDetail, fetchRouteMedia, deleteRoute, renameRoute, updateTravelMode as apiUpdateTravelMode, uploadPhotos as apiUploadPhotos, deletePhoto as apiDeletePhoto, deleteDataPoint, combineJourneys, undoCombine } from '../api/journeys';
+import { createLruCache, ROUTE_CACHE_LIMITS } from '../utils/lruCache';
 import { formatTime } from '../utils/formatters';
 import { isVideo, isViewable, previewFilename, coverFilename, describeFiles, describeMedia } from '../utils/media';
 import { parseDateQuery, matchesSearch } from '../utils/dateSearch';
@@ -84,8 +85,14 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
   const listRef = useRef(null);
   const listEndRef = useRef(null);
   const currentRouteIdRef = useRef(currentRouteId);
-  const routeCacheRef = useRef(new Map());
   const fullDetailRouteIdsRef = useRef(new Set());
+  const routeCacheRef = useRef(null);
+  if (!routeCacheRef.current) {
+    routeCacheRef.current = createLruCache({
+      ...ROUTE_CACHE_LIMITS,
+      onEvict: (id) => fullDetailRouteIdsRef.current.delete(id),
+    });
+  }
   const detailFetchInFlightRef = useRef(new Set());
   const selectionSeqRef = useRef(0);
 
@@ -600,9 +607,14 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
 
   const handleUndoCombine = async () => {
     if (!lastCombinedId) return;
+    const tid = toast.loading('Undoing combine...');
     try {
-      const tid = toast.loading('Undoing combine...');
-      await undoCombine(lastCombinedId);
+      try {
+        await undoCombine(lastCombinedId);
+      } catch (err) {
+        if (err.code !== 'edited_since_combine' || !window.confirm(`${err.message} Undo anyway?`)) throw err;
+        await undoCombine(lastCombinedId, { force: true });
+      }
       toast.dismiss(tid);
       toast.success('Combine undone — journeys restored');
       setLastCombinedId(null);
@@ -622,6 +634,7 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
       }
     } catch (err) {
       console.error(err);
+      toast.dismiss(tid);
       toast.error('Failed to undo combine: ' + err.message);
     }
   };

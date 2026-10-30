@@ -20,7 +20,7 @@ Entry file:
 - React 19
 - React Router
 - Vite
-- Leaflet (+ heatmap, fullscreen, marker cluster plugins)
+- OpenLayers (every map, including the flight import preview)
 - Chart.js + `react-chartjs-2`
 - `lucide-react` icon set
 
@@ -46,9 +46,9 @@ Main route config lives in `client/src/App.jsx`.
 App-level auth gating:
 
 - while auth state is loading -> spinner
-- if system setup not complete -> render register flow
+- if system setup not complete -> render register flow (the first account becomes the server admin)
 - if migration is required -> render migration flow
-- if unauthenticated -> allow only login/register pages
+- if unauthenticated -> allow only login/register pages; registering needs an invite link (`/register?invite=…`) once the first account exists
 - if authenticated -> render full app shell + `Header`
 
 Authenticated routes:
@@ -66,15 +66,16 @@ Authenticated routes:
 
 `client/src/api/`:
 
-- `auth.js` -> auth + avatar + migration actions
-- `journeys.js` -> journey CRUD, photos, map/heatmap endpoints
-- `pairing.js` -> pairing token + QR data endpoints
-- `settings.js` -> runtime DB connection config endpoints
+- `auth.js` -> auth + avatar + migration actions, invite check
+- `admin.js` -> invites and account management (admin)
+- `journeys.js` -> journey CRUD, photos, map/heatmap endpoints, combine/undo
+- `pairing.js` -> pairing tokens (a new token, shown once, for each QR code)
+- `settings.js` -> units, storage, weather (sounding by journey id), flight settings, read-only database info
 
 Notes:
 
-- calls are made with `fetch` and rely on browser-managed cookies
-- `journeys.js` contains `fetchHeatmapData()` for `/api/heatmap-data`, but backend does not expose that endpoint; current Atlas flow uses `/api/heatmap-grid`
+- calls are made with `fetch` (through `apiFetch` for anything that should show the top loading bar) and rely on browser-managed cookies
+- `apiFetch` counts a request as loading until its headers arrive and then while its body is read, so a response whose body is never read (e.g. an error) can't leave the loading bar on
 
 ## Page-Level Behavior
 
@@ -92,7 +93,8 @@ Performance strategy:
 
 - initial detail fetch uses `maxPoints=100`
 - full detail fetch upgrades to `maxPoints=0` when zoom threshold is reached
-- detail cache prevents repeated network fetches for same route
+- detail cache prevents repeated network fetches for same route; it is an LRU bounded to 40 journeys and 1M points (`client/src/utils/lruCache.js`)
+- undo-combine asks before discarding points deleted from the combined journey (`409 edited_since_combine` -> retry with `force`)
 
 ## `TopJourneys` (`/topjourneys`)
 
@@ -101,14 +103,15 @@ Key features:
 - ranking/sorting by distance, duration, top speed
 - travel-mode filtering
 - same map/chart detail surface as dashboard
-- same progressive detail loading behavior
+- same progressive detail loading behavior and bounded cache
+- with "Preload journey data" on, the top journey and the next three are fetched in full, one at a time (not every journey at once)
 
 ## `Atlas` (`/atlas`)
 
 Modes:
 
 - line mode (route overlays, markers, clustering, date filter)
-- heatmap mode (viewport + zoom aware grid fetch)
+- heatmap mode (viewport + zoom aware grid fetch). Cells carry how many journeys passed through them; weights are `log(1 + journeys)` normalized to the 95th percentile of the cells in view (`client/src/utils/heatmapWeights.js`), so busy places stand out without the rest saturating. The date filter sends the same instants the Lines view filters by
 
 Key features:
 
@@ -117,6 +120,7 @@ Key features:
 - date range filtering
 - route click-through into dashboard
 - detail route refresh in high zoom bounds
+- tooltip text (journey names, dates, waypoint labels and notes) is HTML-escaped (`client/src/utils/html.js`); `RouteMap` does the same
 
 ## `Settings` (`/settings`)
 
@@ -126,16 +130,17 @@ Key features:
 - suppress large-route warning toggle
 - avatar upload
 - client pairing link
-- runtime DB connection test and save/reconnect
+- Your Data: export every journey (NDJSON download)
+- admin only: weather provider, FlightAware, Journey AI, read-only database connection info, Accounts & Invites (create/revoke invite links, promote/demote/delete accounts)
 - sign out + account deletion modal
 
 ## `PairClient` (`/pair`)
 
 Key features:
 
-- QR code rendering for pairing URI
-- token list display (created/last-used metadata)
-- create and revoke pairing tokens
+- QR code for a fresh pairing token, made when the page opens; it works once, within 15 minutes, and can't be shown again
+- paired device list (created/last-used, or "waiting to be scanned")
+- new pairing code and revoke
 
 ## `ApiDocs` (`/api-docs`)
 
@@ -144,19 +149,14 @@ Key features:
 
 ## `Login` / `Register` / `DataMigration`
 
-- login and registration flows
+- login and registration flows; `Register` validates the `?invite=` link first and explains when one is missing or used up; passwords need 8+ characters
 - migration prompt shown after first account creation when legacy unassigned data exists
-
-## Unrouted/Legacy Page
-
-- `client/src/pages/Heatmap.jsx` exists but is not mounted in router
-- current heatmap user flow is `Atlas` with `?view=heatmap`
 
 ## Key Components
 
 - `Header`: top navigation, search input, profile menu
 - `Sidebar`: collapsible left panel wrapper
-- `RouteMap`: Leaflet detail route map with tooltip hover overlays
+- `RouteMap`: OpenLayers detail route map with tooltip hover overlays
 - `StatsGrid`: primary route metrics
 - `ElevationChart`, `SpeedChart`, `AccelerationChart`: telemetry visualizations
 - `PhotoGallery` + `PhotoViewer`: media upload/view/delete flow
@@ -190,6 +190,10 @@ Large route warning:
 - default theme is `dark` unless `localStorage.theme` is set
 - `ThemeProvider` pushes `data-theme` to `<html>`
 - tile source and chart color palette are theme dependent
+
+## Tests
+
+From `client/`: `npm test` runs the unit tests in `client/tests/` with Node's built-in runner (loading indicator, HTML escaping, the bounded cache, heatmap weights). `npm run lint` and `npm run build` run in CI too.
 
 ## Development
 

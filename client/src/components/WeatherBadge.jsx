@@ -98,7 +98,7 @@ export default function WeatherBadge({ weather, startTime, lat, lon, overlay, ro
       setSoundingOpen(false);
       return;
     }
-    if (!lat || !lon || !startTime) return;
+    if (!routeId || !startTime) return;
 
     setSoundingOpen(true);
     if (soundingData) return; // already fetched
@@ -106,7 +106,7 @@ export default function WeatherBadge({ weather, startTime, lat, lon, overlay, ro
     setSoundingLoading(true);
     setSoundingError(null);
     try {
-      const data = await fetchSounding(lat, lon, startTime, routeId);
+      const data = await fetchSounding(routeId);
       setSoundingData(data);
     } catch {
       setSoundingError('Failed to load sounding data');

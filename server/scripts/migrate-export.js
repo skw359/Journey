@@ -1,48 +1,44 @@
 #!/usr/bin/env node
+// Exports every account's journeys to exports/<username>-<date>.ndjson (one journey per
+// line; the same format as Settings → Export data). Usage: npm run migrate:export
+// JOURNEY_EXPORT_DIR overrides the output folder.
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const fs = require('fs');
-const { pool, initSchema, toApiRoute } = require('../db');
+const { pool, initSchema } = require('../db');
+const { writeNdjson } = require('../utils/exporter');
 const { PROJECT_ROOT } = require('../config');
 
-const OUTPUT_PATH = path.join(PROJECT_ROOT, 'database-export.json');
+const OUTPUT_DIR = process.env.JOURNEY_EXPORT_DIR
+  ? path.resolve(process.env.JOURNEY_EXPORT_DIR)
+  : path.join(PROJECT_ROOT, 'exports');
 
 async function main() {
   console.log('Connecting to database...');
   await initSchema();
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  const { rows: routes } = await pool.query('SELECT * FROM routes ORDER BY start_time ASC');
-  console.log(`Found ${routes.length} routes`);
+  const { rows: users } = await pool.query('SELECT id, username, display_name FROM users ORDER BY created_at');
+  console.log(`Found ${users.length} account${users.length === 1 ? '' : 's'}`);
 
-  const result = [];
-
-  for (let i = 0; i < routes.length; i++) {
-    const route = routes[i];
-
-    const { rows: waypoints } = await pool.query(
-      'SELECT * FROM waypoints WHERE route_id = $1 ORDER BY "timestamp" ASC',
-      [route.id]
-    );
-
-    const { rows: photos } = await pool.query(
-      'SELECT * FROM photos WHERE route_id = $1 ORDER BY uploaded_at ASC',
-      [route.id]
-    );
-
-    result.push(toApiRoute(route, waypoints, photos));
-
-    if ((i + 1) % 100 === 0 || i === routes.length - 1) {
-      console.log(`Exported ${i + 1}/${routes.length} routes`);
-    }
+  const date = new Date().toISOString().slice(0, 10);
+  let total = 0;
+  for (const user of users) {
+    const safeName = String(user.username).replace(/[^\w.-]+/g, '_').slice(0, 60) || user.id;
+    const file = path.join(OUTPUT_DIR, `${safeName}-${date}.ndjson`);
+    const stream = fs.createWriteStream(file);
+    const count = await writeNdjson(user.id, stream, { user: { username: user.username, displayName: user.display_name } });
+    await new Promise((resolve, reject) => stream.end((err) => (err ? reject(err) : resolve())));
+    console.log(`  ${user.username}: ${count} journeys -> ${file}`);
+    total += count;
   }
 
-  fs.writeFileSync(OUTPUT_PATH, JSON.stringify(result, null, 2));
-  console.log(`Export complete! Written to ${OUTPUT_PATH}`);
-
+  console.log(`Export complete: ${total} journeys`);
   await pool.end();
 }
 
-main().catch(err => {
+main().catch(async (err) => {
   console.error('Export failed:', err);
+  await pool.end().catch(() => {});
   process.exit(1);
 });

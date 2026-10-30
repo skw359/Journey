@@ -1,10 +1,14 @@
 const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
-const { withTenantClient, toApiRoute, toApiSummary, toApiWaypoint } = require('../db');
-const { haversine, detectTravelMode } = require('../utils/geo');
-const { formatDuration } = require('../utils/format');
-const { MIN_ROUTE_MILES } = require('../config');
+const { withTenantClient, withTenantTransaction, toApiRoute, toApiSummary, toApiWaypoint } = require('../db');
+const { detectTravelMode } = require('../utils/geo');
+const { MIN_ROUTE_MILES, GEOCODE_BASE_URL } = require('../config');
+const { visibleSql } = require('../utils/visibility');
+const { statsFromTrack, mergeTracksByTime, trackFromRow } = require('../utils/journeyStats');
+const { insertRoute, insertWaypoints, insertPhotoRow } = require('../utils/routeRecords');
+const { journeyDate } = require('../utils/journeyIngest');
+const { refreshDerivedSoon } = require('../utils/journeyDerived');
 const log = require('../utils/logger').scope('journeys');
 const { requeueProcessing } = require('../utils/mediaQueue');
 const {
@@ -15,6 +19,7 @@ const {
 } = require('../utils/geoBackfill');
 const {
     TRASH_ORIGIN,
+    RestoreConflictError,
     trashExistingRoute,
     restoreTrashedJourney,
     permanentlyDeleteTrash,
@@ -23,6 +28,87 @@ const {
     listTrash,
     getTrashDetail,
 } = require('../utils/trash');
+
+const MAX_COMBINE = 50;
+const MAX_POINTS_PER_DELETE = 10_000;
+
+class HttpError extends Error {
+    constructor(status, message, extra = {}) {
+        super(message);
+        this.status = status;
+        this.extra = extra;
+    }
+}
+
+function sendHttpError(res, err) {
+    return res.status(err.status).json({ error: err.message, ...err.extra });
+}
+
+function newWaypointId() {
+    return `wp-${crypto.randomBytes(8).toString('hex')}`;
+}
+
+function trackSignature(coordinates) {
+    return crypto.createHash('sha256').update(JSON.stringify(coordinates || [])).digest('hex');
+}
+
+async function loadRouteDetail(db, routeId) {
+    const { rows: [route] } = await db.query('SELECT * FROM routes WHERE id = $1', [routeId]);
+    if (!route) return null;
+    const { rows: waypoints } = await db.query(
+        'SELECT * FROM waypoints WHERE route_id = $1 ORDER BY "timestamp" ASC', [routeId]
+    );
+    const { rows: photos } = await db.query(
+        'SELECT * FROM photos WHERE route_id = $1 ORDER BY uploaded_at ASC', [routeId]
+    );
+    return toApiRoute(route, waypoints, photos);
+}
+
+function statsColumns(stats) {
+    return {
+        distance: stats.distance,
+        duration: stats.duration,
+        top_speed: stats.top_speed,
+        avg_speed: stats.avg_speed,
+        top_elevation: stats.top_elevation,
+        lowest_elevation: stats.lowest_elevation,
+        avg_elevation: stats.avg_elevation,
+        elevation_gain: stats.elevation_gain,
+        elevation_loss: stats.elevation_loss,
+        start_time: stats.start_time,
+        end_time: stats.end_time,
+        start_lat: stats.start_lat,
+        start_lon: stats.start_lon,
+        end_lat: stats.end_lat,
+        end_lon: stats.end_lon,
+    };
+}
+
+// Skips the write if the track changed again meanwhile.
+function recomputePassedLists(userId, routeId, coordinates) {
+    if (!GEOCODE_BASE_URL || !coordinates || coordinates.length < 2) return;
+    const signature = trackSignature(coordinates);
+    const { computeCitiesPassed } = require('../utils/cities');
+    const { computePlacesPassed } = require('../utils/places');
+    for (const [column, compute, scope] of [
+        ['cities_passed', computeCitiesPassed, 'cities'],
+        ['places_passed', computePlacesPassed, 'places'],
+    ]) {
+        compute(coordinates)
+            .then((result) => {
+                if (result === null) {
+                    log.scope(scope).error(`geocoder unreachable — journey #${routeId} left for backfill`);
+                    return withTenantClient(userId, (db) => db.query(`UPDATE routes SET ${column} = NULL WHERE id = $1`, [routeId]));
+                }
+                return withTenantClient(userId, async (db) => {
+                    const { rows } = await db.query('SELECT coordinates FROM routes WHERE id = $1', [routeId]);
+                    if (!rows[0] || trackSignature(rows[0].coordinates) !== signature) return;
+                    await db.query(`UPDATE routes SET ${column} = $1 WHERE id = $2`, [JSON.stringify(result), routeId]);
+                });
+            })
+            .catch((err) => log.scope(scope).error('recompute failed', err));
+    }
+}
 
 // GET /api/routes (list view)
 router.get('/', async (req, res) => {
@@ -40,7 +126,7 @@ router.get('/', async (req, res) => {
                           AND (p.mimetype IS NULL OR p.mimetype NOT LIKE 'video/%' OR p.poster_filename IS NOT NULL)
                         ORDER BY p.uploaded_at ASC LIMIT 1) AS cover_photo
                 FROM routes r
-                WHERE r.distance >= $1 OR r.force_visible = TRUE
+                WHERE ${visibleSql('$1', 'r')}
                 ORDER BY r.start_time DESC
             `, [MIN_ROUTE_MILES]);
 
@@ -157,28 +243,18 @@ router.get('/trash/:trashId', async (req, res) => {
 // POST /api/routes/trash/:trashId/restore — restore a trashed journey to the active list
 router.post('/trash/:trashId/restore', async (req, res) => {
     try {
-        await withTenantClient(req.userId, async (db) => {
-            await db.query('BEGIN');
-            try {
-                const restored = await restoreTrashedJourney(db, req.params.trashId);
-                if (!restored) {
-                    await db.query('ROLLBACK');
-                    return res.status(404).json({ error: 'Trashed journey not found' });
-                }
-                await db.query('COMMIT');
-                const { processingMedia, ...summary } = restored;
-                res.json({ message: 'Journey restored', ...summary });
-                // Photos and videos trashed mid-conversion pick up where they left off.
-                if (processingMedia.length > 0) {
-                    requeueProcessing(req.userId, processingMedia)
-                        .catch((err) => log.error('could not requeue restored media', err));
-                }
-            } catch (err) {
-                await db.query('ROLLBACK');
-                throw err;
-            }
-        });
+        const restored = await withTenantTransaction(req.userId, (db) => restoreTrashedJourney(db, req.params.trashId));
+        if (!restored) return res.status(404).json({ error: 'Trashed journey not found' });
+        const { processingMedia, ...summary } = restored;
+        res.json({ message: 'Journey restored', ...summary });
+        refreshDerivedSoon(req.userId);
+        // Photos and videos trashed mid-conversion pick up where they left off.
+        if (processingMedia.length > 0) {
+            requeueProcessing(req.userId, processingMedia)
+                .catch((err) => log.error('could not requeue restored media', err));
+        }
     } catch (err) {
+        if (err instanceof RestoreConflictError) return res.status(409).json({ error: err.message });
         log.error('POST /api/routes/trash/:trashId/restore error:', err);
         res.status(500).json({ error: 'Failed to restore journey' });
     }
@@ -270,27 +346,23 @@ router.get('/:id', async (req, res) => {
 
 // PATCH /api/routes/:id/name
 router.patch('/:id/name', express.json(), async (req, res) => {
-    const { newName } = req.body;
-    if (!newName || typeof newName !== 'string') {
+    const { newName } = req.body || {};
+    if (!newName || typeof newName !== 'string' || !newName.trim()) {
         return res.status(400).json({ error: 'Invalid name' });
+    }
+    if (newName.trim().length > 200) {
+        return res.status(400).json({ error: 'Names are limited to 200 characters' });
     }
     try {
         await withTenantClient(req.userId, async (db) => {
-            const { rows } = await db.query(
-                'UPDATE routes SET name = $1 WHERE id = $2 RETURNING *',
+            const { rowCount } = await db.query(
+                'UPDATE routes SET name = $1 WHERE id = $2',
                 [newName.trim(), req.params.id]
             );
-            if (rows.length === 0) {
+            if (rowCount === 0) {
                 return res.status(404).json({ error: 'Journey not found' });
             }
-            const { rows: waypoints } = await db.query(
-                'SELECT * FROM waypoints WHERE route_id = $1 ORDER BY "timestamp" ASC', [req.params.id]
-            );
-            const { rows: photos } = await db.query(
-                'SELECT * FROM photos WHERE route_id = $1 ORDER BY uploaded_at ASC', [req.params.id]
-            );
-            const route = toApiRoute(rows[0], waypoints, photos);
-            res.json({ message: 'Name updated', route });
+            res.json({ message: 'Name updated', route: await loadRouteDetail(db, req.params.id) });
         });
     } catch (err) {
         log.error('PATCH name error:', err);
@@ -300,7 +372,7 @@ router.patch('/:id/name', express.json(), async (req, res) => {
 
 // PATCH /api/routes/:id/travel-mode
 router.patch('/:id/travel-mode', express.json(), async (req, res) => {
-    const { travelMode } = req.body;
+    const { travelMode } = req.body || {};
     const validModes = ['foot', 'scooter', 'drive', 'train', 'metro', 'flight'];
 
     if (!travelMode || !validModes.includes(travelMode)) {
@@ -309,21 +381,14 @@ router.patch('/:id/travel-mode', express.json(), async (req, res) => {
 
     try {
         await withTenantClient(req.userId, async (db) => {
-            const { rows } = await db.query(
-                'UPDATE routes SET travel_mode = $1 WHERE id = $2 RETURNING *',
+            const { rowCount } = await db.query(
+                'UPDATE routes SET travel_mode = $1 WHERE id = $2',
                 [travelMode, req.params.id]
             );
-            if (rows.length === 0) {
+            if (rowCount === 0) {
                 return res.status(404).json({ error: 'Journey not found' });
             }
-            const { rows: waypoints } = await db.query(
-                'SELECT * FROM waypoints WHERE route_id = $1 ORDER BY "timestamp" ASC', [req.params.id]
-            );
-            const { rows: photos } = await db.query(
-                'SELECT * FROM photos WHERE route_id = $1 ORDER BY uploaded_at ASC', [req.params.id]
-            );
-            const route = toApiRoute(rows[0], waypoints, photos);
-            res.json({ message: 'Travel mode updated', route });
+            res.json({ message: 'Travel mode updated', route: await loadRouteDetail(db, req.params.id) });
         });
     } catch (err) {
         log.error('PATCH travel-mode error:', err);
@@ -335,144 +400,95 @@ router.patch('/:id/travel-mode', express.json(), async (req, res) => {
 // Photo files are kept on disk so a restore can re-link them.
 router.delete('/:id', async (req, res) => {
     try {
-        await withTenantClient(req.userId, async (db) => {
-            await db.query('BEGIN');
-            try {
-                const result = await trashExistingRoute(db, req.params.id, {
-                    origin: TRASH_ORIGIN.USER_DELETED,
-                    reason: 'Deleted from journeys',
-                });
-                if (!result) {
-                    await db.query('ROLLBACK');
-                    return res.status(404).send('Journey not found');
-                }
-                await db.query('COMMIT');
-                res.status(200).json({ message: 'Journey moved to Trash', trashId: result.trashId });
-            } catch (err) {
-                await db.query('ROLLBACK');
-                throw err;
-            }
-        });
+        const result = await withTenantTransaction(req.userId, (db) => trashExistingRoute(db, req.params.id, {
+            origin: TRASH_ORIGIN.USER_DELETED,
+            reason: 'Deleted from journeys',
+        }));
+        if (!result) return res.status(404).send('Journey not found');
+        res.status(200).json({ message: 'Journey moved to Trash', trashId: result.trashId });
     } catch (err) {
         log.error('DELETE /api/routes/:id error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// DELETE /api/routes/:id/points/:index
-router.delete('/:id/points/:index', express.json(), async (req, res) => {
+// Recomputes every statistic from the remaining points (outlier filtering is off by design).
+async function deletePoints(req, res, rawIndices) {
     const routeId = req.params.id;
-    const index = parseInt(req.params.index, 10);
-
-    if (Number.isNaN(index)) {
-        return res.status(400).json({ error: 'Invalid index' });
+    const indices = [];
+    for (const raw of rawIndices) {
+        const text = String(raw);
+        if (!/^\d+$/.test(text)) return res.status(400).json({ error: 'Point indices must be whole numbers' });
+        indices.push(Number(text));
+    }
+    if (indices.length === 0) return res.status(400).json({ error: 'No points given' });
+    if (indices.length > MAX_POINTS_PER_DELETE) {
+        return res.status(400).json({ error: `At most ${MAX_POINTS_PER_DELETE} points per request` });
     }
 
     try {
-        await withTenantClient(req.userId, async (db) => {
-            const { rows } = await db.query('SELECT * FROM routes WHERE id = $1', [routeId]);
-            if (rows.length === 0) {
-                return res.status(404).json({ error: 'Journey not found' });
-            }
-
+        const coordinates = await withTenantTransaction(req.userId, async (db) => {
+            const { rows } = await db.query('SELECT * FROM routes WHERE id = $1 FOR UPDATE', [routeId]);
+            if (rows.length === 0) throw new HttpError(404, 'Journey not found');
             const row = rows[0];
-            const profileTimeMs = row.profile_time_ms || [];
-            const profileDistMi = row.profile_dist_mi || [];
-            const profileElevM = row.profile_elev_m || [];
-            const profileSpeedMph = row.profile_speed_mph || [];
-            const coordinates = row.coordinates || [];
 
-            if (profileTimeMs.length <= 2) {
-                return res.status(400).json({ error: 'Cannot delete points from a journey with too few points.' });
+            const { track, error } = trackFromRow(row);
+            if (error) throw new HttpError(409, `This journey can't be edited point by point: ${error}`);
+            const total = track.coords.length;
+            if (total <= 2) throw new HttpError(400, 'Cannot delete points from a journey with too few points.');
+            const removed = new Set(indices);
+            for (const index of removed) {
+                if (index >= total) throw new HttpError(400, `Point ${index} is out of range (the journey has ${total} points)`);
             }
+            if (total - removed.size < 2) throw new HttpError(400, 'A journey needs at least two points');
 
-            const safeSplice = (arr) => {
-                if (arr && arr.length > index) arr.splice(index, 1);
+            const stats = statsFromTrack(track, { removed });
+            const has = (series) => Array.isArray(series) && series.length === total;
+            const columns = {
+                ...statsColumns(stats),
+                coordinates: JSON.stringify(stats.coordinates),
+                profile_time_ms: JSON.stringify(has(row.profile_time_ms) ? stats.profile_time_ms : []),
+                profile_dist_mi: JSON.stringify(stats.profile_dist_mi),
+                profile_elev_m: JSON.stringify(has(row.profile_elev_m) ? stats.profile_elev_m : []),
+                profile_speed_mph: JSON.stringify(has(row.profile_speed_mph) ? stats.profile_speed_mph : []),
             };
-
-            safeSplice(profileTimeMs);
-            safeSplice(profileDistMi);
-            safeSplice(profileElevM);
-            safeSplice(profileSpeedMph);
-            safeSplice(coordinates);
-
-            const maxSpeed = profileSpeedMph.length > 0 ? Math.max(...profileSpeedMph) : 0;
-            const topSpeed = maxSpeed.toFixed(2);
-
-            let duration = row.duration;
-            let startTime = row.start_time ? row.start_time.toISOString() : null;
-            let endTime = row.end_time ? row.end_time.toISOString() : null;
-            if (profileTimeMs.length > 0) {
-                const s = profileTimeMs[0];
-                const e = profileTimeMs[profileTimeMs.length - 1];
-                const durationSec = (e - s) / 1000;
-                duration = formatDuration(durationSec);
-                startTime = new Date(s).toISOString();
-                endTime = new Date(e).toISOString();
-            }
-
-            let avgSpeed = row.avg_speed;
-            if (profileSpeedMph.length > 0) {
-                const sum = profileSpeedMph.reduce((a, b) => a + b, 0);
-                avgSpeed = sum / profileSpeedMph.length;
-            }
-
-            let distance = row.distance;
-            if (profileDistMi.length > 0) {
-                distance = profileDistMi[profileDistMi.length - 1];
-            }
-
-            let startLat = row.start_lat;
-            let startLon = row.start_lon;
-            let endLat = row.end_lat;
-            let endLon = row.end_lon;
-            if (coordinates.length > 0) {
-                startLat = coordinates[0][0];
-                startLon = coordinates[0][1];
-                endLat = coordinates[coordinates.length - 1][0];
-                endLon = coordinates[coordinates.length - 1][1];
-            }
-
-            await db.query(`
-                UPDATE routes SET
-                    top_speed = $1, duration = $2, start_time = $3, end_time = $4,
-                    avg_speed = $5, distance = $6,
-                    start_lat = $7, start_lon = $8, end_lat = $9, end_lon = $10,
-                    profile_time_ms = $11, profile_dist_mi = $12,
-                    profile_elev_m = $13, profile_speed_mph = $14,
-                    coordinates = $15
-                WHERE id = $16
-            `, [
-                parseFloat(topSpeed), duration, startTime, endTime,
-                avgSpeed, distance,
-                startLat, startLon, endLat, endLon,
-                JSON.stringify(profileTimeMs), JSON.stringify(profileDistMi),
-                JSON.stringify(profileElevM), JSON.stringify(profileSpeedMph),
-                JSON.stringify(coordinates),
-                routeId,
-            ]);
-
-            const { rows: updatedRows } = await db.query('SELECT * FROM routes WHERE id = $1', [routeId]);
-            const { rows: waypoints } = await db.query(
-                'SELECT * FROM waypoints WHERE route_id = $1 ORDER BY "timestamp" ASC', [routeId]
+            const names = Object.keys(columns);
+            await db.query(
+                `UPDATE routes SET ${names.map((name, i) => `${name} = $${i + 2}`).join(', ')} WHERE id = $1`,
+                [routeId, ...names.map((name) => columns[name])]
             );
-            const { rows: photos } = await db.query(
-                'SELECT * FROM photos WHERE route_id = $1 ORDER BY uploaded_at ASC', [routeId]
-            );
-            const route = toApiRoute(updatedRows[0], waypoints, photos);
-            res.json({ message: 'Point deleted', route });
+            return stats.coordinates;
         });
+
+        const route = await withTenantClient(req.userId, (db) => loadRouteDetail(db, routeId));
+        res.json({ message: indices.length === 1 ? 'Point deleted' : 'Points deleted', route });
+        refreshDerivedSoon(req.userId);
+        recomputePassedLists(req.userId, routeId, coordinates);
     } catch (err) {
+        if (err instanceof HttpError) return sendHttpError(res, err);
         log.error('DELETE point error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
+}
+
+// DELETE /api/routes/:id/points/:index
+router.delete('/:id/points/:index', (req, res) => deletePoints(req, res, [req.params.index]));
+
+// POST /api/routes/:id/points/delete { indices: [..] } — several points in one go
+router.post('/:id/points/delete', express.json(), (req, res) => {
+    const indices = req.body?.indices;
+    if (!Array.isArray(indices)) return res.status(400).json({ error: 'indices must be a list' });
+    return deletePoints(req, res, indices);
 });
 
 // PATCH /api/routes/:id/waypoints/:wpId
 router.patch('/:id/waypoints/:wpId', express.json(), async (req, res) => {
-    const { label } = req.body;
+    const { label } = req.body || {};
     if (typeof label !== 'string' || !label.trim()) {
         return res.status(400).json({ error: 'Invalid label' });
+    }
+    if (label.trim().length > 200) {
+        return res.status(400).json({ error: 'Labels are limited to 200 characters' });
     }
     try {
         await withTenantClient(req.userId, async (db) => {
@@ -493,399 +509,197 @@ router.patch('/:id/waypoints/:wpId', express.json(), async (req, res) => {
     }
 });
 
-// POST /api/routes/combine
+// POST /api/routes/combine — merges into the earliest journey, interleaving points by time.
 router.post('/combine', express.json(), async (req, res) => {
-    const { journeyIds, name } = req.body;
+    const { journeyIds, name } = req.body || {};
 
     if (!Array.isArray(journeyIds) || journeyIds.length < 2) {
         return res.status(400).json({ error: 'At least two journey IDs are required' });
     }
+    if (journeyIds.length > MAX_COMBINE || !journeyIds.every((id) => typeof id === 'string' && id)) {
+        return res.status(400).json({ error: `Combine between 2 and ${MAX_COMBINE} journeys` });
+    }
     if (journeyIds.length !== new Set(journeyIds).size) {
         return res.status(400).json({ error: 'Duplicate journey IDs' });
     }
+    if (name != null && (typeof name !== 'string' || name.length > 200)) {
+        return res.status(400).json({ error: 'Invalid name' });
+    }
 
     try {
-        await withTenantClient(req.userId, async (db) => {
-            await db.query('BEGIN');
-            try {
-                // 1. Fetch all source journeys
-                const placeholders = journeyIds.map((_, i) => `$${i + 1}`).join(', ');
-                const { rows: routes } = await db.query(
-                    `SELECT * FROM routes WHERE id IN (${placeholders})`,
-                    journeyIds
-                );
-                if (routes.length !== journeyIds.length) {
-                    const found = new Set(routes.map(r => r.id));
-                    const missing = journeyIds.filter(id => !found.has(id));
-                    await db.query('ROLLBACK');
-                    return res.status(404).json({ error: `Journeys not found: ${missing.join(', ')}` });
-                }
-
-                // Sort chronologically by start_time
-                routes.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-
-                // Fetch waypoints and photos for all routes
-                const waypointsByRoute = {};
-                const photosByRoute = {};
-                for (const route of routes) {
-                    const { rows: wps } = await db.query(
-                        'SELECT * FROM waypoints WHERE route_id = $1 ORDER BY "timestamp" ASC',
-                        [route.id]
-                    );
-                    waypointsByRoute[route.id] = wps;
-                    const { rows: phs } = await db.query(
-                        'SELECT * FROM photos WHERE route_id = $1 ORDER BY uploaded_at ASC',
-                        [route.id]
-                    );
-                    photosByRoute[route.id] = phs;
-                }
-
-                // 2. Save backup snapshot
-                const backupId = `backup-${crypto.randomBytes(8).toString('hex')}`;
-                const sourceSnapshot = routes.map(r => ({
-                    route: r,
-                    waypoints: waypointsByRoute[r.id],
-                    photos: photosByRoute[r.id],
-                }));
-
-                const primaryId = routes[0].id;
-
-                await db.query(
-                    `INSERT INTO journey_backups (id, combined_journey_id, source_journeys, created_at)
-                     VALUES ($1, $2, $3, NOW())`,
-                    [backupId, primaryId, JSON.stringify(sourceSnapshot)]
-                );
-
-                // 3. Merge data
-                // Concatenate coordinates and profiles in chronological order
-                let mergedCoords = [];
-                let mergedTimeMs = [];
-                let mergedDistMi = [];
-                let mergedElevM = [];
-                let mergedSpeedMph = [];
-                let cumulativeDist = 0;
-
-                for (let i = 0; i < routes.length; i++) {
-                    const r = routes[i];
-                    const coords = r.coordinates || [];
-                    const timeMs = r.profile_time_ms || [];
-                    const distMi = r.profile_dist_mi || [];
-                    const elevM = r.profile_elev_m || [];
-                    const speedMph = r.profile_speed_mph || [];
-
-                    // Add gap distance between consecutive journeys
-                    if (i > 0 && mergedCoords.length > 0 && coords.length > 0) {
-                        const prevCoord = mergedCoords[mergedCoords.length - 1];
-                        const nextCoord = coords[0];
-                        const gapMiles = haversine(prevCoord[0], prevCoord[1], nextCoord[0], nextCoord[1]);
-                        cumulativeDist += gapMiles;
-                    }
-
-                    // Append coordinates
-                    mergedCoords = mergedCoords.concat(coords);
-                    mergedTimeMs = mergedTimeMs.concat(timeMs);
-                    mergedElevM = mergedElevM.concat(elevM);
-                    mergedSpeedMph = mergedSpeedMph.concat(speedMph);
-
-                    // Offset distance profile by cumulative distance
-                    const offsetDist = distMi.map(d => d + cumulativeDist);
-                    mergedDistMi = mergedDistMi.concat(offsetDist);
-
-                    // Update cumulative distance to end of this journey
-                    if (distMi.length > 0) {
-                        cumulativeDist += distMi[distMi.length - 1];
-                    }
-                }
-
-                // 4. Recalculate aggregate stats
-                const totalDistance = mergedDistMi.length > 0
-                    ? mergedDistMi[mergedDistMi.length - 1] : 0;
-
-                const startTime = routes[0].start_time;
-                const endTime = routes[routes.length - 1].end_time;
-                const durationSec = (new Date(endTime) - new Date(startTime)) / 1000;
-                const duration = formatDuration(durationSec);
-
-                const validSpeeds = mergedSpeedMph.filter(s => Number.isFinite(s));
-                const topSpeed = validSpeeds.length > 0 ? Math.max(...validSpeeds) : 0;
-                const avgSpeed = validSpeeds.length > 0
-                    ? validSpeeds.reduce((a, b) => a + b, 0) / validSpeeds.length : 0;
-
-                const validElevs = mergedElevM.filter(e => e != null && Number.isFinite(e));
-                const topElevation = validElevs.length > 0 ? Math.max(...validElevs) : 0;
-                const lowestElevation = validElevs.length > 0 ? Math.min(...validElevs) : 0;
-                const avgElevation = validElevs.length > 0
-                    ? validElevs.reduce((a, b) => a + b, 0) / validElevs.length : 0;
-
-                // Sum elevation gain/loss from all source journeys
-                let elevGain = 0, elevLoss = 0;
-                for (const r of routes) {
-                    if (r.elevation_gain != null) elevGain += r.elevation_gain;
-                    if (r.elevation_loss != null) elevLoss += r.elevation_loss;
-                }
-                // Also calculate gain/loss for the gaps between journeys
-                for (let i = 1; i < routes.length; i++) {
-                    const prevElevs = routes[i - 1].profile_elev_m || [];
-                    const nextElevs = routes[i].profile_elev_m || [];
-                    if (prevElevs.length > 0 && nextElevs.length > 0) {
-                        const lastElev = prevElevs[prevElevs.length - 1];
-                        const firstElev = nextElevs[0];
-                        if (lastElev != null && firstElev != null) {
-                            const diff = firstElev - lastElev;
-                            if (diff > 0.5) elevGain += diff;
-                            else if (diff < -0.5) elevLoss += Math.abs(diff);
-                        }
-                    }
-                }
-
-                const startCoord = mergedCoords.length > 0 ? mergedCoords[0] : [null, null];
-                const endCoord = mergedCoords.length > 0 ? mergedCoords[mergedCoords.length - 1] : [null, null];
-
-                const combinedName = name || routes[0].name;
-                const startDate = new Date(startTime);
-                const dateStr = startDate.toLocaleDateString('en-US', {
-                    month: 'short', day: '2-digit', year: 'numeric'
-                });
-
-                const travelMode = detectTravelMode(avgSpeed);
-
-                // 5. Update the primary journey with merged data
-                await db.query(`
-                    UPDATE routes SET
-                        name = $1, date = $2, distance = $3, duration = $4,
-                        top_speed = $5, avg_speed = $6,
-                        top_elevation = $7, lowest_elevation = $8, avg_elevation = $9,
-                        start_time = $10, end_time = $11,
-                        coordinates = $12,
-                        elevation_gain = $13, elevation_loss = $14,
-                        start_lat = $15, start_lon = $16, end_lat = $17, end_lon = $18,
-                        profile_time_ms = $19, profile_dist_mi = $20,
-                        profile_elev_m = $21, profile_speed_mph = $22,
-                        travel_mode = $23,
-                        cities_passed = NULL, places_passed = NULL
-                    WHERE id = $24
-                `, [
-                    combinedName, dateStr, totalDistance, duration,
-                    topSpeed, avgSpeed,
-                    topElevation, lowestElevation, avgElevation,
-                    startTime, endTime,
-                    JSON.stringify(mergedCoords),
-                    elevGain, elevLoss,
-                    startCoord[0], startCoord[1], endCoord[0], endCoord[1],
-                    JSON.stringify(mergedTimeMs), JSON.stringify(mergedDistMi),
-                    JSON.stringify(mergedElevM), JSON.stringify(mergedSpeedMph),
-                    travelMode, primaryId,
-                ]);
-
-                // 6. Reassign waypoints and photos from secondary journeys to primary
-                const secondaryIds = routes.slice(1).map(r => r.id);
-                if (secondaryIds.length > 0) {
-                    const secPlaceholders = secondaryIds.map((_, i) => `$${i + 2}`).join(', ');
-                    await db.query(
-                        `UPDATE waypoints SET route_id = $1 WHERE route_id IN (${secPlaceholders})`,
-                        [primaryId, ...secondaryIds]
-                    );
-                    await db.query(
-                        `UPDATE photos SET route_id = $1 WHERE route_id IN (${secPlaceholders})`,
-                        [primaryId, ...secondaryIds]
-                    );
-
-                    // 7. Delete secondary journeys (waypoints/photos already reassigned)
-                    const delPlaceholders = secondaryIds.map((_, i) => `$${i + 1}`).join(', ');
-                    await db.query(
-                        `DELETE FROM routes WHERE id IN (${delPlaceholders})`,
-                        secondaryIds
-                    );
-                }
-
-                await db.query('COMMIT');
-
-                // Return the combined journey
-                const { rows: [updatedRoute] } = await db.query('SELECT * FROM routes WHERE id = $1', [primaryId]);
-                const { rows: waypoints } = await db.query(
-                    'SELECT * FROM waypoints WHERE route_id = $1 ORDER BY "timestamp" ASC', [primaryId]
-                );
-                const { rows: photos } = await db.query(
-                    'SELECT * FROM photos WHERE route_id = $1 ORDER BY uploaded_at ASC', [primaryId]
-                );
-                const combined = toApiRoute(updatedRoute, waypoints, photos);
-                res.json({ message: 'Journeys combined successfully', route: combined, backupId });
-
-                // The merged track is a new route as far as the geocoded place
-                // index is concerned: the UPDATE above reset both columns to
-                // NULL (unprocessed), and this recomputes them for the full
-                // merged coordinate list — same fire-and-forget pattern as
-                // upload. On geocoder outage (null) the columns stay NULL and
-                // the Fun Stats backfill retries later.
-                if (mergedCoords.length >= 2) {
-                    const { computeCitiesPassed } = require('../utils/cities');
-                    const { computePlacesPassed } = require('../utils/places');
-                    computeCitiesPassed(mergedCoords)
-                        .then(cities => {
-                            if (cities === null) {
-                                log.scope('cities').error(`geocoder unreachable — combined journey #${primaryId} left for backfill`);
-                                return;
-                            }
-                            return withTenantClient(req.userId, (db2) =>
-                                db2.query('UPDATE routes SET cities_passed = $1 WHERE id = $2', [JSON.stringify(cities), primaryId])
-                            ).then(() => log.scope('cities').debug(`recomputed for combined journey #${primaryId}`));
-                        })
-                        .catch(err => log.scope('cities').error('combine recompute failed', err));
-                    computePlacesPassed(mergedCoords)
-                        .then(places => {
-                            if (places === null) {
-                                log.scope('places').error(`geocoder unreachable — combined journey #${primaryId} left for backfill`);
-                                return;
-                            }
-                            return withTenantClient(req.userId, (db2) =>
-                                db2.query('UPDATE routes SET places_passed = $1 WHERE id = $2', [JSON.stringify(places), primaryId])
-                            ).then(() => log.scope('places').debug(`recomputed for combined journey #${primaryId}`));
-                        })
-                        .catch(err => log.scope('places').error('combine recompute failed', err));
-                }
-            } catch (err) {
-                await db.query('ROLLBACK');
-                throw err;
+        const result = await withTenantTransaction(req.userId, async (db) => {
+            const { rows: routes } = await db.query(
+                'SELECT * FROM routes WHERE id = ANY($1) ORDER BY start_time ASC NULLS LAST, id ASC FOR UPDATE',
+                [journeyIds]
+            );
+            if (routes.length !== journeyIds.length) {
+                const found = new Set(routes.map((r) => r.id));
+                const missing = journeyIds.filter((id) => !found.has(id));
+                throw new HttpError(404, `Journeys not found: ${missing.join(', ')}`);
             }
+
+            const tracks = [];
+            for (const route of routes) {
+                const { track, error } = trackFromRow(route);
+                if (error) throw new HttpError(409, `"${route.name}" can't be combined: ${error}`);
+                tracks.push(track);
+            }
+
+            const waypointsByRoute = {};
+            const photosByRoute = {};
+            for (const route of routes) {
+                const { rows: wps } = await db.query(
+                    'SELECT * FROM waypoints WHERE route_id = $1 ORDER BY "timestamp" ASC', [route.id]
+                );
+                waypointsByRoute[route.id] = wps;
+                const { rows: phs } = await db.query(
+                    'SELECT * FROM photos WHERE route_id = $1 ORDER BY uploaded_at ASC', [route.id]
+                );
+                photosByRoute[route.id] = phs;
+            }
+
+            const primaryId = routes[0].id;
+            const stats = statsFromTrack(mergeTracksByTime(tracks));
+            const archiveNames = [...new Set(routes.flatMap((r) => r.archive_names || []))];
+            const combinedName = (typeof name === 'string' && name.trim()) ? name.trim() : routes[0].name;
+
+            const backupId = `backup-${crypto.randomBytes(8).toString('hex')}`;
+            await db.query(
+                `INSERT INTO journey_backups (id, combined_journey_id, source_journeys, created_at, combined_signature)
+                 VALUES ($1, $2, $3, NOW(), $4)`,
+                [
+                    backupId,
+                    primaryId,
+                    JSON.stringify(routes.map((r) => ({ route: r, waypoints: waypointsByRoute[r.id], photos: photosByRoute[r.id] }))),
+                    trackSignature(stats.coordinates),
+                ]
+            );
+
+            const columns = {
+                ...statsColumns(stats),
+                name: combinedName,
+                date: journeyDate(new Date(stats.start_time)),
+                coordinates: JSON.stringify(stats.coordinates),
+                profile_time_ms: JSON.stringify(stats.profile_time_ms),
+                profile_dist_mi: JSON.stringify(stats.profile_dist_mi),
+                profile_elev_m: JSON.stringify(stats.profile_elev_m),
+                profile_speed_mph: JSON.stringify(stats.profile_speed_mph),
+                travel_mode: detectTravelMode(stats.avgSpeedMph),
+                archive_names: archiveNames.length ? archiveNames : null,
+                cities_passed: null,
+                places_passed: null,
+            };
+            const columnNames = Object.keys(columns);
+            await db.query(
+                `UPDATE routes SET ${columnNames.map((col, i) => `${col} = $${i + 2}`).join(', ')} WHERE id = $1`,
+                [primaryId, ...columnNames.map((col) => columns[col])]
+            );
+
+            const secondaryIds = routes.slice(1).map((r) => r.id);
+            await db.query('UPDATE waypoints SET route_id = $1 WHERE route_id = ANY($2)', [primaryId, secondaryIds]);
+            await db.query('UPDATE photos SET route_id = $1 WHERE route_id = ANY($2)', [primaryId, secondaryIds]);
+            await db.query('DELETE FROM routes WHERE id = ANY($1)', [secondaryIds]);
+
+            return { primaryId, backupId, coordinates: stats.coordinates };
         });
+
+        const combined = await withTenantClient(req.userId, (db) => loadRouteDetail(db, result.primaryId));
+        res.json({ message: 'Journeys combined successfully', route: combined, backupId: result.backupId });
+
+        refreshDerivedSoon(req.userId);
+        recomputePassedLists(req.userId, result.primaryId, result.coordinates);
     } catch (err) {
+        if (err instanceof HttpError) return sendHttpError(res, err);
         log.error('POST /api/routes/combine error:', err);
         res.status(500).json({ error: 'Failed to combine journeys' });
     }
 });
 
-// POST /api/routes/:id/undo-combine
+// POST /api/routes/:id/undo-combine { force? }
+// Later photo/waypoint changes are kept (new photos go to the earliest journey). Refused
+// with 409 if the combined track was edited since, unless force is set.
 router.post('/:id/undo-combine', express.json(), async (req, res) => {
     const combinedId = req.params.id;
+    const force = req.body?.force === true;
 
     try {
-        await withTenantClient(req.userId, async (db) => {
-            // Find the backup for this combined journey
+        const restored = await withTenantTransaction(req.userId, async (db) => {
+            const { rows: [combined] } = await db.query('SELECT * FROM routes WHERE id = $1 FOR UPDATE', [combinedId]);
+            if (!combined) throw new HttpError(404, 'The combined journey no longer exists (restore it from Recently Deleted first)');
+
             const { rows: backups } = await db.query(
                 'SELECT * FROM journey_backups WHERE combined_journey_id = $1 ORDER BY created_at DESC LIMIT 1',
                 [combinedId]
             );
-            if (backups.length === 0) {
-                return res.status(404).json({ error: 'No combine backup found for this journey' });
-            }
-
+            if (backups.length === 0) throw new HttpError(404, 'No combine backup found for this journey');
             const backup = backups[0];
-            const sourceJourneys = backup.source_journeys;
+            const sources = backup.source_journeys || [];
 
-            await db.query('BEGIN');
-            try {
-                // Photos may have finished converting since the backup was taken; restore them as they are now.
-                const { rows: currentPhotos } = await db.query('SELECT * FROM photos WHERE route_id = $1', [combinedId]);
-                const currentPhotoById = new Map(currentPhotos.map((ph) => [ph.id, ph]));
-
-                // Delete the combined journey (cascades waypoints/photos)
-                await db.query('DELETE FROM routes WHERE id = $1', [combinedId]);
-
-                // Restore all source journeys
-                for (const entry of sourceJourneys) {
-                    const r = entry.route;
-                    await db.query(`
-                        INSERT INTO routes (
-                            id, name, date, distance, duration, top_speed, avg_speed,
-                            top_elevation, lowest_elevation, avg_elevation,
-                            start_time, end_time, coordinates,
-                            elevation_gain, elevation_loss,
-                            start_lat, start_lon, end_lat, end_lon,
-                            source, watch_recorded,
-                            profile_time_ms, profile_dist_mi, profile_elev_m, profile_speed_mph,
-                            travel_mode,
-                            weather_temp, weather_feels_like, weather_humidity, weather_wind_speed, weather_wind_dir,
-                            weather_condition, weather_description, weather_icon,
-                            sounding_data, cities_passed, places_passed
-                        ) VALUES (
-                            $1, $2, $3, $4, $5, $6, $7,
-                            $8, $9, $10,
-                            $11, $12, $13,
-                            $14, $15,
-                            $16, $17, $18, $19,
-                            $20, $21,
-                            $22, $23, $24, $25,
-                            $26,
-                            $27, $28, $29, $30, $31,
-                            $32, $33, $34,
-                            $35, $36, $37
-                        )
-                    `, [
-                        r.id, r.name, r.date, r.distance, r.duration, r.top_speed, r.avg_speed,
-                        r.top_elevation, r.lowest_elevation, r.avg_elevation,
-                        r.start_time, r.end_time,
-                        typeof r.coordinates === 'string' ? r.coordinates : JSON.stringify(r.coordinates),
-                        r.elevation_gain, r.elevation_loss,
-                        r.start_lat, r.start_lon, r.end_lat, r.end_lon,
-                        r.source, r.watch_recorded,
-                        typeof r.profile_time_ms === 'string' ? r.profile_time_ms : JSON.stringify(r.profile_time_ms),
-                        typeof r.profile_dist_mi === 'string' ? r.profile_dist_mi : JSON.stringify(r.profile_dist_mi),
-                        typeof r.profile_elev_m === 'string' ? r.profile_elev_m : JSON.stringify(r.profile_elev_m),
-                        typeof r.profile_speed_mph === 'string' ? r.profile_speed_mph : JSON.stringify(r.profile_speed_mph),
-                        r.travel_mode,
-                        r.weather_temp, r.weather_feels_like, r.weather_humidity, r.weather_wind_speed,
-                        r.weather_wind_dir ?? null,
-                        r.weather_condition, r.weather_description, r.weather_icon,
-                        typeof r.sounding_data === 'string' ? r.sounding_data : JSON.stringify(r.sounding_data),
-                        // Restore the geocoded place index too — omitting these
-                        // used to leave every un-combined journey NULL until the
-                        // next manual backfill.
-                        r.cities_passed == null ? null : (typeof r.cities_passed === 'string' ? r.cities_passed : JSON.stringify(r.cities_passed)),
-                        r.places_passed == null ? null : (typeof r.places_passed === 'string' ? r.places_passed : JSON.stringify(r.places_passed)),
-                    ]);
-
-                    // Restore waypoints
-                    for (const wp of (entry.waypoints || [])) {
-                        await db.query(`
-                            INSERT INTO waypoints (id, route_id, lat, lon, elevation, "timestamp", note, label)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                        `, [wp.id, wp.route_id, wp.lat, wp.lon, wp.elevation, wp.timestamp, wp.note, wp.label]);
-                    }
-
-                    // Restore photos
-                    for (const saved of (entry.photos || [])) {
-                        const ph = { ...saved, ...currentPhotoById.get(saved.id), route_id: saved.route_id };
-                        await db.query(`
-                            INSERT INTO photos (
-                                id, route_id, filename, original_name, mimetype, size, uploaded_at,
-                                poster_filename, duration_ms, width, height, status
-                            )
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                        `, [
-                            ph.id, ph.route_id, ph.filename, ph.original_name, ph.mimetype, ph.size, ph.uploaded_at,
-                            ph.poster_filename ?? null, ph.duration_ms ?? null, ph.width ?? null, ph.height ?? null, ph.status ?? null,
-                        ]);
-                    }
-                }
-
-                // Delete the backup
-                await db.query('DELETE FROM journey_backups WHERE id = $1', [backup.id]);
-
-                await db.query('COMMIT');
-
-                // Return the restored journeys
-                const restoredIds = sourceJourneys.map(e => e.route.id);
-                const placeholders = restoredIds.map((_, i) => `$${i + 1}`).join(', ');
-                const { rows } = await db.query(
-                    `SELECT r.id, r.name, r.date, r.start_time, r.end_time, r.distance, r.duration,
-                            r.watch_recorded, r.travel_mode, r.avg_speed,
-                            (SELECT COUNT(*) FROM waypoints w WHERE w.route_id = r.id) AS waypoint_count,
-                            (SELECT COUNT(*) FROM photos p WHERE p.route_id = r.id) AS photo_count
-                     FROM routes r WHERE r.id IN (${placeholders})
-                     ORDER BY r.start_time DESC`,
-                    restoredIds
-                );
-
-                res.json({
-                    message: 'Combine undone successfully',
-                    restoredJourneys: rows.map(toApiSummary),
-                });
-            } catch (err) {
-                await db.query('ROLLBACK');
-                throw err;
+            if (!force && backup.combined_signature && backup.combined_signature !== trackSignature(combined.coordinates)) {
+                throw new HttpError(409, 'Points were deleted from this journey after it was combined; undoing would bring them back.', { code: 'edited_since_combine' });
             }
+
+            const { rows: currentPhotos } = await db.query('SELECT * FROM photos WHERE route_id = $1', [combinedId]);
+            const { rows: currentWaypoints } = await db.query('SELECT * FROM waypoints WHERE route_id = $1', [combinedId]);
+            const ownerOfPhoto = new Map();
+            const ownerOfWaypoint = new Map();
+            for (const entry of sources) {
+                for (const ph of entry.photos || []) ownerOfPhoto.set(ph.id, entry.route.id);
+                for (const wp of entry.waypoints || []) ownerOfWaypoint.set(wp.id, entry.route.id);
+            }
+            const primaryId = sources[0]?.route?.id || combinedId;
+            const ownerByTime = (ts) => {
+                const ms = Number(ts);
+                const match = sources.find((entry) => {
+                    const start = new Date(entry.route.start_time).getTime();
+                    const end = new Date(entry.route.end_time).getTime();
+                    return ms >= start && ms <= end;
+                });
+                return match ? match.route.id : primaryId;
+            };
+
+            await db.query('DELETE FROM routes WHERE id = $1', [combinedId]);
+
+            for (const entry of sources) {
+                try {
+                    await insertRoute(db, entry.route);
+                } catch (err) {
+                    if (err.code === '23505') {
+                        throw new HttpError(409, `"${entry.route.name}" can't be restored: a journey with the same id or recording already exists`);
+                    }
+                    throw err;
+                }
+            }
+            for (const wp of currentWaypoints) {
+                const owner = ownerOfWaypoint.get(wp.id) || ownerByTime(wp.timestamp);
+                await insertWaypoints(db, owner, [wp], newWaypointId);
+            }
+            for (const ph of currentPhotos) {
+                await insertPhotoRow(db, ownerOfPhoto.get(ph.id) || primaryId, ph);
+            }
+
+            await db.query('DELETE FROM journey_backups WHERE id = $1', [backup.id]);
+
+            const restoredIds = sources.map((entry) => entry.route.id);
+            const { rows } = await db.query(
+                `SELECT r.id, r.name, r.date, r.start_time, r.end_time, r.distance, r.duration,
+                        r.watch_recorded, r.travel_mode, r.avg_speed,
+                        (SELECT COUNT(*) FROM waypoints w WHERE w.route_id = r.id) AS waypoint_count,
+                        (SELECT COUNT(*) FROM photos p WHERE p.route_id = r.id) AS photo_count
+                 FROM routes r WHERE r.id = ANY($1)
+                 ORDER BY r.start_time DESC`,
+                [restoredIds]
+            );
+            return rows;
         });
+
+        res.json({
+            message: 'Combine undone successfully',
+            restoredJourneys: restored.map(toApiSummary),
+        });
+        refreshDerivedSoon(req.userId);
     } catch (err) {
+        if (err instanceof HttpError) return sendHttpError(res, err);
         log.error('POST /api/routes/:id/undo-combine error:', err);
         res.status(500).json({ error: 'Failed to undo combine' });
     }

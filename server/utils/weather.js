@@ -5,8 +5,12 @@
  * Supported providers:
  *   - open-meteo  (default): Free, no API key, returns historical weather at journey time
  *   - openweather:           Requires API key, returns current weather at location
+ *
+ * Weather is looked up for the start's city (resolveWeatherLocation), never the exact point.
  */
 
+const { GEOCODE_BASE_URL } = require('../config');
+const { haversine } = require('./geo');
 const log = require('../utils/logger').scope('weather');
 
 let _configCache = null;
@@ -87,6 +91,116 @@ async function getWeatherConfig() {
 function clearConfigCache() {
     _configCache = null;
     _configCacheTime = 0;
+}
+
+// ── Location: the start's city, never the exact point ─────────────────
+
+const GEOCODE_TIMEOUT_MS = 8000;
+const CITY_SEARCH_URL = 'https://geocoding-api.open-meteo.com/v1/search';
+// A name-search result farther than this from the start is the wrong place.
+const MAX_CITY_DISTANCE_KM = 60;
+// Without a city, weather comes from the center of a 0.1° cell (~11 km).
+const GRID_DEG = 0.1;
+const CACHE_LIMIT = 2000;
+
+const cityCentroids = new Map();
+const weatherCache = new Map();
+
+function remember(map, key, value) {
+    if (map.size >= CACHE_LIMIT) map.delete(map.keys().next().value);
+    map.set(key, value);
+    return value;
+}
+
+let stateNames = null;
+function stateName(code) {
+    if (!stateNames) {
+        stateNames = new Map();
+        try {
+            const fc = require('../data/us-states.geojson');
+            for (const f of fc.features || []) stateNames.set(f.properties.code, f.properties.name);
+        } catch {
+            // without names, same-named cities are told apart by distance alone
+        }
+    }
+    return stateNames.get(String(code || '').toUpperCase()) || null;
+}
+
+function gridLocation(lat, lon) {
+    const snap = (v) => Number((Math.round(v / GRID_DEG) * GRID_DEG).toFixed(4));
+    return { lat: snap(lat), lon: snap(lon), city: null, source: 'grid' };
+}
+
+function finiteOr(value) {
+    const n = Number(value);
+    return value != null && Number.isFinite(n) ? n : null;
+}
+
+// Asks the configured geocoder (our own service) for the start's city. A city_lat/city_lon
+// (or city_center {lat, lon}) in its reply is used as the city's point.
+async function lookupCity(lat, lon) {
+    if (!GEOCODE_BASE_URL) return null;
+    const res = await fetch(`${GEOCODE_BASE_URL}/lookup?lat=${lat}&lon=${lon}`, {
+        signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const city = data.city && data.city !== 'unknown' ? String(data.city) : null;
+    if (!city) return null;
+    const centerLat = finiteOr(data.city_lat ?? data.city_center?.lat);
+    const centerLon = finiteOr(data.city_lon ?? data.city_center?.lon);
+    return {
+        city,
+        state: data.state_code || null,
+        country: data.country_code || null,
+        center: centerLat != null && centerLon != null ? { lat: centerLat, lon: centerLon } : null,
+    };
+}
+
+// The city's point by name search (only the name is sent); among same-named places, the
+// one in the right country/state nearest the start wins.
+async function searchCityCenter({ city, state, country }, near) {
+    const url = `${CITY_SEARCH_URL}?name=${encodeURIComponent(city)}&count=20&language=en&format=json`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS) });
+    if (!res.ok) return null;
+    const { results = [] } = await res.json();
+    const region = stateName(state);
+    let best = null;
+    for (const r of results) {
+        if (!Number.isFinite(r.latitude) || !Number.isFinite(r.longitude)) continue;
+        if (country && r.country_code && r.country_code.toUpperCase() !== String(country).toUpperCase()) continue;
+        if (region && r.admin1 && r.admin1 !== region) continue;
+        const km = haversine(near.lat, near.lon, r.latitude, r.longitude) * 1.609344;
+        if (!best || km < best.km) best = { lat: r.latitude, lon: r.longitude, km };
+    }
+    return best && best.km <= MAX_CITY_DISTANCE_KM ? { lat: best.lat, lon: best.lon } : null;
+}
+
+/**
+ * Where to fetch weather for a journey starting at (lat, lon): the start city's center, or
+ * the center of its 0.1° cell when there's no city (rural, at sea, geocoder down).
+ * @returns {Promise<{lat: number, lon: number, city: string|null, source: 'city'|'grid'}|null>}
+ */
+async function resolveWeatherLocation(lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    try {
+        const found = await lookupCity(lat, lon);
+        if (found) {
+            const key = [found.city, found.state, found.country].join('|').toLowerCase();
+            const label = [found.city, found.state || found.country].filter(Boolean).join(', ');
+            let center = found.center || cityCentroids.get(key);
+            if (!center) {
+                center = await searchCityCenter(found, { lat, lon });
+                if (center) remember(cityCentroids, key, center);
+            }
+            if (center) {
+                return { lat: Math.round(center.lat * 1e4) / 1e4, lon: Math.round(center.lon * 1e4) / 1e4, city: label, source: 'city' };
+            }
+        }
+    } catch (err) {
+        log.debug(`city lookup failed, using the coarse grid: ${err.message}`);
+    }
+    return gridLocation(lat, lon);
 }
 
 // ── Open-Meteo (free, historical forecast) ─────────────────────────────
@@ -210,13 +324,14 @@ function owIconToWmo(iconCode) {
 
 // ── Custom URL provider ────────────────────────────────────────────────
 
-async function fetchFromCustom(urlTemplate, lat, lon, startTime, apiKey) {
+async function fetchFromCustom(urlTemplate, lat, lon, startTime, apiKey, city) {
     if (!urlTemplate) throw new Error('Custom weather URL not configured');
 
     const date = new Date(startTime);
     const url = urlTemplate
         .replace(/\{lat\}/g, lat)
         .replace(/\{lon\}/g, lon)
+        .replace(/\{city\}/g, encodeURIComponent(city || ''))
         .replace(/\{date\}/g, date.toISOString().slice(0, 10))
         .replace(/\{timestamp\}/g, date.toISOString())
         .replace(/\{api_key\}/g, encodeURIComponent(apiKey || ''));
@@ -241,24 +356,36 @@ async function fetchFromCustom(urlTemplate, lat, lon, startTime, apiKey) {
 
 // ── Public API ─────────────────────────────────────────────────────────
 
-async function fetchWeatherForCoord(lat, lon, startTime) {
+/** Weather at a resolved location (see resolveWeatherLocation), cached by place and hour. */
+async function fetchWeatherForLocation(location, startTime) {
     const config = await getWeatherConfig();
-    if (!config.enabled) return null;
+    if (!config.enabled || !location) return null;
 
+    const hour = new Date(startTime).toISOString().slice(0, 13);
+    const key = `${config.provider}|${location.lat},${location.lon}|${hour}`;
+    if (weatherCache.has(key)) return weatherCache.get(key);
+
+    let weather;
     if (config.provider === 'openweather') {
-        return fetchFromOpenWeather(lat, lon, config.apiKey);
+        weather = await fetchFromOpenWeather(location.lat, location.lon, config.apiKey);
+    } else if (config.provider === 'custom') {
+        weather = await fetchFromCustom(config.customUrl, location.lat, location.lon, startTime, config.apiKey, location.city);
+    } else {
+        weather = await fetchFromOpenMeteo(location.lat, location.lon, startTime);
     }
-    if (config.provider === 'custom') {
-        return fetchFromCustom(config.customUrl, lat, lon, startTime, config.apiKey);
-    }
-    return fetchFromOpenMeteo(lat, lon, startTime);
+    // OpenWeather returns current conditions, which mustn't be reused for another hour.
+    if (weather && config.provider !== 'openweather') remember(weatherCache, key, weather);
+    return weather;
 }
 
 async function fetchAndStoreWeather(userId, routeId, lat, lon, startTime) {
     const { withTenantClient } = require('../db');
 
     try {
-        const weather = await fetchWeatherForCoord(lat, lon, startTime);
+        const config = await getWeatherConfig();
+        if (!config.enabled) return;
+        const location = await resolveWeatherLocation(Number(lat), Number(lon));
+        const weather = await fetchWeatherForLocation(location, startTime);
         if (!weather) return;
 
         await withTenantClient(userId, async (db) => {
@@ -268,18 +395,36 @@ async function fetchAndStoreWeather(userId, routeId, lat, lon, startTime) {
                     weather_humidity = $3, weather_wind_speed = $4,
                     weather_wind_dir = $5,
                     weather_condition = $6, weather_description = $7,
-                    weather_icon = $8
+                    weather_icon = $8,
+                    weather_city = $10, weather_lat = $11, weather_lon = $12
                 WHERE id = $9
             `, [
                 weather.temp, weather.feelsLike, weather.humidity,
                 weather.windSpeed, weather.windDir ?? null,
                 weather.condition, weather.description,
                 weather.icon, routeId,
+                location.city, location.lat, location.lon,
             ]);
         });
     } catch (err) {
         log.error(`could not fetch/store for journey #${routeId}`, err);
     }
+}
+
+// A journey's stored weather location, resolved (and stored) when missing.
+async function weatherLocationForRow(userId, row) {
+    if (row.weather_lat != null && row.weather_lon != null) {
+        return { lat: row.weather_lat, lon: row.weather_lon, city: row.weather_city || null };
+    }
+    const location = await resolveWeatherLocation(row.start_lat, row.start_lon);
+    if (location) {
+        const { withTenantClient } = require('../db');
+        await withTenantClient(userId, (db) => db.query(
+            'UPDATE routes SET weather_city = $2, weather_lat = $3, weather_lon = $4 WHERE id = $1',
+            [row.id, location.city, location.lat, location.lon]
+        ));
+    }
+    return location;
 }
 
 // Spacing between backfill requests, keeping well under Open-Meteo's free
@@ -303,7 +448,7 @@ async function backfillWindDirections() {
 
     for (const user of users) {
         const { rows } = await withTenantClient(user.id, (db) => db.query(`
-            SELECT id, start_lat, start_lon, start_time FROM routes
+            SELECT id, start_lat, start_lon, start_time, weather_city, weather_lat, weather_lon FROM routes
             WHERE weather_temp IS NOT NULL AND weather_wind_dir IS NULL
               AND start_lat IS NOT NULL AND start_lon IS NOT NULL AND start_time IS NOT NULL
             ORDER BY start_time DESC
@@ -312,7 +457,8 @@ async function backfillWindDirections() {
 
         for (const row of rows) {
             try {
-                const weather = await fetchFromOpenMeteo(row.start_lat, row.start_lon, row.start_time);
+                const location = await weatherLocationForRow(user.id, row);
+                const weather = location && await fetchFromOpenMeteo(location.lat, location.lon, row.start_time);
                 if (weather?.windDir != null) {
                     await withTenantClient(user.id, (db) => db.query(
                         'UPDATE routes SET weather_wind_dir = $1 WHERE id = $2',
@@ -404,4 +550,47 @@ async function fetchSounding(lat, lon, startTime) {
     };
 }
 
-module.exports = { fetchWeatherForCoord, fetchAndStoreWeather, backfillWindDirections, clearConfigCache, fetchSounding };
+/**
+ * The pressure-level sounding for a journey at its start city and time, cached on the
+ * journey after the first lookup.
+ * @returns {Promise<{status: 'ok'|'not_found', sounding?: object|null}>}
+ */
+async function soundingForRoute(userId, routeId) {
+    const { queryTenant } = require('../db');
+    const { rows: [row] } = await queryTenant(userId, `
+        SELECT id, sounding_data, start_lat, start_lon, start_time, weather_city, weather_lat, weather_lon
+        FROM routes WHERE id = $1
+    `, [routeId]);
+    if (!row) {
+        // A journey in Recently Deleted (looked up by its trash id); nothing is cached for it.
+        const { rows: [trashed] } = await queryTenant(userId, "SELECT snapshot->'route' AS route FROM trashed_journeys WHERE id = $1", [routeId]);
+        if (!trashed?.route) return { status: 'not_found' };
+        const r = trashed.route;
+        if (r.sounding_data) return { status: 'ok', sounding: r.sounding_data };
+        if (r.start_time == null || r.start_lat == null) return { status: 'ok', sounding: null };
+        const location = r.weather_lat != null
+            ? { lat: r.weather_lat, lon: r.weather_lon }
+            : await resolveWeatherLocation(r.start_lat, r.start_lon);
+        return { status: 'ok', sounding: location ? await fetchSounding(location.lat, location.lon, r.start_time) : null };
+    }
+    if (row.sounding_data != null) return { status: 'ok', sounding: row.sounding_data };
+    if (row.start_time == null || row.start_lat == null || row.start_lon == null) return { status: 'ok', sounding: null };
+
+    const location = await weatherLocationForRow(userId, row);
+    const sounding = location ? await fetchSounding(location.lat, location.lon, row.start_time) : null;
+    if (sounding) {
+        queryTenant(userId, 'UPDATE routes SET sounding_data = $1 WHERE id = $2', [JSON.stringify(sounding), routeId])
+            .catch((err) => log.error('Failed to cache sounding data:', err));
+    }
+    return { status: 'ok', sounding };
+}
+
+module.exports = {
+    resolveWeatherLocation,
+    fetchWeatherForLocation,
+    fetchAndStoreWeather,
+    backfillWindDirections,
+    clearConfigCache,
+    fetchSounding,
+    soundingForRoute,
+};

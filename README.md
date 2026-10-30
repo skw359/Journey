@@ -20,6 +20,7 @@ where you’ve been and visualizes your movement.
 ## Privacy-First by Design
 
 - Your data stays on your server
+- Weather is looked up for the city a journey starts in, never your exact location
 - Zero telemetry, no tracking scripts
 
 ## Documentation

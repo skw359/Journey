@@ -1,13 +1,13 @@
 const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
-const { withTenantClient, toApiRoute } = require('../db');
-const { haversine } = require('../utils/geo');
+const { withTenantTransaction } = require('../db');
 const { formatDuration } = require('../utils/format');
 const { searchFlights, getFlightTrack, getAirports } = require('../utils/flight');
 const { fetchAndStoreWeather } = require('../utils/weather');
-const { computeCitiesPassed } = require('../utils/cities');
-const { computePlacesPassed } = require('../utils/places');
+const { insertRoute } = require('../utils/routeRecords');
+const { refreshDerivedSoon } = require('../utils/journeyDerived');
+const { computePassedLists } = require('./upload');
 const log = require('../utils/logger').scope('flights');
 
 // GET /api/flights/airports — return airport lookup data for frontend autocomplete
@@ -113,68 +113,34 @@ router.post('/import', express.json(), async (req, res) => {
             travelMode: 'flight',
         };
 
-        // Insert into database
-        await withTenantClient(req.userId, async (client) => {
-            await client.query('BEGIN');
-            try {
-                const startCoord = routeData.startCoord || [null, null];
-                const endCoord = routeData.endCoord || [null, null];
-
-                await client.query(`
-                    INSERT INTO routes (
-                        id, name, date, distance, duration, top_speed, avg_speed,
-                        top_elevation, lowest_elevation, avg_elevation,
-                        start_time, end_time, coordinates,
-                        elevation_gain, elevation_loss,
-                        start_lat, start_lon, end_lat, end_lon,
-                        source, watch_recorded,
-                        profile_time_ms, profile_dist_mi, profile_elev_m, profile_speed_mph,
-                        travel_mode
-                    ) VALUES (
-                        $1, $2, $3, $4, $5, $6, $7,
-                        $8, $9, $10,
-                        $11, $12, $13,
-                        $14, $15,
-                        $16, $17, $18, $19,
-                        $20, $21,
-                        $22, $23, $24, $25,
-                        $26
-                    )
-                `, [
-                    routeData.id,
-                    routeData.name,
-                    routeData.date,
-                    routeData.distance,
-                    routeData.duration,
-                    routeData.topSpeed,
-                    routeData.avgSpeed,
-                    routeData.topElevation,
-                    routeData.lowestElevation,
-                    routeData.avgElevation,
-                    routeData.startTime,
-                    routeData.endTime,
-                    JSON.stringify(routeData.coordinates),
-                    routeData.elevationGain,
-                    routeData.elevationLoss,
-                    startCoord[0],
-                    startCoord[1],
-                    endCoord[0],
-                    endCoord[1],
-                    routeData.source,
-                    routeData.watchRecorded,
-                    JSON.stringify(routeData.profileTimeMs),
-                    JSON.stringify(routeData.profileDistMi),
-                    JSON.stringify(routeData.profileElevM),
-                    JSON.stringify(routeData.profileSpeedMph),
-                    routeData.travelMode,
-                ]);
-
-                await client.query('COMMIT');
-            } catch (err) {
-                await client.query('ROLLBACK');
-                throw err;
-            }
-        });
+        await withTenantTransaction(req.userId, (db) => insertRoute(db, {
+            id: routeData.id,
+            name: routeData.name,
+            date: routeData.date,
+            distance: routeData.distance,
+            duration: routeData.duration,
+            top_speed: routeData.topSpeed,
+            avg_speed: routeData.avgSpeed,
+            top_elevation: routeData.topElevation,
+            lowest_elevation: routeData.lowestElevation,
+            avg_elevation: routeData.avgElevation,
+            start_time: routeData.startTime,
+            end_time: routeData.endTime,
+            coordinates: routeData.coordinates,
+            elevation_gain: routeData.elevationGain,
+            elevation_loss: routeData.elevationLoss,
+            start_lat: routeData.startCoord ? routeData.startCoord[0] : null,
+            start_lon: routeData.startCoord ? routeData.startCoord[1] : null,
+            end_lat: routeData.endCoord ? routeData.endCoord[0] : null,
+            end_lon: routeData.endCoord ? routeData.endCoord[1] : null,
+            source: routeData.source,
+            watch_recorded: routeData.watchRecorded,
+            profile_time_ms: routeData.profileTimeMs,
+            profile_dist_mi: routeData.profileDistMi,
+            profile_elev_m: routeData.profileElevM,
+            profile_speed_mph: routeData.profileSpeedMph,
+            travel_mode: routeData.travelMode,
+        }));
 
         log.success(`flight imported · ${departure.toUpperCase()}→${arrival.toUpperCase()} · ${routeData.distance}mi · #${routeData.id} · via ${track.source}`);
 
@@ -193,37 +159,13 @@ router.post('/import', express.json(), async (req, res) => {
 
         res.status(201).json({ message: 'Flight imported', route: fullRoute });
 
-        // Fire-and-forget: weather, cities, places
+        // Fire-and-forget: weather (for the departure city), map data, cities, places
         if (routeData.startCoord && routeData.startCoord[0] != null) {
             fetchAndStoreWeather(req.userId, routeData.id, routeData.startCoord[0], routeData.startCoord[1], routeData.startTime)
                 .catch(err => log.scope('weather').error('flight import fetch failed', err));
         }
-
-        if (routeData.coordinates && routeData.coordinates.length >= 2) {
-            computeCitiesPassed(routeData.coordinates)
-                .then(cities => {
-                    if (cities === null) {
-                        log.scope('cities').error(`geocoder unreachable — flight #${routeData.id} left for backfill`);
-                        return;
-                    }
-                    return withTenantClient(req.userId, client =>
-                        client.query('UPDATE routes SET cities_passed = $1 WHERE id = $2', [JSON.stringify(cities), routeData.id])
-                    ).then(() => log.scope('cities').debug(`computed for flight #${routeData.id}`));
-                })
-                .catch(err => log.scope('cities').error('flight computation failed', err));
-
-            computePlacesPassed(routeData.coordinates)
-                .then(places => {
-                    if (places === null) {
-                        log.scope('places').error(`geocoder unreachable — flight #${routeData.id} left for backfill`);
-                        return;
-                    }
-                    return withTenantClient(req.userId, client =>
-                        client.query('UPDATE routes SET places_passed = $1 WHERE id = $2', [JSON.stringify(places), routeData.id])
-                    ).then(() => log.scope('places').debug(`computed for flight #${routeData.id}`));
-                })
-                .catch(err => log.scope('places').error('flight computation failed', err));
-        }
+        refreshDerivedSoon(req.userId);
+        computePassedLists(req.userId, routeData.id, routeData.coordinates);
     } catch (err) {
         log.error('POST /api/flights/import error:', err);
         res.status(500).json({ error: 'Failed to import flight' });

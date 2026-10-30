@@ -3,10 +3,11 @@
 /**
  * RouteStore — the "lots of memory" part of the desktop app.
  *
- * Holds every journey's full-resolution coordinates in typed arrays and answers the
- * Atlas endpoints (`/api/alltime-map-data`, `/api/heatmap-grid`) byte-for-byte the way
- * `server/routes/maps.js` would — except from RAM, in a few milliseconds, instead of
- * having Postgres re-parse ~2M jsonb points on every pan.
+ * Holds every journey's full-resolution coordinates in typed arrays and answers
+ * `/api/alltime-map-data` from RAM, in a few milliseconds. Overviews match
+ * `server/routes/maps.js` byte for byte; viewport (bounds) requests return evenly spaced
+ * full-resolution points where the server sends its simplified lines. The heatmap comes
+ * from the server, which keeps an exact per-account grid.
  *
  * It also caches full-resolution journey detail responses (`GET /api/routes/:id`) as
  * JSON text and derives the down-sampled variants the Dashboard asks for, mirroring the
@@ -140,15 +141,6 @@ function parseBounds(raw) {
     return ok ? { south, west, north, east } : null;
 }
 
-function heatmapCellSize(zoom) {
-    if (zoom >= 15) return 0.0002;
-    if (zoom >= 13) return 0.0005;
-    if (zoom >= 11) return 0.001;
-    if (zoom >= 9) return 0.002;
-    if (zoom >= 7) return 0.005;
-    return 0.01;
-}
-
 /** JSON number formatting identical to JSON.stringify for finite numbers. */
 function num(v) {
     return Number.isFinite(v) ? String(v) : 'null';
@@ -257,16 +249,27 @@ function buildRecord(route) {
     };
 }
 
-/** Serialize the coordinates of a record, optionally at the given index picks. */
-function coordsJson(rec, picks) {
+/** Server: `roundCoord` — 6 decimals, anything that isn't a finite pair passes through. */
+function roundCoord(coord) {
+    if (!Array.isArray(coord) || !Number.isFinite(coord[0]) || !Number.isFinite(coord[1])) return coord;
+    return [Math.round(coord[0] * 1e6) / 1e6, Math.round(coord[1] * 1e6) / 1e6];
+}
+
+const round6 = (v) => Math.round(v * 1e6) / 1e6;
+
+/**
+ * Serialize the coordinates of a record, optionally at the given index picks. `rounded`
+ * mirrors the server rounding every coordinate it sends for maxPoints > 0.
+ */
+function coordsJson(rec, picks, rounded = false) {
     if (rec.raw) {
         // Malformed data path: operate on the raw array like the server does.
         const src = picks ? picks.map((i) => rec.raw[i]) : rec.raw;
-        return JSON.stringify(src);
+        return JSON.stringify(rounded ? src.map(roundCoord) : src);
     }
     const lat = rec.lat;
     const lon = rec.lon;
-    if (!picks) {
+    if (!picks && !rounded) {
         if (rec.fullCoordsJson) return rec.fullCoordsJson;
         const n = rec.n;
         if (n === 0) return '[]';
@@ -277,10 +280,12 @@ function coordsJson(rec, picks) {
         rec.fullCoordsJson = '[' + parts.join(',') + ']';
         return rec.fullCoordsJson;
     }
-    const parts = new Array(picks.length);
-    for (let k = 0; k < picks.length; k++) {
-        const i = picks[k];
-        parts[k] = '[' + num(lat[i]) + ',' + num(lon[i]) + ']';
+    const count = picks ? picks.length : rec.n;
+    const at = rounded ? round6 : (v) => v;
+    const parts = new Array(count);
+    for (let k = 0; k < count; k++) {
+        const i = picks ? picks[k] : k;
+        parts[k] = '[' + num(at(lat[i])) + ',' + num(at(lon[i])) + ']';
     }
     return '[' + parts.join(',') + ']';
 }
@@ -344,14 +349,15 @@ class RouteStore {
             records[i] = rec;
             byId.set(String(rec.id), rec);
             totalPoints += rec.n;
-            if (cursor >= 0 && !rec.raw) {
+            if (cursor >= 0) {
                 // `"coordinates":` can only occur as a key (quotes inside string values
-                // are escaped), and a numeric array cannot contain `,"startCoord":`.
+                // are escaped), and a JSON array cannot contain `,"startCoord":`. Malformed
+                // routes aren't cached but are still stepped over.
                 const keyIdx = text.indexOf('"coordinates":', cursor);
                 const start = keyIdx >= 0 ? keyIdx + 14 : -1;
                 const end = start >= 0 ? text.indexOf(',"startCoord":', start) : -1;
                 if (start >= 0 && end > start && text.charCodeAt(start) === 91 /* [ */ && text.charCodeAt(end - 1) === 93 /* ] */) {
-                    rec.fullCoordsJson = text.slice(start, end);
+                    if (!rec.raw) rec.fullCoordsJson = text.slice(start, end);
                     cursor = end;
                 } else {
                     cursor = -1; // give up on slicing; lazy path still works
@@ -418,128 +424,9 @@ class RouteStore {
             for (const rec of this.records) {
                 if (bounds && !routeIntersectsBounds(rec, bounds)) continue;
                 const picks = maxPoints === 0 ? null : pickIndicesRound(rec.rawLength, maxPoints);
-                chunks.push(rec.headJson + coordsJson(rec, picks) + rec.tailJson);
+                chunks.push(rec.headJson + coordsJson(rec, picks, maxPoints !== 0) + rec.tailJson);
             }
             text = '{"routes":[' + chunks.join(',') + '],"stats":' + this.statsJson + ',"bounds":' + this.boundsJson + '}';
-        }
-
-        this.remember(cacheKey, text);
-        return text;
-    }
-
-    /* ------------------------------ /api/heatmap-grid ------------------------------ */
-
-    heatmapGrid(query) {
-        const q = toQueryObject(query);
-        const cacheKey = 'h|' + (q.start ?? '') + '|' + (q.end ?? '') + '|' + (q.zoom ?? '') + '|' + (q.bounds ?? '');
-        const cached = this.responseCache.get(cacheKey);
-        if (cached) return cached;
-
-        let text;
-        if (this.records.length === 0) {
-            text = JSON.stringify({ cells: [], totalPoints: 0 });
-        } else {
-            const startQ = q.start ? Date.parse(q.start) : null;
-            const endQ = q.end ? Date.parse(q.end) : null;
-            const zoom = parseInt(q.zoom) || 4; // mirrors the server (no radix, `|| 4`)
-            const CELL_SIZE = heatmapCellSize(zoom);
-            const bounds = q.bounds ? parseBounds(q.bounds) : null;
-            const dateFiltered = startQ != null || endQ != null;
-
-            // Padded query box, as on the server. Routes whose bbox misses it entirely are
-            // skipped without touching their points.
-            let pSouth = -Infinity, pNorth = Infinity, pWest = -Infinity, pEast = Infinity;
-            if (bounds) {
-                const pad = CELL_SIZE * 5;
-                pSouth = bounds.south - pad;
-                pNorth = bounds.north + pad;
-                pWest = bounds.west - pad;
-                pEast = bounds.east + pad;
-            }
-
-            const grid = new Map();
-            let totalPoints = 0;
-            const KY_OFF = 1 << 20;
-            const KX_OFF = 1 << 21;
-            const KX_SPAN = 1 << 22;
-
-            for (const rec of this.records) {
-                if (rec.rawLength === 0) continue;
-
-                const startMs = rec.startMs;
-                const endMs = rec.endMs;
-                const timed = startMs != null && endMs != null && endMs >= startMs;
-
-                if (dateFiltered) {
-                    if (timed) {
-                        if (startQ != null && endMs < startQ) continue;
-                        if (endQ != null && startMs > endQ) continue;
-                    } else {
-                        continue;
-                    }
-                }
-
-                if (bounds && (rec.maxLat < pSouth || rec.minLat > pNorth || rec.maxLon < pWest || rec.minLon > pEast)) {
-                    continue;
-                }
-
-                const perPointDate = timed && dateFiltered;
-                const denom = Math.max(rec.rawLength - 1, 1);
-
-                if (rec.raw) {
-                    // Malformed data path: the literal server loop over the raw array.
-                    const coords = rec.raw;
-                    for (let i = 0; i < coords.length; i++) {
-                        if (perPointDate) {
-                            const ts = startMs + Math.floor((endMs - startMs) * (i / denom));
-                            if (startQ != null && ts < startQ) continue;
-                            if (endQ != null && ts > endQ) continue;
-                        }
-                        const c = coords[i];
-                        if (!Array.isArray(c)) continue; // the server would throw here (500)
-                        const lat = c[0];
-                        const lon = c[1];
-                        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-                        if (bounds && (lat < pSouth || lat > pNorth || lon < pWest || lon > pEast)) continue;
-                        const ky = Math.round(lat / CELL_SIZE);
-                        const kx = Math.round(lon / CELL_SIZE);
-                        const key = (ky + KY_OFF) * KX_SPAN + (kx + KX_OFF);
-                        grid.set(key, (grid.get(key) || 0) + 1);
-                        totalPoints++;
-                    }
-                    continue;
-                }
-
-                const lat = rec.lat;
-                const lon = rec.lon;
-                const n = rec.n;
-                for (let i = 0; i < n; i++) {
-                    if (perPointDate) {
-                        const ts = startMs + Math.floor((endMs - startMs) * (i / denom));
-                        if (startQ != null && ts < startQ) continue;
-                        if (endQ != null && ts > endQ) continue;
-                    }
-                    const a = lat[i];
-                    const o = lon[i];
-                    if (bounds && (a < pSouth || a > pNorth || o < pWest || o > pEast)) continue;
-                    const ky = Math.round(a / CELL_SIZE);
-                    const kx = Math.round(o / CELL_SIZE);
-                    const key = (ky + KY_OFF) * KX_SPAN + (kx + KX_OFF);
-                    grid.set(key, (grid.get(key) || 0) + 1);
-                    totalPoints++;
-                }
-            }
-
-            const parts = new Array(grid.size);
-            let k = 0;
-            for (const [key, weight] of grid) {
-                const ky = Math.floor(key / KX_SPAN) - KY_OFF;
-                const kx = (key % KX_SPAN) - KX_OFF;
-                // Same expression as the server: Math.round(v / CELL) * CELL, then a
-                // String->Number round trip, which is exact for shortest-repr doubles.
-                parts[k++] = '[' + num(ky * CELL_SIZE) + ',' + num(kx * CELL_SIZE) + ',' + weight + ']';
-            }
-            text = '{"cells":[' + parts.join(',') + '],"totalPoints":' + totalPoints + '}';
         }
 
         this.remember(cacheKey, text);
@@ -670,6 +557,5 @@ module.exports = {
     sampleIndicesFloor,
     parseMaxPoints,
     parseBounds,
-    heatmapCellSize,
     routeIntersectsBounds,
 };

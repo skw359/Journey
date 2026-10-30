@@ -15,6 +15,7 @@ const {
 } = require('../ai/marco-config');
 const ollama = require('../ai/ollama');
 const { ask, MarcoError } = require('../ai/pipeline');
+const { isAdmin, requireAdmin } = require('../middleware/auth');
 const { sanitizeHistory } = require('../ai/history');
 const { todayInZone } = require('../ai/periods');
 const log = require('../utils/logger').scope('marco');
@@ -22,8 +23,10 @@ const log = require('../utils/logger').scope('marco');
 // Mounted at /api/ask, guarded by requireSession in app.js.
 //
 // The Ollama endpoint is app-level infrastructure (stored in app_config, like
-// the database and weather settings); the journeys Marco reads are always the
-// requesting user's own tenant schema via queryTenant(req.userId, ...).
+// the weather settings), so only the admin can see or change it: every
+// account's questions and journey summaries are sent there. The journeys Marco
+// reads are always the requesting user's own tenant schema via
+// queryTenant(req.userId, ...).
 
 const MAX_QUESTION_CHARS = 500;
 
@@ -38,10 +41,15 @@ function safeTimeZone(raw) {
 }
 
 // GET /api/ask/config — current Marco settings for the settings screen.
+// Other accounts only learn whether Marco is on.
 router.get('/config', async (req, res) => {
     try {
         const config = await getMarcoConfig(true);
+        if (!(await isAdmin(req.userId))) {
+            return res.json({ enabled: config.enabled, canManage: false });
+        }
         res.json({
+            canManage: true,
             enabled: config.enabled,
             url: config.url,
             model: config.model,
@@ -58,7 +66,7 @@ router.get('/config', async (req, res) => {
 });
 
 // PUT /api/ask/config — save toggle + endpoint + model.
-router.put('/config', async (req, res) => {
+router.put('/config', requireAdmin, async (req, res) => {
     try {
         const { enabled, url, model, timeoutS } = req.body || {};
         if (typeof enabled !== 'boolean') {
@@ -79,7 +87,7 @@ router.put('/config', async (req, res) => {
 // POST /api/ask/config/test — probe an Ollama endpoint before saving.
 // Uses the values from the body so the user can test unsaved edits; falls
 // back to the stored config when a field is omitted.
-router.post('/config/test', async (req, res) => {
+router.post('/config/test', requireAdmin, async (req, res) => {
     try {
         const stored = await getMarcoConfig();
         let url;

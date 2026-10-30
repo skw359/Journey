@@ -82,35 +82,15 @@ export async function updateUnitPreference(unitPreference) {
   return data;
 }
 
-export async function updateDatabaseConfig(config) {
-  const res = await apiFetch('/api/settings/database', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to update database config');
-  return data;
-}
-
-export async function testDatabaseConnection(config) {
-  const res = await apiFetch('/api/settings/database/test', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config),
-  });
-  return res.json();
-}
-
 export async function getWeatherConfig() {
   const res = await apiFetch('/api/settings/weather');
   if (!res.ok) throw new Error('Failed to get weather config');
   return res.json();
 }
 
-export async function fetchSounding(lat, lon, time, routeId) {
-  const params = new URLSearchParams({ lat, lon, time });
-  if (routeId) params.set('routeId', routeId);
+// The server looks up the journey's start city itself; no coordinates are sent.
+export async function fetchSounding(routeId) {
+  const params = new URLSearchParams({ routeId });
   const res = await apiFetch(`/api/settings/weather/sounding?${params}`);
   if (!res.ok) throw new Error('Failed to fetch sounding data');
   return res.json();

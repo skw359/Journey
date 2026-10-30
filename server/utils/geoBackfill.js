@@ -1,5 +1,6 @@
 const { pool, withTenantClient } = require('../db');
 const { MIN_ROUTE_MILES } = require('../config');
+const { visibleSql } = require('./visibility');
 const { computeCitiesPassed } = require('./cities');
 const { computePlacesPassed } = require('./places');
 const log = require('./logger');
@@ -56,7 +57,7 @@ async function run(job) {
         // One route at a time, re-queried each pass, so a Reindex or new upload mid-run is picked up.
         const { rows: [row] } = await withTenantClient(userId, (db) => db.query(
             `SELECT id, name, coordinates FROM routes
-             WHERE ${column} IS NULL AND coordinates IS NOT NULL AND distance >= $1 AND NOT (id = ANY($2))
+             WHERE ${column} IS NULL AND coordinates IS NOT NULL AND ${visibleSql('$1')} AND NOT (id = ANY($2))
              ORDER BY start_time ASC LIMIT 1`,
             [MIN_ROUTE_MILES, skipped]
         ));
@@ -169,7 +170,7 @@ async function getGeoBackfillStatus(userId, kind) {
     const { column } = KINDS[kind];
     const { rows: [counts] } = await withTenantClient(userId, (db) => db.query(
         `SELECT COUNT(*) AS total, COUNT(${column}) AS processed
-         FROM routes WHERE distance >= $1 AND coordinates IS NOT NULL`,
+         FROM routes WHERE ${visibleSql('$1')} AND coordinates IS NOT NULL`,
         [MIN_ROUTE_MILES]
     ));
     const total = Number(counts.total);

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { getPairingTokens, createPairingToken, revokePairingToken, getQRData } from '../api/pairing';
+import { getPairingTokens, createPairingToken, revokePairingToken } from '../api/pairing';
 import './PairClient.css';
 
 export default function PairClient() {
@@ -10,35 +10,35 @@ export default function PairClient() {
   const [tokens, setTokens] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const loadData = useCallback(async () => {
+  const loadTokens = useCallback(async () => {
     try {
-      const [qr, tokenList] = await Promise.all([getQRData(), getPairingTokens()]);
-      setQrData(qr);
-      setTokens(tokenList);
+      setTokens(await getPairingTokens());
     } catch (err) {
-      console.error('Failed to load pairing data:', err);
-    } finally {
-      setLoading(false);
+      console.error('Failed to load paired devices:', err);
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const handleGenerate = async () => {
+  // Tokens are stored hashed, so the code shown is always a fresh one.
+  const handleGenerate = useCallback(async () => {
     try {
-      await createPairingToken('iPhone');
-      await loadData();
+      setQrData(await createPairingToken('iPhone'));
+      await loadTokens();
     } catch (err) {
       console.error('Failed to create token:', err);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [loadTokens]);
+
+  useEffect(() => {
+    handleGenerate();
+  }, [handleGenerate]);
 
   const handleRevoke = async (id) => {
     try {
       await revokePairingToken(id);
-      await loadData();
+      if (qrData?.id === id) setQrData(null);
+      await loadTokens();
     } catch (err) {
       console.error('Failed to revoke token:', err);
     }
@@ -95,6 +95,7 @@ export default function PairClient() {
 
               <p className="pair-instructions">
                 Open the Journey app on your iPhone, go to Settings, and tap "Scan QR Code" to pair.
+                The code works once, within 15 minutes.
               </p>
 
               <h2 className="pair-section-title">Paired Devices</h2>
@@ -108,7 +109,7 @@ export default function PairClient() {
                       <div className="pair-token-info">
                         <span className="pair-token-label">{token.label || 'Device'}</span>
                         <span className="pair-token-meta">
-                          Created {formatDate(token.created_at)}
+                          {token.status === 'pending' ? 'Waiting to be scanned' : `Created ${formatDate(token.created_at)}`}
                           {token.last_used_at && ` · Last used ${formatDate(token.last_used_at)}`}
                         </span>
                       </div>
@@ -124,7 +125,7 @@ export default function PairClient() {
               )}
 
               <button className="pair-generate-btn" onClick={handleGenerate}>
-                Generate New Token
+                New Pairing Code
               </button>
             </>
           )}

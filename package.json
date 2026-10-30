@@ -9,18 +9,21 @@
     "build": "cd client && npm run build",
     "migrate:import": "node server/scripts/migrate-import.js",
     "migrate:export": "node server/scripts/migrate-export.js",
-    "test:ai": "node server/ai/tests/run-all.js"
+    "test:ai": "node server/ai/tests/run-all.js",
+    "test": "npm run test:ai && npm run test:server",
+    "test:server": "node --test --test-concurrency=1 server/tests/*.test.js",
+    "archive:prune": "node server/scripts/prune-archives.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "connect-pg-simple": "^10.0.0",
     "csv-parser": "^3.0.0",
     "dotenv": "^17.3.1",
-    "express": "^4.17.1",
+    "express": "^4.22.3",
     "express-session": "^1.19.0",
     "ffmpeg": "^0.0.4",
     "heic-convert": "^2.1.0",
-    "multer": "^1.4.3",
+    "multer": "^2.5.0",
     "pg": "^8.13.0",
     "sharp": "^0.35.5",
     "unzipper": "^0.10.11"

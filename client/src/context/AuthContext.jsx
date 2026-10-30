@@ -11,6 +11,7 @@ export function AuthProvider({ children }) {
   const [needsMigration, setNeedsMigration] = useState(false);
   const [migrationCount, setMigrationCount] = useState(0);
   const [marcoEnabled, setMarcoEnabled] = useState(false);
+  const [registration, setRegistration] = useState('invite-only');
 
   const checkStatus = useCallback(async () => {
     try {
@@ -19,6 +20,7 @@ export function AuthProvider({ children }) {
       setIsAuthenticated(data.isAuthenticated);
       setUser(data.user);
       setMarcoEnabled(Boolean(data.marcoEnabled));
+      setRegistration(data.registration || (data.isSetup ? 'invite-only' : 'first-run'));
     } catch {
       setIsSetup(true);
       setIsAuthenticated(false);
@@ -62,6 +64,7 @@ export function AuthProvider({ children }) {
     setNeedsMigration(false);
     setMigrationCount(0);
     setIsSetup(Boolean(data.isSetup));
+    setRegistration(data.isSetup ? 'invite-only' : 'first-run');
   }, []);
 
   const completeMigration = useCallback(async (doImport) => {
@@ -92,6 +95,7 @@ export function AuthProvider({ children }) {
       updateUser,
       marcoEnabled,
       setMarcoEnabled,
+      registration,
     }}>
       {children}
     </AuthContext.Provider>

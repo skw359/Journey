@@ -6,6 +6,7 @@
 const path = require('path');
 const { haversine } = require('./geo');
 const { formatDuration } = require('./format');
+const { maxOf } = require('./journeyStats');
 const log = require('../utils/logger').scope('flight');
 
 // ── Config cache (mirrors weather.js pattern) ────────────────────────
@@ -158,9 +159,9 @@ function synthesizeTrack(depAirport, arrAirport, departureTime, arrivalTime) {
         distance: parseFloat(totalMiles.toFixed(2)),
         duration: formatDuration(durationMs / 1000),
         durationSec: durationMs / 1000,
-        topSpeed: speeds.length ? parseFloat(Math.max(...speeds).toFixed(2)) : 0,
+        topSpeed: speeds.length ? parseFloat(maxOf(speeds).toFixed(2)) : 0,
         avgSpeed: speeds.length ? parseFloat((speeds.reduce((a, b) => a + b, 0) / speeds.length).toFixed(2)) : 0,
-        topElevation: elevations.length ? parseFloat(Math.max(...elevations).toFixed(2)) : 0,
+        topElevation: elevations.length ? parseFloat(maxOf(elevations).toFixed(2)) : 0,
         lowestElevation: 0,
         avgElevation: elevations.length ? parseFloat((elevations.reduce((a, b) => a + b, 0) / elevations.length).toFixed(2)) : 0,
         elevationGain: parseFloat((10668).toFixed(2)), // climb to cruise

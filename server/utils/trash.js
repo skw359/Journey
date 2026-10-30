@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const { pool, withTenantClient, toApiRoute } = require('../db');
 const mediaStorage = require('./mediaStorage');
 const { cancelMediaJob } = require('./mediaQueue');
+const { unreferencedArchives, deleteArchiveFiles } = require('./uploadArchive');
+const { insertRoute, insertWaypoints, insertPhotoRow, jsonParam } = require('./routeRecords');
 const log = require('../utils/logger').scope('trash');
 
 // Journeys live in Trash for this long before they are permanently purged.
@@ -15,15 +17,16 @@ const TRASH_ORIGIN = {
     REJECTED_INSUFFICIENT: 'rejected_insufficient',
 };
 
+class RestoreConflictError extends Error {
+    constructor(message) {
+        super(message);
+        this.status = 409;
+    }
+}
+
 function deletePhotoFiles(photos) {
     // Videos also have a poster image
     return mediaStorage.removeFiles((photos || []).flatMap((photo) => [photo?.filename, photo?.poster_filename]));
-}
-
-// node-postgres needs JSON columns serialized; snapshots round-trip as parsed JS.
-function jsonParam(value) {
-    if (value == null) return null;
-    return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
 function expiresAtFrom(deletedAt) {
@@ -87,8 +90,11 @@ async function insertTrashSnapshot(db, { snapshot, origin, reason }) {
     const trashId = `trash-${crypto.randomBytes(8).toString('hex')}`;
     const route = snapshot.route || {};
     await db.query(`
-        INSERT INTO trashed_journeys (id, route_id, name, distance, duration, origin, reason, snapshot, deleted_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        INSERT INTO trashed_journeys (
+            id, route_id, name, distance, duration, origin, reason, snapshot, deleted_at,
+            archive_names, client_upload_id, content_fingerprint
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11)
     `, [
         trashId,
         route.id || null,
@@ -98,6 +104,9 @@ async function insertTrashSnapshot(db, { snapshot, origin, reason }) {
         origin || null,
         reason || null,
         jsonParam(snapshot),
+        Array.isArray(route.archive_names) && route.archive_names.length ? route.archive_names : null,
+        route.client_upload_id || null,
+        route.content_fingerprint || null,
     ]);
     return trashId;
 }
@@ -105,7 +114,7 @@ async function insertTrashSnapshot(db, { snapshot, origin, reason }) {
 // Move an existing active journey into Trash. Photo FILES are intentionally kept
 // on disk so a restore can re-link them; only the DB rows are removed (cascade).
 async function trashExistingRoute(db, routeId, { origin = TRASH_ORIGIN.USER_DELETED, reason = null } = {}) {
-    const { rows: routeRows } = await db.query('SELECT * FROM routes WHERE id = $1', [routeId]);
+    const { rows: routeRows } = await db.query('SELECT * FROM routes WHERE id = $1 FOR UPDATE', [routeId]);
     if (routeRows.length === 0) return null;
     const route = routeRows[0];
 
@@ -127,123 +136,121 @@ async function trashExistingRoute(db, routeId, { origin = TRASH_ORIGIN.USER_DELE
     return { trashId, routeId, name: route.name };
 }
 
-// Re-insert a trashed journey into the active routes table. force_visible is set
-// so sub-threshold journeys (e.g. backend-rejected ones) reappear in the list.
+function newWaypointId() {
+    return `wp-${crypto.randomBytes(8).toString('hex')}`;
+}
+
+// Re-insert a trashed journey (in the caller's transaction). force_visible is set so
+// sub-threshold journeys reappear. Throws RestoreConflictError if it already exists.
 async function restoreTrashedJourney(db, trashId) {
-    const { rows } = await db.query('SELECT * FROM trashed_journeys WHERE id = $1', [trashId]);
+    const { rows } = await db.query('SELECT * FROM trashed_journeys WHERE id = $1 FOR UPDATE', [trashId]);
     if (rows.length === 0) return null;
 
-    const snapshot = rows[0].snapshot || {};
+    const entry = rows[0];
+    const snapshot = entry.snapshot || {};
     const route = snapshot.route || {};
 
-    await db.query(`
-        INSERT INTO routes (
-            id, name, date, distance, duration, top_speed, avg_speed,
-            top_elevation, lowest_elevation, avg_elevation,
-            start_time, end_time, coordinates,
-            elevation_gain, elevation_loss,
-            start_lat, start_lon, end_lat, end_lon,
-            source, watch_recorded,
-            profile_time_ms, profile_dist_mi, profile_elev_m, profile_speed_mph,
-            travel_mode,
-            weather_temp, weather_feels_like, weather_humidity, weather_wind_speed, weather_wind_dir,
-            weather_condition, weather_description, weather_icon,
-            sounding_data, cities_passed, places_passed,
-            force_visible
-        ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7,
-            $8, $9, $10,
-            $11, $12, $13,
-            $14, $15,
-            $16, $17, $18, $19,
-            $20, $21,
-            $22, $23, $24, $25,
-            $26,
-            $27, $28, $29, $30, $31,
-            $32, $33, $34,
-            $35, $36, $37,
-            $38
-        )
-        ON CONFLICT (id) DO NOTHING
-    `, [
-        route.id, route.name, route.date, route.distance, route.duration, route.top_speed, route.avg_speed,
-        route.top_elevation, route.lowest_elevation, route.avg_elevation,
-        route.start_time, route.end_time, jsonParam(route.coordinates),
-        route.elevation_gain, route.elevation_loss,
-        route.start_lat, route.start_lon, route.end_lat, route.end_lon,
-        route.source, route.watch_recorded,
-        jsonParam(route.profile_time_ms), jsonParam(route.profile_dist_mi),
-        jsonParam(route.profile_elev_m), jsonParam(route.profile_speed_mph),
-        route.travel_mode,
-        route.weather_temp, route.weather_feels_like, route.weather_humidity, route.weather_wind_speed,
-        route.weather_wind_dir ?? null,
-        route.weather_condition, route.weather_description, route.weather_icon,
-        jsonParam(route.sounding_data), jsonParam(route.cities_passed), jsonParam(route.places_passed),
-        true,
-    ]);
-
-    for (const wp of (snapshot.waypoints || [])) {
-        await db.query(`
-            INSERT INTO waypoints (id, route_id, lat, lon, elevation, "timestamp", note, label)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ON CONFLICT (id) DO NOTHING
-        `, [wp.id, route.id, wp.lat, wp.lon, wp.elevation, wp.timestamp, wp.note, wp.label || null]);
-    }
-
-    const processingMedia = [];
-    for (const ph of (snapshot.photos || [])) {
-        await db.query(`
-            INSERT INTO photos (
-                id, route_id, filename, original_name, mimetype, size, uploaded_at,
-                poster_filename, duration_ms, width, height, status
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            ON CONFLICT (id) DO NOTHING
-        `, [
-            ph.id, route.id, ph.filename, ph.original_name, ph.mimetype, ph.size, ph.uploaded_at,
-            ph.poster_filename ?? null, ph.duration_ms ?? null, ph.width ?? null, ph.height ?? null, ph.status ?? null,
-        ]);
-        if (ph.status === 'processing') {
-            processingMedia.push({ id: ph.id, filename: ph.filename, mimetype: ph.mimetype });
+    try {
+        const inserted = await insertRoute(db, {
+            ...route,
+            archive_names: entry.archive_names || route.archive_names || null,
+            client_upload_id: entry.client_upload_id || route.client_upload_id || null,
+            content_fingerprint: entry.content_fingerprint || route.content_fingerprint || null,
+            force_visible: true,
+        }, { ifAbsent: true });
+        if (!inserted) {
+            throw new RestoreConflictError('A journey with the same id already exists, so this one was left in Recently Deleted');
         }
+
+        await insertWaypoints(db, route.id, snapshot.waypoints || [], newWaypointId);
+        for (const ph of snapshot.photos || []) {
+            await insertPhotoRow(db, route.id, ph);
+        }
+    } catch (err) {
+        if (err.code === '23505') {
+            throw new RestoreConflictError('This journey (or one of its photos) is already in your journeys, so it was left in Recently Deleted');
+        }
+        throw err;
     }
+
+    const processingMedia = (snapshot.photos || [])
+        .filter((ph) => ph.status === 'processing')
+        .map((ph) => ({ id: ph.id, filename: ph.filename, mimetype: ph.mimetype }));
 
     await db.query('DELETE FROM trashed_journeys WHERE id = $1', [trashId]);
     // The caller re-queues processingMedia once this transaction commits.
     return { routeId: route.id, name: route.name, processingMedia };
 }
 
+// Deletes combine backups of `routeIds`, including nested ones.
+async function deleteCombineBackups(db, routeIds) {
+    let pending = [...new Set(routeIds.filter(Boolean))];
+    const seen = new Set(pending);
+    let deleted = 0;
+    while (pending.length > 0) {
+        const { rows } = await db.query(
+            'DELETE FROM journey_backups WHERE combined_journey_id = ANY($1) RETURNING source_journeys',
+            [pending]
+        );
+        deleted += rows.length;
+        const next = [];
+        for (const row of rows) {
+            for (const source of row.source_journeys || []) {
+                const id = source?.route?.id;
+                if (id && !seen.has(id)) {
+                    seen.add(id);
+                    next.push(id);
+                }
+            }
+        }
+        pending = next;
+    }
+    return deleted;
+}
+
+// Hard delete: rows and combine backups in one transaction, then media and archive files.
+async function hardDeleteTrash(db, where, params) {
+    let removed = [];
+    let archives = [];
+    await db.query('BEGIN');
+    try {
+        const { rows } = await db.query(
+            `DELETE FROM trashed_journeys WHERE ${where} RETURNING id, route_id, snapshot, archive_names`,
+            params
+        );
+        removed = rows;
+        if (rows.length > 0) {
+            await deleteCombineBackups(db, rows.map((row) => row.route_id || row.snapshot?.route?.id));
+            const names = rows.flatMap((row) => row.archive_names || row.snapshot?.route?.archive_names || []);
+            archives = await unreferencedArchives(db, names);
+        }
+        await db.query('COMMIT');
+    } catch (err) {
+        await db.query('ROLLBACK').catch(() => {});
+        throw err;
+    }
+
+    for (const row of removed) {
+        await deletePhotoFiles(row.snapshot && row.snapshot.photos);
+    }
+    await deleteArchiveFiles(archives);
+    return removed.length;
+}
+
 // Permanently remove a single trashed journey (and its photo files).
 async function permanentlyDeleteTrash(db, trashId) {
-    const { rows } = await db.query('SELECT snapshot FROM trashed_journeys WHERE id = $1', [trashId]);
-    if (rows.length === 0) return false;
-    await deletePhotoFiles(rows[0].snapshot && rows[0].snapshot.photos);
-    await db.query('DELETE FROM trashed_journeys WHERE id = $1', [trashId]);
-    return true;
+    return (await hardDeleteTrash(db, 'id = $1', [trashId])) > 0;
 }
 
 // Permanently remove every trashed journey for the current tenant.
 async function emptyTrash(db) {
-    const { rows } = await db.query('SELECT snapshot FROM trashed_journeys');
-    for (const row of rows) {
-        await deletePhotoFiles(row.snapshot && row.snapshot.photos);
-    }
-    const { rowCount } = await db.query('DELETE FROM trashed_journeys');
-    return rowCount;
+    return hardDeleteTrash(db, 'TRUE', []);
 }
 
 // Purge trashed journeys older than the retention window for the current tenant.
 async function purgeExpiredTrash(db) {
     const cutoff = new Date(Date.now() - TRASH_RETENTION_MS).toISOString();
-    const { rows } = await db.query(
-        'SELECT id, snapshot FROM trashed_journeys WHERE deleted_at < $1', [cutoff]
-    );
-    if (rows.length === 0) return 0;
-    for (const row of rows) {
-        await deletePhotoFiles(row.snapshot && row.snapshot.photos);
-    }
-    await db.query('DELETE FROM trashed_journeys WHERE deleted_at < $1', [cutoff]);
-    return rows.length;
+    return hardDeleteTrash(db, 'deleted_at < $1', [cutoff]);
 }
 
 // List Trash summaries for the current tenant (lightweight — does not load snapshots).
@@ -287,9 +294,11 @@ module.exports = {
     TRASH_RETENTION_DAYS,
     TRASH_RETENTION_MS,
     TRASH_ORIGIN,
+    RestoreConflictError,
     insertTrashSnapshot,
     trashExistingRoute,
     restoreTrashedJourney,
+    deleteCombineBackups,
     permanentlyDeleteTrash,
     emptyTrash,
     purgeExpiredTrash,

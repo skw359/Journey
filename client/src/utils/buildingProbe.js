@@ -5,6 +5,7 @@ import Overlay from 'ol/Overlay';
 import { Style, Stroke, Fill } from 'ol/style';
 import { toLonLat } from 'ol/proj';
 import { lookupBuilding } from '../api/geocode';
+import { escapeHtml } from './html';
 
 // Rounding the cache key to ~1 m means dragging the cursor a few pixels and
 // clicking the same doorway twice costs one request, not two.
@@ -47,15 +48,7 @@ function translucent(color, alpha) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-function esc(value) {
-  if (value === null || value === undefined) return '';
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+const esc = escapeHtml;
 
 function titleCase(tag) {
   return String(tag).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

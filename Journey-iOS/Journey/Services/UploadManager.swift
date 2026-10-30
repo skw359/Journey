@@ -39,7 +39,8 @@ final class UploadManager {
         do {
             let response = try await APIService.shared.uploadJourney(
                 fileURL: item.fileURL,
-                source: item.source
+                source: item.source,
+                recordingId: item.id.uuidString
             )
             // Clean up file after successful upload
             try? FileManager.default.removeItem(at: item.fileURL)

@@ -29,6 +29,7 @@ import { speedToColor } from '../utils/speedColors';
 import { createBuildingProbe } from '../utils/buildingProbe';
 import { createRouteMeasure } from '../utils/routeMeasure';
 import { isZoomWheel, ZOOM_MODIFIER_LABEL } from '../utils/wheelZoom';
+import { escapeHtml } from '../utils/html';
 import WeatherBadge from './WeatherBadge';
 import './RouteMeasure.css';
 
@@ -679,8 +680,8 @@ export default function RouteMap({
       f.set('radius', 8);
       f.set('tooltipHtml', `
         <div style="color: var(--accent-primary); font-weight: 500; margin-bottom: 8px; border-bottom: 1px solid var(--bg-tertiary); padding-bottom: 4px;">Journey Start</div>
-        <div class="tooltip-row"><span class="tooltip-label">Journey:</span><span class="tooltip-value">${route.name}</span></div>
-        <div class="tooltip-row"><span class="tooltip-label">Date:</span><span class="tooltip-value">${route.date}</span></div>
+        <div class="tooltip-row"><span class="tooltip-label">Journey:</span><span class="tooltip-value">${escapeHtml(route.name)}</span></div>
+        <div class="tooltip-row"><span class="tooltip-label">Date:</span><span class="tooltip-value">${escapeHtml(route.date)}</span></div>
       `);
       markerSource.addFeature(f);
     }
@@ -691,8 +692,8 @@ export default function RouteMap({
       f.set('radius', 8);
       f.set('tooltipHtml', `
         <div style="color: var(--accent-danger); font-weight: 500; margin-bottom: 8px; border-bottom: 1px solid var(--bg-tertiary); padding-bottom: 4px;">Journey End</div>
-        <div class="tooltip-row"><span class="tooltip-label">Journey:</span><span class="tooltip-value">${route.name}</span></div>
-        <div class="tooltip-row"><span class="tooltip-label">Date:</span><span class="tooltip-value">${route.date}</span></div>
+        <div class="tooltip-row"><span class="tooltip-label">Journey:</span><span class="tooltip-value">${escapeHtml(route.name)}</span></div>
+        <div class="tooltip-row"><span class="tooltip-label">Date:</span><span class="tooltip-value">${escapeHtml(route.date)}</span></div>
       `);
       markerSource.addFeature(f);
     }
@@ -703,7 +704,7 @@ export default function RouteMap({
         f.set('fillColor', '#4A90E2');
         f.set('radius', 6);
         const displayName = wp.label?.trim() || wp.note?.trim() || `Saved Spot ${idx + 1}`;
-        f.set('tooltipHtml', `<div style="color:#4A90E2; font-weight:600;">${displayName}</div>`);
+        f.set('tooltipHtml', `<div style="color:#4A90E2; font-weight:600;">${escapeHtml(displayName)}</div>`);
         markerSource.addFeature(f);
       });
     }

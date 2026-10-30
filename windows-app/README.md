@@ -27,22 +27,23 @@ that installs per-user, adds Start-menu + desktop shortcuts, and launches Journe
 finish. `npm run pack` produces an unpacked `dist/win-unpacked/Journey.exe` for testing.
 
 The default server URL is baked from the server's `.env` `PUBLIC_URL` at build time
-(currently `https://journey.mdoan.com`); override with the `JOURNEY_DEFAULT_SERVER` env
+(the server's `PUBLIC_URL`); override with the `JOURNEY_DEFAULT_SERVER` env
 var at build time, or change it any time in the app (File → Change Server…, or first run).
 
 ## Tests
 
 ```bash
-# Byte-for-byte equivalence of the in-memory store vs. the REAL server handlers,
-# driven by real tenant rows. Regenerate the fixture first (read-only DB dump):
+# The in-memory store vs. the real server, driven by real tenant rows. Regenerate the
+# fixture first (read-only DB dump); the test seeds it into a throwaway database:
 node tests/fixtures/dump-fixture.cjs      # needs ../.env DATABASE_URL; writes tests/fixtures/tenants.json (~250 MB)
-npm test
+TEST_DATABASE_URL=postgres://user@localhost:5432/postgres npm test
 
 # End-to-end: drives the real protocol handler through Electron's network stack.
 npm run test:smoke                        # optional arg: a reachable server URL
 ```
 
-The equivalence test loads `server/routes/maps.js` and `server/routes/journeys.js`
-unmodified (with only the DB layer stubbed by fixture rows) and asserts the store's output
-matches the server's across 130+ generated Atlas/heatmap/detail queries, including edge
-cases (empty tenant, malformed coordinates, invalid params, date-filtered heatmaps).
+The equivalence test starts the real server (`server/app.js`) against a database created
+for the run (`TEST_DATABASE_URL` must point at a Postgres server where it may create
+databases), loads the fixture into it, warms the store from the server's own response and
+asserts that Atlas overviews and journey detail match the server's byte for byte, and that
+viewport requests return the same journeys. The heatmap is no longer served from memory.

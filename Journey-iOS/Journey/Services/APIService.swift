@@ -319,7 +319,9 @@ final class APIService: Sendable {
         let reason: String?
     }
 
-    func uploadJourney(fileURL: URL, source: String) async throws -> UploadResponse {
+    /// `recordingId` stays the same across retries, so the server returns the journey it
+    /// already stored instead of saving a duplicate when an earlier response was lost.
+    func uploadJourney(fileURL: URL, source: String, recordingId: String) async throws -> UploadResponse {
         guard let pairing = ServerPairing.stored else { throw APIError.notPaired }
         guard let url = URL(string: "\(pairing.baseURL)/upload") else { throw APIError.invalidURL }
 
@@ -339,6 +341,11 @@ final class APIService: Sendable {
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"source\"\r\n\r\n".data(using: .utf8)!)
         body.append("\(source)\r\n".data(using: .utf8)!)
+
+        // Recording id field
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"recordingId\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(recordingId)\r\n".data(using: .utf8)!)
 
         // File field
         body.append("--\(boundary)\r\n".data(using: .utf8)!)

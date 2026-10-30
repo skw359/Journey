@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import L from 'leaflet';
+import 'ol/ol.css';
+import OlMap from 'ol/Map';
+import View from 'ol/View';
+import TileLayer from 'ol/layer/Tile';
+import VectorLayer from 'ol/layer/Vector';
+import XYZ from 'ol/source/XYZ';
+import VectorSource from 'ol/source/Vector';
+import Feature from 'ol/Feature';
+import LineString from 'ol/geom/LineString';
+import Point from 'ol/geom/Point';
+import { Style, Stroke, Fill, Circle as CircleStyle } from 'ol/style';
+import { fromLonLat } from 'ol/proj';
 import Modal from './Modal';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -10,6 +21,39 @@ import { Plane, ArrowLeft, Search, ArrowRight, MapPin } from 'lucide-react';
 import './FlightImportModal.css';
 
 const STEPS = { SEARCH: 'search', RESULTS: 'results', PREVIEW: 'preview' };
+
+function tileUrls(template) {
+  const cleaned = template.replace('{r}', '');
+  return cleaned.includes('{s}') ? ['a', 'b', 'c', 'd'].map((sub) => cleaned.replace('{s}', sub)) : [cleaned];
+}
+
+function endpointStyle(color) {
+  return new Style({
+    image: new CircleStyle({ radius: 6, fill: new Fill({ color }), stroke: new Stroke({ color: '#fff', width: 2 }) }),
+  });
+}
+
+// Flight path preview: the track with green start and red end markers.
+function createPreviewMap(target, tileUrl, coords) {
+  const projected = coords.map(([lat, lon]) => fromLonLat([lon, lat]));
+  const line = new Feature({ geometry: new LineString(projected) });
+  line.setStyle(new Style({ stroke: new Stroke({ color: 'rgba(168, 85, 247, 0.9)', width: 3 }) }));
+  const start = new Feature({ geometry: new Point(projected[0]) });
+  start.setStyle(endpointStyle('#22c55e'));
+  const end = new Feature({ geometry: new Point(projected[projected.length - 1]) });
+  end.setStyle(endpointStyle('#ef4444'));
+
+  const map = new OlMap({
+    target,
+    layers: [
+      new TileLayer({ source: new XYZ({ urls: tileUrls(tileUrl), attributions: TILE_ATTRIBUTION, maxZoom: 20, crossOrigin: 'anonymous' }) }),
+      new VectorLayer({ source: new VectorSource({ features: [line, start, end] }) }),
+    ],
+    view: new View({ center: projected[0], zoom: 4 }),
+  });
+  map.getView().fit(line.getGeometry().getExtent(), { padding: [30, 30, 30, 30] });
+  return map;
+}
 
 export default function FlightImportModal({ open, onClose, onImported }) {
   const toast = useToast();
@@ -74,7 +118,7 @@ export default function FlightImportModal({ open, onClose, onImported }) {
       setImportName('');
       setImporting(false);
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        mapInstanceRef.current.setTarget(null);
         mapInstanceRef.current = null;
       }
     }
@@ -183,7 +227,7 @@ export default function FlightImportModal({ open, onClose, onImported }) {
 
     // Clean up previous map
     if (mapInstanceRef.current) {
-      mapInstanceRef.current.remove();
+      mapInstanceRef.current.setTarget(null);
       mapInstanceRef.current = null;
     }
 
@@ -191,36 +235,9 @@ export default function FlightImportModal({ open, onClose, onImported }) {
     const timer = setTimeout(() => {
       if (!mapContainerRef.current) return;
 
-      const map = L.map(mapContainerRef.current, {
-        zoomControl: true,
-        attributionControl: true,
-      });
-      mapInstanceRef.current = map;
-
-      L.tileLayer(tileUrl, {
-        attribution: TILE_ATTRIBUTION,
-        subdomains: 'abcd',
-        maxZoom: 20,
-      }).addTo(map);
-
-      // Draw flight path
       const coords = trackData.coordinates;
       if (coords && coords.length >= 2) {
-        const polyline = L.polyline(coords, {
-          color: '#A855F7',
-          weight: 3,
-          opacity: 0.9,
-        }).addTo(map);
-
-        // Start/end markers
-        L.circleMarker(coords[0], {
-          radius: 6, fillColor: '#22c55e', fillOpacity: 1, color: '#fff', weight: 2,
-        }).addTo(map);
-        L.circleMarker(coords[coords.length - 1], {
-          radius: 6, fillColor: '#ef4444', fillOpacity: 1, color: '#fff', weight: 2,
-        }).addTo(map);
-
-        map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+        mapInstanceRef.current = createPreviewMap(mapContainerRef.current, tileUrl, coords);
       }
     }, 50);
 
@@ -263,7 +280,7 @@ export default function FlightImportModal({ open, onClose, onImported }) {
     if (step === STEPS.RESULTS) setStep(STEPS.SEARCH);
     else if (step === STEPS.PREVIEW) {
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        mapInstanceRef.current.setTarget(null);
         mapInstanceRef.current = null;
       }
       setTrackData(null);

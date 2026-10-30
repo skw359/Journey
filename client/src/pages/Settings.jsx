@@ -5,14 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import { useUnits } from '../context/UnitsContext';
 import Modal from '../components/Modal';
 import AttachmentStoragePanel from '../components/AttachmentStoragePanel';
+import AdminAccountsPanel from '../components/AdminAccountsPanel';
 import { UNIT_PREFERENCES } from '../utils/units';
 import { formatBytes } from '../utils/formatters';
 import {
   WEATHER_SOUNDING_STORAGE_KEY,
   getDatabaseConfig,
   getStorageUsage,
-  updateDatabaseConfig,
-  testDatabaseConnection,
   getWeatherConfig,
   updateWeatherConfig,
   getFlightConfig,
@@ -36,20 +35,14 @@ export default function Settings() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout, updateUser, deleteAccount, setMarcoEnabled: setMarcoNavEnabled } = useAuth();
   const { isMetric, setUnitPreference } = useUnits();
+  const isAdmin = user?.isAdmin === true;
   const avatarInputRef = useRef(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [unitPreferenceSaving, setUnitPreferenceSaving] = useState(false);
   const [unitPreferenceError, setUnitPreferenceError] = useState('');
 
-  // Database config state
-  const [dbHost, setDbHost] = useState('');
-  const [dbPort, setDbPort] = useState('5432');
-  const [dbName, setDbName] = useState('');
-  const [dbUser, setDbUser] = useState('');
-  const [dbPassword, setDbPassword] = useState('');
-  const [dbTestResult, setDbTestResult] = useState(null);
-  const [dbSaving, setDbSaving] = useState(false);
-  const [dbTesting, setDbTesting] = useState(false);
+  // Where the database is (read-only; set by DATABASE_URL)
+  const [dbInfo, setDbInfo] = useState(null);
   const [preloadData, setPreloadData] = useState(() => localStorage.getItem('preloadData') === 'true');
 
   // Storage usage state
@@ -93,12 +86,9 @@ export default function Settings() {
 
 
   useEffect(() => {
-    getDatabaseConfig().then(config => {
-      if (config.db_host) setDbHost(config.db_host);
-      if (config.db_port) setDbPort(config.db_port);
-      if (config.db_name) setDbName(config.db_name);
-      if (config.db_user) setDbUser(config.db_user);
-    }).catch(() => {});
+    // Server-wide settings are the admin's; other accounts don't load them.
+    if (!isAdmin) return;
+    getDatabaseConfig().then(setDbInfo).catch(() => {});
 
     getFlightConfig().then(config => {
       if (config.flightaware_api_key) setFlightApiKey(config.flightaware_api_key);
@@ -127,7 +117,7 @@ export default function Settings() {
         localStorage.setItem(WEATHER_SOUNDING_STORAGE_KEY, String(nextSoundingEnabled));
       }
     }).catch(() => {});
-  }, []);
+  }, [isAdmin]);
 
   const loadStorage = useCallback(() => {
     getStorageUsage()
@@ -171,41 +161,6 @@ export default function Settings() {
       setUnitPreferenceError(err.message || 'Failed to save unit preference');
     } finally {
       setUnitPreferenceSaving(false);
-    }
-  };
-
-  const getDbConfig = () => ({
-    host: dbHost,
-    port: dbPort,
-    database: dbName,
-    username: dbUser,
-    password: dbPassword,
-  });
-
-  const handleTestConnection = async () => {
-    setDbTesting(true);
-    setDbTestResult(null);
-    try {
-      const result = await testDatabaseConnection(getDbConfig());
-      setDbTestResult(result);
-    } catch {
-      setDbTestResult({ success: false, error: 'Connection test failed' });
-    } finally {
-      setDbTesting(false);
-    }
-  };
-
-  const handleSaveDatabase = async () => {
-    setDbSaving(true);
-    setDbTestResult(null);
-    try {
-      await updateDatabaseConfig(getDbConfig());
-      setDbTestResult({ success: true, message: 'Connected and saved' });
-      loadStorage();
-    } catch (err) {
-      setDbTestResult({ success: false, error: err.message });
-    } finally {
-      setDbSaving(false);
     }
   };
 
@@ -476,10 +431,13 @@ export default function Settings() {
           </div>
         </section>
 
+        {isAdmin && (
+        <>
         <section className="settings-panel" style={{ marginTop: 24 }}>
           <h2 className="settings-section-title">Weather API</h2>
           <p className="settings-description">
-            Configure the weather data provider for journey weather information.
+            Configure the weather data provider for journey weather information. Weather is
+            looked up for the city a journey starts in, never its exact starting point.
           </p>
 
           <label className="settings-item" htmlFor="weather-toggle">
@@ -538,7 +496,7 @@ export default function Settings() {
                   <option value="custom">Custom URL</option>
                 </select>
                 <span className="settings-item-detail" style={{ marginTop: 6, display: 'block' }}>
-                  {weatherProvider === 'open-meteo' && 'Uses historical weather data at the exact time of the journey. Free with no API key required.'}
+                  {weatherProvider === 'open-meteo' && 'Uses historical weather data for the start city at the exact time of the journey. Free with no API key required.'}
                   {weatherProvider === 'openweather' && 'Uses current weather at the journey location. Requires a free API key from openweathermap.org.'}
                   {weatherProvider === 'custom' && 'Use your own weather API endpoint. The response must return JSON with weather data.'}
                 </span>
@@ -571,7 +529,7 @@ export default function Settings() {
                     placeholder="https://api.example.com/weather?lat={lat}&lon={lon}&date={date}"
                   />
                   <span className="settings-item-detail" style={{ marginTop: 6, display: 'block' }}>
-                    {'Available placeholders: {lat}, {lon}, {date} (YYYY-MM-DD), {timestamp} (ISO 8601), {api_key}. Response JSON should include: temp, humidity, wind_speed, description, and optionally feels_like, condition, icon/weather_code.'}
+                    {'Available placeholders: {lat}, {lon} (the start city\'s center), {city}, {date} (YYYY-MM-DD), {timestamp} (ISO 8601), {api_key}. Must be an http(s) URL. Response JSON should include: temp, humidity, wind_speed, description, and optionally feels_like, condition, icon/weather_code.'}
                   </span>
                 </div>
               )}
@@ -753,6 +711,8 @@ export default function Settings() {
             </button>
           </div>
         </section>
+        </>
+        )}
 
         <section className="settings-panel" style={{ marginTop: 24 }}>
           <h2 className="settings-section-title">Storage</h2>
@@ -765,6 +725,8 @@ export default function Settings() {
 
           {storage && (
             <>
+              {storage.database.pretty && (
+              <>
               <div className="settings-storage-row">
                 <div className="settings-item-copy">
                   <span className="settings-item-title">Database</span>
@@ -799,6 +761,8 @@ export default function Settings() {
                   Other accounts &amp; app data <strong>{formatBytes(dbBytes - accountBytes)}</strong>
                 </span>
               </div>
+              </>
+              )}
 
               <div className="settings-storage-row">
                 <div className="settings-item-copy">
@@ -826,91 +790,36 @@ export default function Settings() {
 
         <AttachmentStoragePanel onChanged={loadStorage} />
 
-        <section className="settings-panel" style={{ marginTop: 24 }}>
-          <h2 className="settings-section-title">Database Connection</h2>
-          <p className="settings-description">Configure the PostgreSQL database connection.</p>
-
-          <div className="settings-form-group">
-            <label className="settings-field-label" htmlFor="db-host">Host</label>
-            <input
-              id="db-host"
-              className="settings-input"
-              type="text"
-              value={dbHost}
-              onChange={(e) => setDbHost(e.target.value)}
-              placeholder="localhost"
-            />
-          </div>
-
-          <div className="settings-form-group">
-            <label className="settings-field-label" htmlFor="db-port">Port</label>
-            <input
-              id="db-port"
-              className="settings-input"
-              type="text"
-              value={dbPort}
-              onChange={(e) => setDbPort(e.target.value)}
-              placeholder="5432"
-            />
-          </div>
-
-          <div className="settings-form-group">
-            <label className="settings-field-label" htmlFor="db-name">Database Name</label>
-            <input
-              id="db-name"
-              className="settings-input"
-              type="text"
-              value={dbName}
-              onChange={(e) => setDbName(e.target.value)}
-              placeholder="journey"
-            />
-          </div>
-
-          <div className="settings-form-group">
-            <label className="settings-field-label" htmlFor="db-user">Username</label>
-            <input
-              id="db-user"
-              className="settings-input"
-              type="text"
-              value={dbUser}
-              onChange={(e) => setDbUser(e.target.value)}
-              placeholder="postgres"
-            />
-          </div>
-
-          <div className="settings-form-group">
-            <label className="settings-field-label" htmlFor="db-password">Password</label>
-            <input
-              id="db-password"
-              className="settings-input"
-              type="password"
-              value={dbPassword}
-              onChange={(e) => setDbPassword(e.target.value)}
-              placeholder="Enter password"
-            />
-          </div>
-
-          {dbTestResult && (
-            <div className={`settings-connection-status ${dbTestResult.success ? 'success' : 'error'}`}>
-              {dbTestResult.success ? dbTestResult.message || 'Connection successful' : dbTestResult.error}
+        {isAdmin && dbInfo && (
+          <section className="settings-panel" style={{ marginTop: 24 }}>
+            <h2 className="settings-section-title">Database Connection</h2>
+            <p className="settings-description">
+              Journey uses the PostgreSQL database in DATABASE_URL in the server's .env file.
+              To move it, change that setting and restart the server.
+            </p>
+            <div className="settings-storage-row">
+              <div className="settings-item-copy">
+                <span className="settings-item-title">{dbInfo.db_name || 'Database'}</span>
+                <span className="settings-item-detail">
+                  {dbInfo.db_user ? `${dbInfo.db_user} @ ` : ''}{dbInfo.db_host}{dbInfo.db_port ? `:${dbInfo.db_port}` : ''}
+                </span>
+              </div>
             </div>
-          )}
+          </section>
+        )}
 
+        {isAdmin && <AdminAccountsPanel />}
+
+        <section className="settings-panel" style={{ marginTop: 24 }}>
+          <h2 className="settings-section-title">Your Data</h2>
+          <p className="settings-description">
+            Download every journey (tracks, timing, stats, waypoints and photo details) as a
+            newline-delimited JSON file. Photos themselves stay on the server.
+          </p>
           <div className="settings-btn-row">
-            <button
-              className="settings-btn settings-btn-secondary"
-              onClick={handleTestConnection}
-              disabled={dbTesting || !dbHost || !dbName || !dbUser}
-            >
-              <BtnLabel loading={dbTesting}>Test Connection</BtnLabel>
-            </button>
-            <button
-              className="settings-btn settings-btn-primary"
-              onClick={handleSaveDatabase}
-              disabled={dbSaving || !dbHost || !dbName || !dbUser}
-            >
-              <BtnLabel loading={dbSaving}>Save &amp; Reconnect</BtnLabel>
-            </button>
+            <a className="settings-btn settings-btn-primary" href="/api/export/journeys" download style={{ textDecoration: 'none', display: 'inline-block' }}>
+              Export Journeys
+            </a>
           </div>
         </section>
 

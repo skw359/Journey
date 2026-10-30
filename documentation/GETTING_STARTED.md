@@ -103,8 +103,10 @@ MIN_ROUTE_MILES=0.25
 
 Important:
 
-- `PUBLIC_URL` should be your final HTTPS domain (not HTTP, not localhost).
-- `SESSION_SECRET` should be a long random value, generated using node.
+- `PUBLIC_URL` should be your final HTTPS domain (not HTTP, not localhost). Pairing QR codes and invite links use it.
+- `SESSION_SECRET` must be a long random value; the server refuses to start without it when `NODE_ENV=production`. Generate one with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`.
+- Journey trusts one reverse proxy in front of it (the nginx below) for the client address and HTTPS. If it faces the internet directly, add `TRUST_PROXY=false`.
+- `DATABASE_URL` is the only way to choose the database; changing it needs a restart.
 
 ### Frontend environment
 
@@ -248,21 +250,27 @@ After TLS is enabled, confirm:
 
 Open your domain in a browser and register the first account.
 
-That first account becomes your initial admin-like account for data ownership and migration flow.
+That first account is the server **admin**: it manages server-wide settings (weather, flight import, Journey AI, attachment storage) and accounts.
+
+Accounts are invite-only after that. To add someone, open Settings → Accounts & Invites, create an invite link (it works once and expires after 1–30 days) and send it to them. The link is shown only once.
 
 Password requirement:
 
-- minimum 4 characters
+- minimum 8 characters
 
-This service will store your location data, so please use a stronger password than the minimum.
+This service will store your location data, so please use a strong password.
 
 ## 11. Verification Checklist
 
-- `https://journey.example.com/ping` returns `pong`
-- You can register and log in
+- `https://journey.example.com/ping` returns `pong`, and `/health` returns `{"status":"ok","database":"ok"}`
+- You can register and log in, and `/register` without an invite link says accounts are invite-only
 - `/api-docs` page loads
 - Pairing page `/pair` loads and displays a QR code
 - Uploads and journeys persist after service restart
+
+## Backups
+
+Back up the database (`pg_dump`) together with the `photos/`, `avatars/` and `uploads/archive/` folders. The exact commands and the restore procedure are in [Backend Documentation → Backup and restore](./BACKEND.md#backup-and-restore). Settings → Your Data → Export Journeys downloads one account's journeys as a portable file.
 
 ## Troubleshooting
 

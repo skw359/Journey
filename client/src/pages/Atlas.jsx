@@ -28,6 +28,8 @@ import { fetchAllTimeMapData, fetchHeatmapGrid } from '../api/journeys';
 import { computeFilteredStats } from '../utils/travelStats';
 import { createBuildingProbe } from '../utils/buildingProbe';
 import { createRouteLinesLayer } from '../utils/routeLinesLayer';
+import { escapeHtml } from '../utils/html';
+import { heatmapWeights } from '../utils/heatmapWeights';
 import './Atlas.css';
 
 const HEATMAP_GRADIENT = ['#2454ff', '#2be86f', '#f4ef39', '#ff9d2e', '#ff4a2a'];
@@ -368,14 +370,14 @@ export default function Atlas({ sidebarCollapsed = false }) {
       if (kind === 'route') {
         const dist = (convertDistanceRef.current(feature.get('routeDistance')) ?? 0).toFixed(1);
         return `
-          <div class="tooltip-row"><span class="tooltip-label">Journey:</span><span class="tooltip-value">${feature.get('routeName')}</span></div>
-          <div class="tooltip-row"><span class="tooltip-label">Date:</span><span class="tooltip-value">${feature.get('routeDate')}</span></div>
-          <div class="tooltip-row"><span class="tooltip-label">Distance:</span><span class="tooltip-value">${dist} ${distanceUnitRef.current}</span></div>
-          <div class="tooltip-row"><span class="tooltip-label">Duration:</span><span class="tooltip-value">${feature.get('routeDuration')}</span></div>
+          <div class="tooltip-row"><span class="tooltip-label">Journey:</span><span class="tooltip-value">${escapeHtml(feature.get('routeName'))}</span></div>
+          <div class="tooltip-row"><span class="tooltip-label">Date:</span><span class="tooltip-value">${escapeHtml(feature.get('routeDate'))}</span></div>
+          <div class="tooltip-row"><span class="tooltip-label">Distance:</span><span class="tooltip-value">${dist} ${escapeHtml(distanceUnitRef.current)}</span></div>
+          <div class="tooltip-row"><span class="tooltip-label">Duration:</span><span class="tooltip-value">${escapeHtml(feature.get('routeDuration'))}</span></div>
         `;
       }
       if (kind === 'marker') {
-        return `<div style="color:#02d87f;font-weight:600;">${feature.get('routeName')}</div>`;
+        return `<div style="color:#02d87f;font-weight:600;">${escapeHtml(feature.get('routeName'))}</div>`;
       }
       return null;
     };
@@ -726,8 +728,9 @@ export default function Atlas({ sidebarCollapsed = false }) {
         zoom: Math.round(view.getZoom()),
         bounds: `${sw[1]},${sw[0]},${ne[1]},${ne[0]}`,
       };
-      if (start) params.start = start;
-      if (end) params.end = `${end}T23:59:59`;
+      // The same instants the Lines view filters journeys by.
+      if (start) params.start = new Date(start).getTime();
+      if (end) params.end = new Date(`${end}T23:59:59`).getTime();
       const result = await fetchHeatmapGrid(params);
       const cells = result?.cells || [];
       setStats(prev => ({
@@ -844,9 +847,11 @@ export default function Atlas({ sidebarCollapsed = false }) {
     if (cells.length === 0) return;
 
     const source = heatmapLayer.getSource();
-    const features = cells.map(([lat, lon, intensity]) => {
+    // cells: [lat, lon, journeys through the cell, GPS points in it]
+    const weights = heatmapWeights(cells.map((cell) => cell[2] ?? 0));
+    const features = cells.map(([lat, lon], i) => {
       const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
-      f.set('weight', Math.min(1, (intensity ?? 0) / 1.2));
+      f.set('weight', weights[i]);
       return f;
     });
     source.addFeatures(features);
@@ -1017,7 +1022,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
               <p className="heatmap-view-note">
                 {loadingPoints
                   ? 'Loading heatmap data...'
-                  : 'Heatmap highlights your most traveled areas using all-time GPS point density.'}
+                  : 'Brighter areas are ones you pass through on more journeys.'}
               </p>
             </div>
           )}

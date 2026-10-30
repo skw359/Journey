@@ -9,11 +9,14 @@ import JourneyStage from '../components/JourneyStage';
 import JourneyDetails from '../components/JourneyDetails';
 import FirstRunOnboarding from '../components/FirstRunOnboarding';
 import { fetchRoutes, fetchRouteDetail } from '../api/journeys';
+import { createLruCache, ROUTE_CACHE_LIMITS } from '../utils/lruCache';
 import useGeoLabel from '../hooks/useGeoLabel';
 import './TopJourneys.css';
 
 const PREVIEW_MAX_POINTS = 100;
 const DETAIL_ZOOM_THRESHOLD = 8;
+// "Preload journey data" fetches this many of the next journeys in full, one at a time.
+const PRELOAD_AHEAD = 3;
 
 function parseDuration(durationStr) {
   const match = durationStr?.match(/(\d+)h\s*(\d+)m/);
@@ -31,8 +34,14 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
   const [measureActive, setMeasureActive] = useState(false);
   const loaderRef = useRef(null);
   const currentRouteIdRef = useRef(currentRouteId);
-  const routeCacheRef = useRef(new Map());
   const fullDetailRouteIdsRef = useRef(new Set());
+  const routeCacheRef = useRef(null);
+  if (!routeCacheRef.current) {
+    routeCacheRef.current = createLruCache({
+      ...ROUTE_CACHE_LIMITS,
+      onEvict: (id) => fullDetailRouteIdsRef.current.delete(id),
+    });
+  }
   const detailFetchInFlightRef = useRef(new Set());
   const selectionSeqRef = useRef(0);
   const { label: geoLabel, loading: geoLoading } = useGeoLabel(currentRoute);
@@ -117,15 +126,13 @@ export default function TopJourneys({ sidebarCollapsed = false }) {
           setCurrentRouteId(sorted[0].id);
 
           if (shouldPreload && sorted.length > 1) {
-            const remaining = sorted.slice(1);
-            Promise.all(
-              remaining.map(r => fetchRouteDetail(r.id, { maxPoints: 0 }))
-            ).then(details => {
-              details.forEach(route => {
+            (async () => {
+              for (const r of sorted.slice(1, 1 + PRELOAD_AHEAD)) {
+                const route = await fetchRouteDetail(r.id, { maxPoints: 0 });
                 routeCacheRef.current.set(route.id, route);
                 if (route.isFullResolution) fullDetailRouteIdsRef.current.add(route.id);
-              });
-            }).catch(err => console.error('Failed to preload routes:', err));
+              }
+            })().catch(err => console.error('Failed to preload routes:', err));
           }
         }
       } catch (err) {

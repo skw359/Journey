@@ -55,9 +55,6 @@ function createRouter({ staticApp, staticFonts, store, proxy, dataService, media
             if (pathname === '/api/alltime-map-data') {
                 return storeJson(store.allTimeMapData(url.searchParams));
             }
-            if (pathname === '/api/heatmap-grid') {
-                return storeJson(store.heatmapGrid(url.searchParams));
-            }
             const detail = pathname.match(DETAIL_RE);
             if (detail) {
                 const id = safeDecode(detail[1]);

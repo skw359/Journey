@@ -5,15 +5,22 @@ export async function getAuthStatus() {
   return res.json();
 }
 
-export async function register({ username, password, firstName, lastName }) {
+export async function register({ username, password, firstName, lastName, invite }) {
   const res = await apiFetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password, firstName, lastName }),
+    body: JSON.stringify({ username, password, firstName, lastName, invite }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Registration failed');
   return data;
+}
+
+// Whether an invite link can still be used: { valid, expiresAt? }
+export async function checkInvite(token) {
+  const res = await apiFetch(`/api/auth/invite?token=${encodeURIComponent(token)}`);
+  const data = await res.json().catch(() => ({}));
+  return { valid: res.ok && data.valid === true, expiresAt: data.expiresAt || null };
 }
 
 export async function login({ username, password }) {
