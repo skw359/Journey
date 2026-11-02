@@ -145,7 +145,6 @@ router.get('/me', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/auth/status
 router.get('/status', async (req, res) => {
   try {
     const { rows: users } = await pool.query('SELECT 1 FROM users LIMIT 1');
@@ -289,7 +288,6 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /api/auth/login
 router.post('/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
@@ -326,7 +324,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/logout
 router.post('/logout', requireSession, (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -337,7 +334,6 @@ router.post('/logout', requireSession, (req, res) => {
   });
 });
 
-// DELETE /api/auth/account
 router.delete('/account', requireSession, async (req, res) => {
   try {
     const password = req.body?.password;
@@ -364,7 +360,6 @@ router.delete('/account', requireSession, async (req, res) => {
   }
 });
 
-// POST /api/auth/migrate
 router.post('/migrate', requireSession, async (req, res) => {
   try {
     if (!(await isAdmin(req.userId))) {

@@ -60,10 +60,8 @@ export default function FlightImportModal({ open, onClose, onImported }) {
   const { tileUrl } = useTheme();
   const { convertDistance, convertSpeed, convertElevation, distanceUnit, speedUnit, elevationUnit } = useUnits();
 
-  // Step state
   const [step, setStep] = useState(STEPS.SEARCH);
 
-  // Search form
   const [departure, setDeparture] = useState('');
   const [arrival, setArrival] = useState('');
   const [date, setDate] = useState('');
@@ -72,34 +70,28 @@ export default function FlightImportModal({ open, onClose, onImported }) {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
 
-  // Airport autocomplete
   const [airports, setAirports] = useState(null);
   const [depSuggestions, setDepSuggestions] = useState([]);
   const [arrSuggestions, setArrSuggestions] = useState([]);
   const [activeField, setActiveField] = useState(null);
 
-  // Results
   const [flights, setFlights] = useState([]);
 
-  // Preview
   const [selectedFlight, setSelectedFlight] = useState(null);
   const [trackData, setTrackData] = useState(null);
   const [loadingTrack, setLoadingTrack] = useState(false);
   const [importName, setImportName] = useState('');
   const [importing, setImporting] = useState(false);
 
-  // Map ref
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
 
-  // Load airports for autocomplete
   useEffect(() => {
     if (open && !airports) {
       fetchAirports().then(setAirports).catch(() => {});
     }
   }, [open, airports]);
 
-  // Reset on close
   useEffect(() => {
     if (!open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- parent owns `open`; clear the form when it closes
@@ -124,7 +116,6 @@ export default function FlightImportModal({ open, onClose, onImported }) {
     }
   }, [open]);
 
-  // Airport search/filter
   const filterAirports = useCallback((query) => {
     if (!airports || query.length < 1) return [];
     const q = query.toUpperCase();
@@ -161,7 +152,6 @@ export default function FlightImportModal({ open, onClose, onImported }) {
     setActiveField(null);
   };
 
-  // Search
   const handleSearch = async () => {
     if (!departure || !arrival || !date) {
       setSearchError('Please fill in departure, arrival, and date.');
@@ -196,7 +186,6 @@ export default function FlightImportModal({ open, onClose, onImported }) {
     setSearching(false);
   };
 
-  // Select flight and load track
   const handleSelectFlight = async (flight) => {
     setSelectedFlight(flight);
     setLoadingTrack(true);
@@ -225,7 +214,6 @@ export default function FlightImportModal({ open, onClose, onImported }) {
   useEffect(() => {
     if (step !== STEPS.PREVIEW || !trackData || !mapContainerRef.current) return;
 
-    // Clean up previous map
     if (mapInstanceRef.current) {
       mapInstanceRef.current.setTarget(null);
       mapInstanceRef.current = null;
@@ -246,7 +234,6 @@ export default function FlightImportModal({ open, onClose, onImported }) {
     };
   }, [step, trackData, tileUrl]);
 
-  // Import
   const handleImport = async () => {
     if (!selectedFlight || !trackData) return;
     setImporting(true);
@@ -291,7 +278,6 @@ export default function FlightImportModal({ open, onClose, onImported }) {
   return (
     <Modal open={open} onClose={onClose}>
       <div className="flight-import-modal">
-        {/* Header */}
         <div className="modal-header flight-header">
           {step !== STEPS.SEARCH && (
             <button className="flight-back-btn" onClick={goBack}>

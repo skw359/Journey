@@ -38,7 +38,6 @@ function createRouter({ staticApp, staticFonts, store, proxy, dataService, media
             return res || new Response('font not found', { status: 404 });
         }
 
-        // 2. Server-bound paths.
         if (isProxyPath(pathname)) {
             return handleServerPath(request, url, pathname, method);
         }

@@ -14,7 +14,6 @@
   background: var(--bg-secondary);
 }
 
-/* Profile header */
 .settings-profile-header {
   display: flex;
   align-items: center;
@@ -195,7 +194,6 @@
   background: var(--accent-primary);
 }
 
-/* Storage usage */
 .settings-storage-loading {
   display: block;
   margin-top: 24px;
@@ -266,7 +264,6 @@
   background: color-mix(in srgb, var(--text-secondary) 35%, transparent);
 }
 
-/* Attachment storage */
 .settings-attach-state {
   flex-shrink: 0;
   padding: 4px 10px;
@@ -391,7 +388,6 @@
   margin-top: 10px;
 }
 
-/* Database settings form */
 .settings-form-group {
   margin-top: 16px;
 }

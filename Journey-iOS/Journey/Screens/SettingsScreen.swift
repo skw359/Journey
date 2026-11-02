@@ -31,7 +31,6 @@ struct SettingsScreen: View {
                         ProfileHeaderView(profile: profile)
                     }
 
-                    // Recording
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Recording")
                             .font(.montserrat(size: 13, weight: .semibold))
@@ -120,7 +119,6 @@ struct SettingsScreen: View {
                         }
                     }
 
-                    // Upload Queue
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Text("Uploads")

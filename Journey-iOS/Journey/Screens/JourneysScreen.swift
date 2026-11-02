@@ -27,7 +27,6 @@ struct JourneysScreen: View {
             }
         }
 
-        // Chip filter
         switch selectedFilter {
         case .all:
             break

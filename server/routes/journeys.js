@@ -110,7 +110,6 @@ function recomputePassedLists(userId, routeId, coordinates) {
     }
 }
 
-// GET /api/routes (list view)
 router.get('/', async (req, res) => {
     try {
         await withTenantClient(req.userId, async (db) => {
@@ -274,7 +273,6 @@ router.delete('/trash/:trashId', async (req, res) => {
     }
 });
 
-// GET /api/routes/:id (detail view)
 router.get('/:id', async (req, res) => {
     try {
         const parsedMaxPoints = req.query.maxPoints != null
@@ -344,7 +342,6 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// PATCH /api/routes/:id/name
 router.patch('/:id/name', express.json(), async (req, res) => {
     const { newName } = req.body || {};
     if (!newName || typeof newName !== 'string' || !newName.trim()) {
@@ -370,7 +367,6 @@ router.patch('/:id/name', express.json(), async (req, res) => {
     }
 });
 
-// PATCH /api/routes/:id/travel-mode
 router.patch('/:id/travel-mode', express.json(), async (req, res) => {
     const { travelMode } = req.body || {};
     const validModes = ['foot', 'scooter', 'drive', 'train', 'metro', 'flight'];
@@ -471,7 +467,6 @@ async function deletePoints(req, res, rawIndices) {
     }
 }
 
-// DELETE /api/routes/:id/points/:index
 router.delete('/:id/points/:index', (req, res) => deletePoints(req, res, [req.params.index]));
 
 // POST /api/routes/:id/points/delete { indices: [..] } — several points in one go
@@ -481,7 +476,6 @@ router.post('/:id/points/delete', express.json(), (req, res) => {
     return deletePoints(req, res, indices);
 });
 
-// PATCH /api/routes/:id/waypoints/:wpId
 router.patch('/:id/waypoints/:wpId', express.json(), async (req, res) => {
     const { label } = req.body || {};
     if (typeof label !== 'string' || !label.trim()) {

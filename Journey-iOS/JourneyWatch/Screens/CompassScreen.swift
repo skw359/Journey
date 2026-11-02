@@ -28,7 +28,6 @@ struct CompassScreen: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Main compass view
                 ZStack {
                     Circle()
                         .stroke(lineWidth: 0)
@@ -81,7 +80,6 @@ struct CompassScreen: View {
             )
             .frame(width: geometry.size.width, height: geometry.size.height)
             .pauseOverlay(recorder: viewModel)
-            // Calibration instructions overlay
             if showCalibrationInstructions || showRecalibratingMessage {
                 ZStack {
                     Color.black.opacity(0.95)

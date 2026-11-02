@@ -4,7 +4,6 @@
   align-items: center;
 }
 
-/* Map overlay positioning */
 .weather-badge.weather-overlay {
   position: absolute;
   top: 12px;
@@ -170,7 +169,6 @@
   color: rgba(0, 0, 0, 0.5);
 }
 
-/* Sounding panel */
 .sounding-panel {
   position: absolute;
   top: calc(100% + 6px);

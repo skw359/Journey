@@ -58,7 +58,6 @@ export default function VisualCanvas() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
 
-      // Grid
       ctx.strokeStyle = GRID_COLOR;
       ctx.lineWidth = 1;
       for (let x = GRID_STEP; x < W; x += GRID_STEP) {

@@ -337,7 +337,6 @@ final class APIService: Sendable {
 
         var body = Data()
 
-        // Source field
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"source\"\r\n\r\n".data(using: .utf8)!)
         body.append("\(source)\r\n".data(using: .utf8)!)
@@ -347,7 +346,6 @@ final class APIService: Sendable {
         body.append("Content-Disposition: form-data; name=\"recordingId\"\r\n\r\n".data(using: .utf8)!)
         body.append("\(recordingId)\r\n".data(using: .utf8)!)
 
-        // File field
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"journey\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: application/zip\r\n\r\n".data(using: .utf8)!)

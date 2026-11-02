@@ -139,7 +139,6 @@ async function findFurthestPoint(db, home, routes) {
     return best;
 }
 
-// Level system
 const LEVELS = [
     { name: 'Wanderer', xp: 0 },
     { name: 'Explorer', xp: 1000 },
@@ -180,7 +179,6 @@ const BINGO_CHALLENGES = [
     { id: 'diversity_20', label: '20 Unique Routes', desc: '20+ unique route pairs' },
 ];
 
-// Spirit animal classification
 function classifySpiritAnimal(stats) {
     const { avgSpeedMph, routeDiversityPct, avgDistMi, nightPct, weekendPct,
             roundTripPct, elevGain, totalRoutes, streakDays, explorationPct } = stats;
@@ -388,7 +386,6 @@ async function computeFunStats(db, now) {
     // For most repeated route
     const routePairCounts = {};
 
-    // Track extreme points
     let northernmost = null, southernmost = null, easternmost = null, westernmost = null;
     let maxLat = -Infinity, minLat = Infinity, maxLon = -Infinity, minLon = Infinity;
 
@@ -406,7 +403,6 @@ async function computeFunStats(db, now) {
     // Journey timestamps for gap/break calculation
     const journeyTimestamps = [];
 
-    // Weather trackers
     const weatherTemps = [];       // { date, temp, feelsLike, name }
     const weatherConditions = {};  // condition -> count
     let hottestJourney = null, hottestTemp = -Infinity;
@@ -439,7 +435,6 @@ async function computeFunStats(db, now) {
         if (avgSpd > 0) avgSpeeds.push(avgSpd);
         if (avgSpd > fastestAvgVal) { fastestAvgVal = avgSpd; fastestAvgRoute = route; }
 
-        // Elevation
         if (route.elevation_gain != null) { totalElevGain += Number(route.elevation_gain) || 0; hasElevation = true; }
         if (route.elevation_loss != null) { totalElevLoss += Number(route.elevation_loss) || 0; hasElevation = true; }
         if (route.top_elevation != null) {
@@ -449,7 +444,6 @@ async function computeFunStats(db, now) {
             hasElevation = true;
         }
 
-        // Weather data
         const wTemp = route.weather_temp != null ? Number(route.weather_temp) : null;
         const wFeelsLike = route.weather_feels_like != null ? Number(route.weather_feels_like) : null;
         const wHumidity = route.weather_humidity != null ? Number(route.weather_humidity) : null;
@@ -465,7 +459,6 @@ async function computeFunStats(db, now) {
             if (wTemp > hottestTemp) { hottestTemp = wTemp; hottestJourney = { name: route.name, date: dateStr, temp: wTemp }; }
             if (wTemp < coldestTemp) { coldestTemp = wTemp; coldestJourney = { name: route.name, date: dateStr, temp: wTemp }; }
 
-            // Feels-like difference
             if (wFeelsLike != null && Number.isFinite(wFeelsLike)) {
                 const diff = Math.abs(wTemp - wFeelsLike);
                 if (diff > biggestFeelsLikeDiffVal) {
@@ -479,7 +472,6 @@ async function computeFunStats(db, now) {
             const bucketKey = `${bucketBase}`;
             tempBuckets[bucketKey] = (tempBuckets[bucketKey] || 0) + 1;
 
-            // Season temps
             if (route.start_time) {
                 const month = route.start_time.getUTCMonth();
                 if (month >= 2 && month <= 4) seasonTemps.spring.push(wTemp);
@@ -515,7 +507,6 @@ async function computeFunStats(db, now) {
             if (lc.includes('thunder') || lc.includes('storm')) stormCount++;
         }
 
-        // Travel mode
         const mode = route.travel_mode || 'drive';
         if (modeCounts.hasOwnProperty(mode)) { modeCounts[mode]++; modeDistances[mode] += dist; }
         if (previousMode != null) {
@@ -524,7 +515,6 @@ async function computeFunStats(db, now) {
         }
         previousMode = mode;
 
-        // Round trip
         if (route.start_lat != null && route.start_lon != null &&
             route.end_lat != null && route.end_lon != null) {
             const roundDist = haversine(route.start_lat, route.start_lon, route.end_lat, route.end_lon);
@@ -538,7 +528,6 @@ async function computeFunStats(db, now) {
             }
         }
 
-        // Compass direction
         if (route.start_lat != null && route.start_lon != null &&
             route.end_lat != null && route.end_lon != null) {
             const dLon = (route.end_lon - route.start_lon) * Math.PI / 180;
@@ -563,7 +552,6 @@ async function computeFunStats(db, now) {
         }
         routePairKeys.push(routePairKey);
 
-        // Duration-dependent stats
         let durationMs = 0;
         if (route.start_time && route.end_time) {
             durationMs = route.end_time.getTime() - route.start_time.getTime();
@@ -639,7 +627,6 @@ async function computeFunStats(db, now) {
             routeCoarseCells.add(coarseKey);
             if (!seenRouteCoarseCells.has(coarseKey)) routeAddsNewTerritory = true;
 
-            // New territory tracking
             if (routeMonthStr === thisMonthStr) cellsThisMonth.add(coarseKey);
             else if (routeMonthStr === lastMonthStr) cellsLastMonth.add(coarseKey);
             if (routeMonthStr !== thisMonthStr) cellsBeforeThisMonth.add(coarseKey);
@@ -785,7 +772,6 @@ async function computeFunStats(db, now) {
             longestStreakStart = curStreakStart;
             longestStreakEnd = sortedJourneyDays[sortedJourneyDays.length - 1];
         }
-        // Active streak from today
         const todayStr = new Date().toISOString().slice(0, 10);
         const yestDate = new Date(); yestDate.setDate(yestDate.getDate() - 1);
         const yesterdayStr = yestDate.toISOString().slice(0, 10);
@@ -1153,7 +1139,6 @@ async function computeFunStats(db, now) {
         return a;
     }
 
-    // Check which bingo challenges are completed
     const bingoCompleted = new Set();
     if (nightCount > 0) bingoCompleted.add('night_journey');
     for (const route of routes) {

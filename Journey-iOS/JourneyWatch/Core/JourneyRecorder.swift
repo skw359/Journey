@@ -250,7 +250,6 @@ final class JourneyRecorder: NSObject, ObservableObject {
         startWorkoutSession()
         pushContext(state: "recording")
 
-        // Prepare CSV
         let fileName = "route_\(Int64(Date().timeIntervalSince1970 * 1000)).csv"
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         csvURL = docs.appendingPathComponent(fileName)
@@ -277,7 +276,6 @@ final class JourneyRecorder: NSObject, ObservableObject {
         averageSpeed = 0.0
         currentSpeedMps = 0
 
-        // Clear readings for new recording
         elevationReadings.removeAll()
         speedReadings.removeAll()
         lastSignificantElevationReading = nil
@@ -317,7 +315,6 @@ final class JourneyRecorder: NSObject, ObservableObject {
         updateTimer?.invalidate()
         updateTimer = nil
 
-        // Flush and close CSV
         try? fileHandle?.synchronize()
         try? fileHandle?.close()
         fileHandle = nil
@@ -329,7 +326,6 @@ final class JourneyRecorder: NSObject, ObservableObject {
             try? FileManager.default.removeItem(at: csvURL)
         }
 
-        // Tear down workout
         stopWorkoutSession()
 
         // Reset recording state but keep readings alive for TravelRecordedView
@@ -366,7 +362,6 @@ final class JourneyRecorder: NSObject, ObservableObject {
             pauseStartTime = Date()
             locationManager.stopUpdatingLocation()
             locationManager.stopUpdatingHeading()
-            // Pause workout session
             workoutSession?.pause()
         } else {
             if let pauseStart = pauseStartTime {
@@ -718,7 +713,6 @@ final class JourneyRecorder: NSObject, ObservableObject {
         let locElevation = location.altitude
         let currentSpeed = max(location.speed, 0)
 
-        // Update speed in mph
         DispatchQueue.main.async {
             self.speed = max(currentSpeed * 2.23694, 0)
             self.currentElevation = locElevation
@@ -841,7 +835,6 @@ extension JourneyRecorder: CLLocationManagerDelegate {
             }
         }
 
-        // Update geocoding
         if let loc = validatedLocations.last {
             updateLocationName(for: loc)
         }
@@ -891,7 +884,6 @@ extension JourneyRecorder: CLLocationManagerDelegate {
             for loc in validatedLocations {
                 // Update metrics (speed, elevation, distance)
                 updateMetrics(with: loc)
-                // Write to CSV
                 write(loc)
             }
 

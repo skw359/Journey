@@ -163,7 +163,6 @@ router.post('/api/routes/:id/photos', requireAuth, acceptMedia, async (req, res)
     }
 });
 
-// DELETE /api/routes/:id/photos/:photoId
 router.delete('/api/routes/:id/photos/:photoId', requireAuth, async (req, res) => {
     try {
         await withTenantClient(req.userId, async (db) => {

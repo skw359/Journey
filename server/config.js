@@ -10,7 +10,6 @@ const PHOTOS_DIR = path.join(DATA_DIR, 'photos');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const AVATARS_DIR = path.join(DATA_DIR, 'avatars');
 
-// Ensure required directories exist
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(AVATARS_DIR)) fs.mkdirSync(AVATARS_DIR, { recursive: true });
 const CLIENT_DIST = path.join(PROJECT_ROOT, 'client', 'dist');

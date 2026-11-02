@@ -25,7 +25,6 @@ async function saveConfig(entries) {
   }
 }
 
-// GET /api/settings/units
 router.get('/units', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -45,7 +44,6 @@ router.get('/units', async (req, res) => {
   }
 });
 
-// PUT /api/settings/units
 router.put('/units', async (req, res) => {
   try {
     const unitPreference = req.body?.unitPreference;
@@ -84,7 +82,6 @@ router.get('/database', requireAdmin, (req, res) => {
   }
 });
 
-// GET /api/settings/storage
 // This account's usage; the admin also sees the whole database (pg_database_size).
 // Photo totals come from the photos table's recorded sizes.
 router.get('/storage', async (req, res) => {
@@ -141,7 +138,6 @@ async function attachmentStorageStatus(userId) {
   return { canManage, ...storage, move: mediaMove.status() };
 }
 
-// GET /api/settings/attachment-storage
 // Where photos and videos are stored, files still waiting elsewhere, and any move in progress.
 router.get('/attachment-storage', async (req, res) => {
   try {
@@ -253,7 +249,6 @@ router.get('/weather', async (req, res) => {
     }
 });
 
-// PUT /api/settings/weather
 router.put('/weather', requireAdmin, async (req, res) => {
     try {
         const { enabled, provider, apiKey, customUrl, soundingEnabled } = req.body || {};
@@ -312,7 +307,6 @@ router.get('/weather/sounding', async (req, res) => {
     }
 });
 
-// GET /api/settings/flights
 router.get('/flights', async (req, res) => {
     try {
         const { rows } = await pool.query(
@@ -329,7 +323,6 @@ router.get('/flights', async (req, res) => {
     }
 });
 
-// PUT /api/settings/flights
 router.put('/flights', requireAdmin, async (req, res) => {
     try {
         const { apiKey } = req.body || {};

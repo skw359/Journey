@@ -87,12 +87,10 @@ function flightAltitudeM(f) {
     const climbEnd = 0.12;
     const descentStart = 0.85;
     if (f <= climbEnd) {
-        // Climb phase — smooth ramp up
         const t = f / climbEnd;
         return cruiseM * (1 - Math.cos(t * Math.PI / 2));
     }
     if (f >= descentStart) {
-        // Descent phase — smooth ramp down
         const t = (f - descentStart) / (1 - descentStart);
         return cruiseM * Math.cos(t * Math.PI / 2);
     }
@@ -241,27 +239,23 @@ async function searchFlights(departure, arrival, date, departureTime, flightNumb
         throw new Error(`Unknown airport code: ${!depAirport ? departure : arrival}`);
     }
 
-    // If we have an API key, try FlightAware
     if (config.apiKey) {
         try {
             let flights = [];
 
             if (flightNumber) {
-                // Search by flight number
                 const ident = flightNumber.replace(/\s+/g, '').toUpperCase();
                 const data = await flightAwareFetch(`/flights/${ident}?start=${date}T00:00:00Z&end=${date}T23:59:59Z`, config.apiKey);
                 flights = (data.flights || [])
                     .filter(f => {
                         const depCode = f.origin?.code_iata || f.origin?.code || '';
                         const arrCode = f.destination?.code_iata || f.destination?.code || '';
-                        // Filter to matching airports if both specified
                         if (departure && depCode && depCode !== departure.toUpperCase()) return false;
                         if (arrival && arrCode && arrCode !== arrival.toUpperCase()) return false;
                         return true;
                     })
                     .map(normalizeFlightAwareFlight);
             } else {
-                // Search by origin/destination
                 const query = `-origin {${departure.toUpperCase()}} -destination {${arrival.toUpperCase()}}`;
                 const data = await flightAwareFetch(
                     `/flights/search?query=${encodeURIComponent(query)}&start=${date}T00:00:00Z&end=${date}T23:59:59Z`,
@@ -270,7 +264,6 @@ async function searchFlights(departure, arrival, date, departureTime, flightNumb
                 flights = (data.flights || []).map(normalizeFlightAwareFlight);
             }
 
-            // Filter by approximate departure time if provided
             if (departureTime && flights.length > 1) {
                 const targetHour = parseInt(departureTime.split(':')[0], 10);
                 flights.sort((a, b) => {
@@ -281,14 +274,11 @@ async function searchFlights(departure, arrival, date, departureTime, flightNumb
             }
 
             if (flights.length > 0) return flights;
-            // Fall through to synthetic if no results
         } catch (err) {
             log.warn('FlightAware search failed — falling back to synthesis', err);
-            // Fall through to synthetic
         }
     }
 
-    // Fallback: synthetic result
     const depTimeStr = departureTime || '08:00';
     const depDateTime = `${date}T${depTimeStr}:00`;
     const distMi = haversine(depAirport.lat, depAirport.lon, arrAirport.lat, arrAirport.lon);
@@ -330,7 +320,6 @@ async function getFlightTrack(flightId, departure, arrival, departureTime, arriv
         throw new Error(`Unknown airport code: ${!depAirport ? departure : arrival}`);
     }
 
-    // Try FlightAware if we have a key and it's not a synthetic ID
     if (config.apiKey && flightId && !flightId.startsWith('synth-')) {
         try {
             const data = await flightAwareFetch(`/flights/${flightId}/track`, config.apiKey);
@@ -386,7 +375,6 @@ async function getFlightTrack(flightId, departure, arrival, departureTime, arriv
                 const lastTs = profileTimeMs[profileTimeMs.length - 1];
                 const durationSec = (lastTs - firstTs) / 1000;
 
-                // Compute elevation gain/loss
                 let elevGain = 0, elevLoss = 0;
                 for (let i = 1; i < profileElevM.length; i++) {
                     const d = profileElevM[i] - profileElevM[i - 1];
@@ -419,7 +407,6 @@ async function getFlightTrack(flightId, departure, arrival, departureTime, arriv
         }
     }
 
-    // Fallback: great-circle synthesis
     const depTime = departureTime || new Date().toISOString();
     const distMi = haversine(depAirport.lat, depAirport.lon, arrAirport.lat, arrAirport.lon);
     const flightHours = distMi / 500;

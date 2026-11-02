@@ -73,7 +73,6 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
 
   const [travelModeDropdownOpen, setTravelModeDropdownOpen] = useState(false);
 
-  // Combine mode
   const [combineMode, setCombineMode] = useState(false);
   const [selectedForCombine, setSelectedForCombine] = useState(new Set());
   const [combineModalOpen, setCombineModalOpen] = useState(false);

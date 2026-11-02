@@ -72,7 +72,6 @@ router.post('/import', express.json(), async (req, res) => {
             return res.status(400).json({ error: 'Departure and arrival airport codes are required' });
         }
 
-        // Get the flight track
         const track = await getFlightTrack(flightId, departure, arrival, departureTime, arrivalTime);
 
         if (!track.coordinates || track.coordinates.length < 2) {
@@ -144,7 +143,6 @@ router.post('/import', express.json(), async (req, res) => {
 
         log.success(`flight imported · ${departure.toUpperCase()}→${arrival.toUpperCase()} · ${routeData.distance}mi · #${routeData.id} · via ${track.source}`);
 
-        // Return the full route object
         const fullRoute = {
             ...routeData,
             distance: routeData.distance != null ? Number(routeData.distance).toFixed(2) : null,

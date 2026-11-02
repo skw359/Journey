@@ -199,7 +199,6 @@ final class LocationService: NSObject {
         fileHandle = try? FileHandle(forWritingTo: csvURL!)
         _ = try? fileHandle?.seekToEnd()
 
-        // Reset state
         isRecording = true
         pointCount = 0
         writeCounter = 0
@@ -240,7 +239,6 @@ final class LocationService: NSObject {
             )
         }
 
-        // Ensure location updates
         locationManager.startUpdatingLocation()
 
         // Timer for elapsed time — add to .common mode so it fires in background
@@ -274,7 +272,6 @@ final class LocationService: NSObject {
         try? fileHandle?.close()
         fileHandle = nil
 
-        // Create ZIP
         var resultURL: URL?
         if let csvURL, let zipURL {
             createZip(from: csvURL, to: zipURL)
@@ -442,7 +439,6 @@ final class LocationService: NSObject {
         guard isRecording else { return }
         let currentSpeed = max(location.speed, 0)
 
-        // Update speed
         currentSpeedMps = currentSpeed
 
         if let lastLoc = lastDistanceLocation {

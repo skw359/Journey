@@ -551,7 +551,6 @@ export default function FunStats() {
             </div>
           </section>
 
-          {/* Travel Profile */}
           <section className="funstats-panel">
             <h2 className="funstats-panel-title">Travel Profile</h2>
             <div className="funstats-profile-grid">
@@ -608,7 +607,6 @@ export default function FunStats() {
             </div>
           </section>
 
-          {/* States Visited */}
           {data.statesVisited?.length > 0 && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">States Visited</h2>
@@ -617,7 +615,6 @@ export default function FunStats() {
             </section>
           )}
 
-          {/* Cities Passed Through */}
           {(data.citiesPassed?.length > 0 || citiesBackfill.running || citiesBackfill.status?.remaining > 0) && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Cities Passed Through</h2>
@@ -628,7 +625,6 @@ export default function FunStats() {
             </section>
           )}
 
-          {/* Unique Places */}
           {(data.uniquePlaces?.length > 0 || placesBackfill.running || placesBackfill.status?.remaining > 0) && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Unique Places</h2>
@@ -639,7 +635,6 @@ export default function FunStats() {
             </section>
           )}
 
-          {/* Monthly Distance Chart */}
           {data.monthlyChart?.length > 0 && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Distance Over Time</h2>
@@ -673,7 +668,6 @@ export default function FunStats() {
             </section>
           )}
 
-          {/* Temperature Over Time */}
           {tempChartData && tempTimeline.length > 2 && (
             <section className="funstats-panel">
               <div className="funstats-panel-heading">
@@ -700,7 +694,6 @@ export default function FunStats() {
             </section>
           )}
 
-          {/* Weather Overview */}
           {data.weather && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Weather</h2>
@@ -756,7 +749,6 @@ export default function FunStats() {
           )}
 
 
-          {/* Weather Conditions Breakdown */}
           {data.weather?.conditions?.length > 0 && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Weather Conditions</h2>
@@ -777,7 +769,6 @@ export default function FunStats() {
             </section>
           )}
 
-          {/* Comfort Zone */}
           {data.weather?.tempBuckets?.length > 0 && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Comfort Zone</h2>
@@ -793,7 +784,6 @@ export default function FunStats() {
             </section>
           )}
 
-          {/* Temperature by Season */}
           {data.weather?.seasonAvgTemps && Object.values(data.weather.seasonAvgTemps).some(v => v != null) && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Temperature by Season</h2>
@@ -813,7 +803,6 @@ export default function FunStats() {
             </section>
           )}
 
-          {/* Activity Heatmap */}
           {heatmapWeeks.length > 0 && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Activity</h2>

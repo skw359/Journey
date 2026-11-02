@@ -22,7 +22,6 @@ function notAuthenticated(res) {
   });
 }
 
-// Requires a valid session (cookie-based)
 function requireSession(req, res, next) {
   if (req.session && req.session.userId) {
     req.userId = req.session.userId;

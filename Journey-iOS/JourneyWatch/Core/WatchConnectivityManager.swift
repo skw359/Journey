@@ -1,4 +1,3 @@
-// WatchConnectivityManager.swift
 import Foundation
 import WatchConnectivity
 import Combine

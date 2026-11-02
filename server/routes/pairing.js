@@ -74,7 +74,6 @@ router.post('/tokens', async (req, res) => {
   }
 });
 
-// DELETE /api/pairing/tokens/:id
 router.delete('/tokens/:id', async (req, res) => {
   try {
     const result = await pool.query(

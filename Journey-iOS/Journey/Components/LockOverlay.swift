@@ -22,7 +22,6 @@ struct LockOverlay: View {
 
                     // App icon and name
                     HStack(spacing: 10) {
-                        // Three vertical bars icon
                         HStack(spacing: 3) {
                             ForEach(0..<3, id: \.self) { _ in
                                 RoundedRectangle(cornerRadius: 2)
@@ -46,7 +45,6 @@ struct LockOverlay: View {
 
                     Spacer()
 
-                    // Slide to unlock
                     GeometryReader { geo in
                         let maxDrag = geo.size.width - knobSize - knobPadding * 2
 
@@ -59,7 +57,6 @@ struct LockOverlay: View {
                                         .stroke(AppConstants.darkCardBorder, lineWidth: 1)
                                 )
 
-                            // Label
                             Text("Slide to unlock")
                                 .font(.montserrat(size: 16, weight: .medium))
                                 .foregroundColor(Color(hex: "#3A3A3C"))

@@ -94,7 +94,6 @@ async function onReady() {
 
     const ses = session.defaultSession;
 
-    // Core singletons.
     store = new RouteStore();
     store.detailLimitBytes = Math.max(64, Number(cfg.detailCacheMB) || 768) * 1024 * 1024;
     mediaCache = new MediaCache({ limitBytes: Math.max(32, Number(cfg.mediaCacheMB) || 512) * 1024 * 1024 });

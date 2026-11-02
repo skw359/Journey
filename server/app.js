@@ -81,10 +81,8 @@ function createApp({ sessionSecret }) {
         app.use('/landing', express.static(LANDING_DIR, { maxAge: '1h' }));
     }
 
-    // Body parsing
     app.use(express.json());
 
-    // Session middleware
     app.use(session({
         store: new PgSession({
             pool: { query: (...args) => pool.query(...args) },
@@ -103,7 +101,6 @@ function createApp({ sessionSecret }) {
         },
     }));
 
-    // Serve React build (production)
     if (fs.existsSync(CLIENT_DIST)) {
         app.use(express.static(CLIENT_DIST));
     }
@@ -121,13 +118,11 @@ function createApp({ sessionSecret }) {
         }
     });
 
-    // Auth routes (unprotected)
     app.use('/api/auth', require('./routes/auth'));
 
     // Upload (accepts session + bearer token)
     app.use('/upload', requireAuth, require('./routes/upload'));
 
-    // Protected API routes
     app.use('/api/settings', requireSession, require('./routes/settings'));
     app.use('/api/pairing', requireSession, require('./routes/pairing'));
     app.use('/api/admin', requireSession, requireAdmin, require('./routes/admin'));
@@ -135,35 +130,28 @@ function createApp({ sessionSecret }) {
     // Journey AI (Marco) — config + natural-language questions (protected)
     app.use('/api/ask', requireSession, require('./routes/ask'));
 
-    // Photos static serving + photo API routes
     app.use(require('./routes/photos'));
 
     // Large photo/video uploads sent in pieces (protected)
     app.use('/api/routes/:id/uploads', requireAuth, require('./routes/mediaUploads').router);
 
-    // Journey CRUD (protected)
     app.use('/api/routes', requireAuth, limitPairingTokens, require('./routes/journeys'));
 
-    // Flight import (protected)
     app.use('/api/flights', requireSession, require('./routes/flights'));
 
     // Reverse geocoding for the web client, forwarded to GEOCODE_BASE_URL (protected)
     app.use('/api/geocode', requireSession, require('./routes/geocode'));
 
-    // Exports (protected)
     const exportRoutes = require('./routes/export');
     app.use('/api/export', requireSession, exportRoutes.router);
     app.get('/database', requireSession, exportRoutes.legacyDatabaseDump);
 
-    // Fun stats (protected)
     app.use('/api', requireSession, require('./routes/funstats'));
 
-    // Map data endpoints (protected)
     app.use('/api', requireSession, require('./routes/maps'));
 
     app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
-    // SPA catch-all (production)
     if (fs.existsSync(CLIENT_DIST)) {
         app.get('*', (req, res) => {
             res.sendFile(path.join(CLIENT_DIST, 'index.html'));

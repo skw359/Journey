@@ -56,7 +56,6 @@ struct AccelerationChart: View, Equatable {
                         .foregroundStyle(AppConstants.redAction)
                         .lineStyle(StrokeStyle(lineWidth: 1.5))
 
-                    // Zero line
                     RuleMark(y: .value("Zero", 0))
                         .foregroundStyle(.gray.opacity(0.5))
                         .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4]))

@@ -27,7 +27,6 @@ enum AppConstants {
     static let electricBlue = Color(hex: "#32ADE6")
     static let secondaryText = Color(hex: "#8E8E93")
 
-    // API
     // Read from Journey/JourneyConfig.plist, which is git-ignored (copy
     // Config/JourneyConfig.example.plist). Without it, geocoding is skipped.
     static let geocodeBaseURL: String? = {
@@ -38,11 +37,9 @@ enum AppConstants {
         return base.isEmpty ? nil : base
     }()
 
-    // Keychain
     static let keychainTokenKey = "journey_bearer_token"
     static let serverURLKey = "journey_server_url"
 
-    // UserDefaults
     static let confirmBeforeStoppingKey = "confirmBeforeStopping"
     static let autoSegmentKey = "autoSegmentJourneys"
     static let appearanceKey = "appAppearance"

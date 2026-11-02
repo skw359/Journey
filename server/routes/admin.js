@@ -32,7 +32,6 @@ function inviteResponse(row) {
   };
 }
 
-// GET /api/admin/invites
 router.get('/invites', async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -95,7 +94,6 @@ router.delete('/invites/:id', async (req, res) => {
   }
 });
 
-// GET /api/admin/users
 router.get('/users', async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -151,7 +149,6 @@ router.patch('/users/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/admin/users/:id
 router.delete('/users/:id', async (req, res) => {
   if (req.params.id === req.userId) {
     return res.status(400).json({ error: 'Delete your own account from the Account section instead' });

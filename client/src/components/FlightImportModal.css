@@ -39,7 +39,6 @@
   color: var(--text-primary);
 }
 
-/* Search Form */
 .flight-form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -67,7 +66,6 @@
   margin-bottom: 16px;
 }
 
-/* Airport input */
 .airport-input-wrap {
   position: relative;
 }
@@ -142,7 +140,6 @@
   gap: 6px;
 }
 
-/* Results */
 .flight-results-count {
   color: var(--text-secondary);
   font-size: 0.85em;
@@ -234,7 +231,6 @@
   color: var(--text-secondary);
 }
 
-/* Preview */
 .flight-map-container {
   height: 280px;
   border-radius: 10px;
@@ -295,7 +291,6 @@
   gap: 6px;
 }
 
-/* Loading */
 .flight-loading {
   display: flex;
   flex-direction: column;

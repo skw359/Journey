@@ -215,7 +215,6 @@ async function uploadJourney(client, zipBuffer, { recordingId, source = 'iphone'
     return client.post('/upload', { body: form });
 }
 
-/** Registers the first (admin) account and returns its agent. */
 async function registerAdmin(origin, username = 'owner', password = 'owner-password-1') {
     const owner = agent(origin);
     const res = await owner.post('/api/auth/register', { json: { username, password, firstName: 'Own', lastName: 'Er' } });
@@ -224,7 +223,6 @@ async function registerAdmin(origin, username = 'owner', password = 'owner-passw
     return owner;
 }
 
-/** Registers another account through an invite from `admin`. */
 async function registerInvited(origin, admin, username, password = 'second-password-1') {
     const invite = await admin.post('/api/admin/invites', { json: { note: username } });
     if (invite.status !== 201) throw new Error(`invite failed: ${invite.status} ${invite.text}`);

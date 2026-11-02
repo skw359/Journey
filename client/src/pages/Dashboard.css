@@ -274,7 +274,6 @@
   height: 1px;
 }
 
-/* Import Flight button */
 .import-flight-btn {
   display: flex;
   align-items: center;
@@ -302,7 +301,6 @@
   background: rgba(147, 51, 234, 0.08);
 }
 
-/* Combine mode */
 .combine-toolbar {
   display: flex;
   align-items: center;

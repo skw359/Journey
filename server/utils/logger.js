@@ -121,7 +121,7 @@ const C = {
     cyan: fg(44),
     blue: fg(75),
     violet: fg(141),
-    green: hex(BRAND),   // success reads in the brand green
+    green: hex(BRAND),
     yellow: fg(179),
     orange: fg(215),
     red: fg(203),

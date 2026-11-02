@@ -45,11 +45,9 @@ export default function Settings() {
   const [dbInfo, setDbInfo] = useState(null);
   const [preloadData, setPreloadData] = useState(() => localStorage.getItem('preloadData') === 'true');
 
-  // Storage usage state
   const [storage, setStorage] = useState(null);
   const [storageError, setStorageError] = useState('');
 
-  // Weather config state
   const [weatherEnabled, setWeatherEnabled] = useState(true);
   const [weatherProvider, setWeatherProvider] = useState('open-meteo');
   const [weatherApiKey, setWeatherApiKey] = useState('');
@@ -63,12 +61,10 @@ export default function Settings() {
   const [weatherResult, setWeatherResult] = useState(null);
   const weatherSoundingTouchedRef = useRef(false);
 
-  // Flight config state
   const [flightApiKey, setFlightApiKey] = useState('');
   const [flightSaving, setFlightSaving] = useState(false);
   const [flightResult, setFlightResult] = useState(null);
 
-  // Journey AI (Marco) config state
   const [marcoEnabled, setMarcoEnabled] = useState(false);
   const [marcoUrl, setMarcoUrl] = useState('');
   const [marcoModel, setMarcoModel] = useState('');

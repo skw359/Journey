@@ -16,7 +16,6 @@ function pressureToY(p, pTop, pBot) {
   return PAD.top + ((logP - logTop) / (logBot - logTop)) * PLOT_H;
 }
 
-// Map temperature (F) to X
 function tempToX(t, tMin, tMax) {
   return PAD.left + ((t - tMin) / (tMax - tMin)) * PLOT_W;
 }
@@ -100,7 +99,6 @@ export default function SoundingChart({ data }) {
       ctx.fillText(`${t}${temperatureUnit}`, x, PAD.top + PLOT_H + 14);
     }
 
-    // Axis labels
     ctx.fillStyle = fg;
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'center';
@@ -127,7 +125,6 @@ export default function SoundingChart({ data }) {
       ctx.stroke();
     }
 
-    // Draw temperature line (red)
     ctx.beginPath();
     ctx.strokeStyle = isDark ? '#ff6b6b' : '#e63946';
     ctx.lineWidth = 2.5;
@@ -177,7 +174,6 @@ export default function SoundingChart({ data }) {
     ctx.textAlign = 'left';
     ctx.fillText(`Wind (${speedUnit})`, PAD.left + PLOT_W + 6, PAD.top - 8);
 
-    // Legend
     ctx.font = '10px system-ui, sans-serif';
     ctx.textAlign = 'left';
     const legendY = PAD.top - 18;

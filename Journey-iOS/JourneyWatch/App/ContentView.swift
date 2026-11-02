@@ -11,7 +11,6 @@ struct TravelData: Hashable {
     var elapsedTime: String
 }
 
-// Defines navigation items for the app
 enum NavigationItem: Hashable {
     case travelRecorded(TravelData)
 }
@@ -101,7 +100,6 @@ struct ContentView: View {
     }
 }
 
-// Manages the tab view displayed during recording
 struct RecordingTabs: View {
     @Binding var selectedTab: Int
     @ObservedObject var recorder: JourneyRecorder

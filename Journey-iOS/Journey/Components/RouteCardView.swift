@@ -17,7 +17,6 @@ struct RouteCardView: View {
 
     var body: some View {
         ZStack {
-            // Full-screen clean route map
             RouteCardMapView(
                 coordinates: routeCoordinates,
                 hasUserMovedMap: $hasUserMovedMap,
@@ -25,11 +24,9 @@ struct RouteCardView: View {
             )
             .ignoresSafeArea()
 
-            // Bottom branded overlay
             VStack(spacing: 0) {
                 Spacer()
 
-                // Gradient fade into bottom bar
                 LinearGradient(
                     colors: [.clear, .black.opacity(0.9)],
                     startPoint: .top,
@@ -37,7 +34,6 @@ struct RouteCardView: View {
                 )
                 .frame(height: 160)
 
-                // Branded info bar
                 VStack(spacing: 10) {
                     HStack(spacing: 10) {
                         Image("Logo")
@@ -72,7 +68,6 @@ struct RouteCardView: View {
                 .background(Color.black.opacity(0.85))
             }
 
-            // Close button
             VStack {
                 HStack {
                     Spacer()

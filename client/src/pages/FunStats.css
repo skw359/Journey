@@ -287,7 +287,6 @@
   color: var(--text-secondary);
 }
 
-/* US State Map */
 .us-map-container {
   position: relative;
   width: 100%;
@@ -750,7 +749,6 @@
   }
 }
 
-/* Cities backfill */
 .funstats-backfill {
   margin-top: 12px;
 }

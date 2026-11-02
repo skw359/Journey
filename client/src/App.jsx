@@ -146,7 +146,6 @@ export default function App() {
     }, PAGE_TRANSITION_MS);
   }, [location, displayLocation]);
 
-  // Auth gating - render without Header
   if (isLoading) {
     return (
       <div className="auth-loading">

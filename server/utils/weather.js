@@ -15,7 +15,7 @@ const log = require('../utils/logger').scope('weather');
 
 let _configCache = null;
 let _configCacheTime = 0;
-const CONFIG_CACHE_MS = 30_000; // refresh config from DB every 30s
+const CONFIG_CACHE_MS = 30_000;
 
 function normalizeHourlyTime(value) {
     if (typeof value !== 'string') return Number.NaN;

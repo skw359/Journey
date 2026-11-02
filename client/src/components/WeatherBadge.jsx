@@ -64,7 +64,6 @@ export default function WeatherBadge({ weather, startTime, lat, lon, overlay, ro
   );
   const panelRef = useRef(null);
 
-  // Reset sounding data when route changes
   useEffect(() => {
     setSoundingData(null);
     setSoundingError(null);
@@ -101,7 +100,7 @@ export default function WeatherBadge({ weather, startTime, lat, lon, overlay, ro
     if (!routeId || !startTime) return;
 
     setSoundingOpen(true);
-    if (soundingData) return; // already fetched
+    if (soundingData) return;
 
     setSoundingLoading(true);
     setSoundingError(null);
@@ -115,7 +114,6 @@ export default function WeatherBadge({ weather, startTime, lat, lon, overlay, ro
     }
   };
 
-  // Close on outside click
   useEffect(() => {
     if (!soundingOpen) return;
     const handler = (e) => {
