@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Tool handlers for Marco. One function per tool; every SQL statement in the
- * ask feature lives in this file, hand-written — the model never writes a
+ * Tool handlers for Marco. One function per tool; every query over journey data
+ * lives in this file, hand-written — the model never writes a
  * query. Each handler receives already-validated arguments (tools.js), already-
  * resolved periods (periods.js), and a `ctx`:
  *
@@ -13,6 +13,7 @@
  *     tz        IANA timezone for bucketing (e.g. 'America/New_York')
  *     units     'imperial' | 'metric'
  *     minMiles  MIN_ROUTE_MILES, so Marco counts the same journeys the UI shows
+ *     now       the pipeline's injectable clock, for "today"
  *   }
  *
  * Every handler returns { data, summary }. `summary` is a finished, unit-
@@ -872,11 +873,12 @@ function isStateQuery(raw) {
     return bare.length === 2 && US_STATE_ABBREVS.has(bare);
 }
 
+const STOP_WORDS = new Set(['the', 'a', 'an', 'of', 'at', 'in', 'on', 'and']);
+
 /**
  * Split a place query into significant words for word-level matching.
  * "Hyattsville Fire Department" -> ['hyattsville', 'fire', 'department'].
  */
-const STOP_WORDS = new Set(['the', 'a', 'an', 'of', 'at', 'in', 'on', 'and']);
 function placeWords(raw) {
     return String(raw || '')
         .toLowerCase()
@@ -1528,7 +1530,7 @@ const HANDLERS = {
  * @param {string} name       tool name (validated upstream)
  * @param {object} args       validated arguments
  * @param {object} periods    map of period-field -> resolved period
- * @param {object} ctx        { query, tz, units, minMiles }
+ * @param {object} ctx        { query, tz, units, minMiles, now }
  */
 async function runTool(name, args, periods, ctx) {
     const handler = HANDLERS[name];

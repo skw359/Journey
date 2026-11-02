@@ -26,7 +26,7 @@ final class GeocodingService {
 
     private func updateCity(_ location: CLLocation) {
         let now = Date()
-        // Throttle: max once per 30s or 500m moved
+        // Skip if the last lookup was under 30s ago and we've moved under 500m
         if let lastTime = lastCityLookupTime, now.timeIntervalSince(lastTime) < 30 {
             if let lastLoc = lastCityLookupLocation, location.distance(from: lastLoc) < 500 {
                 return

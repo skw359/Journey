@@ -877,8 +877,6 @@ extension JourneyRecorder: CLLocationManagerDelegate {
             self.currentSpeedMps = max(avgSpeed, 0)
         }
 
-        // Auto-start REMOVED — second_journey uses manual start via StartScreen button
-
         // DURING recording: write validated locations & evaluate STOP
         if isRecording {
             for loc in validatedLocations {

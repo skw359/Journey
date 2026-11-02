@@ -17,7 +17,6 @@
  *
  *   deps = {
  *     ollama: { chatToolSelect, chatAnswer, chatAnswerStream? },
- *     query(text, params),                      tenant-scoped executor
  *     url, model,                               Ollama endpoint config
  *     timeoutMs?                                per-round Ollama deadline (from
  *                                               settings; ollama.js defaults
@@ -104,9 +103,10 @@ function trimPassthrough(text) {
  *                                  resolve; empty/omitted = today's behaviour.
  * @param {string} input.timeZone   IANA zone for period resolution
  * @param {string} input.units      'imperial' | 'metric'
- * @param {object} input.ctx        { query, minMiles } — tenant-scoped executor
+ * @param {object} input.ctx        { query, tz, units, minMiles } — query is the
+ *                                  tenant-scoped executor; `now` is added here
  * @param {Date}   [input.now]      injectable clock for tests
- * @param {object} deps             { ollama, url, model, log? }
+ * @param {object} deps             { ollama, url, model, timeoutMs?, log?, onEvent?, signal? }
  *
  * @returns {{
  *   answer: string,
@@ -114,6 +114,7 @@ function trimPassthrough(text) {
  *   phrasing: 'model'|'fallback'|'passthrough'|'capability',
  *   tool: string|null, args: object|null,
  *   periods: Array<{field,token,start,end,label}>,
+ *   data?: object,    // the handler's data; only when a tool ran
  *   timing: { select_ms, sql_ms, answer_ms, total_ms },
  *   model: string,
  * }}
