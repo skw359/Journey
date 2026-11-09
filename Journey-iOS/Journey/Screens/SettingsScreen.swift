@@ -1,8 +1,11 @@
+// Settings screen.
+
 import SwiftUI
 
 struct SettingsScreen: View {
     @Environment(PairingManager.self) private var pairingManager
     @Environment(UploadManager.self) private var uploadManager
+    @Binding var showUploads: Bool
 
     @AppStorage(AppConstants.confirmBeforeStoppingKey) private var confirmBeforeStopping = true
     @AppStorage(AppConstants.autoSegmentKey) private var autoSegmentJourneys = false
@@ -12,6 +15,9 @@ struct SettingsScreen: View {
     @State private var showQRScanner = false
     @State private var showDisconnectAlert = false
     @State private var userProfile: APIService.Profile?
+    @State private var scrollPosition = ScrollPosition()
+
+    private static let uploadsSectionID = "uploads"
 
     var body: some View {
         ZStack {
@@ -21,21 +27,18 @@ struct SettingsScreen: View {
                 VStack(spacing: 24) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Settings")
-                            .font(.montserrat(size: 32, weight: .bold))
+                            .font(.montserrat(size: 28, weight: .heavy))
                             .foregroundColor(.white)
+                            .accessibilityAddTraits(.isHeader)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 8)
 
                     if let profile = userProfile {
                         ProfileHeaderView(profile: profile)
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Recording")
-                            .font(.montserrat(size: 13, weight: .semibold))
-                            .foregroundColor(AppConstants.secondaryText)
-                            .padding(.leading, 4)
+                        SettingsSectionHeader(title: "Recording")
 
                         SettingsSection {
                             SettingsToggle(
@@ -55,10 +58,7 @@ struct SettingsScreen: View {
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Units")
-                            .font(.montserrat(size: 13, weight: .semibold))
-                            .foregroundColor(AppConstants.secondaryText)
-                            .padding(.leading, 4)
+                        SettingsSectionHeader(title: "Units")
 
                         SettingsSection {
                             SettingsToggle(
@@ -71,48 +71,19 @@ struct SettingsScreen: View {
                         }
                     }
 
-                    // Server Pairing
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Server Pairing")
-                            .font(.montserrat(size: 13, weight: .semibold))
-                            .foregroundColor(AppConstants.secondaryText)
-                            .padding(.leading, 4)
+                        SettingsSectionHeader(title: "Server Pairing")
 
                         SettingsSection {
                             VStack(alignment: .leading, spacing: 16) {
-                                HStack(spacing: 12) {
-                                    Circle()
-                                        .fill(pairingManager.isServerReachable ? AppConstants.journeyGreen : .yellow)
-                                        .frame(width: 10, height: 10)
-                                        .overlay(Circle().stroke(.white.opacity(0.15), lineWidth: 0.5))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(pairingManager.isServerReachable ? "Connected" : "Not Connected")
-                                            .font(.montserrat(size: 16, weight: .semibold))
-                                            .foregroundColor(.white)
-                                        if pairingManager.isServerReachable, let url = pairingManager.serverURL {
-                                            Text(url)
-                                                .font(.montserrat(size: 12))
-                                                .foregroundColor(AppConstants.secondaryText)
-                                                .lineLimit(1)
-                                                .truncationMode(.middle)
-                                        }
-                                    }
-                                    Spacer()
+                                ViewThatFits(in: .horizontal) {
+                                    HStack(spacing: 8) { pairingStatus }
+                                    VStack(alignment: .leading, spacing: 8) { pairingStatus }
                                 }
 
-                                HStack(spacing: 10) {
-                                    PillButton(
-                                        icon: "qrcode",
-                                        label: "Re-pair",
-                                        tint: AppConstants.journeyGreen,
-                                        action: { showQRScanner = true }
-                                    )
-                                    PillButton(
-                                        icon: "xmark.circle",
-                                        label: "Disconnect",
-                                        tint: AppConstants.redAction,
-                                        action: { showDisconnectAlert = true }
-                                    )
+                                ViewThatFits(in: .horizontal) {
+                                    HStack(spacing: 10) { pairingButtons }
+                                    VStack(spacing: 10) { pairingButtons }
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -121,10 +92,7 @@ struct SettingsScreen: View {
 
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            Text("Uploads")
-                                .font(.montserrat(size: 13, weight: .semibold))
-                                .foregroundColor(AppConstants.secondaryText)
-                                .padding(.leading, 4)
+                            SettingsSectionHeader(title: "Uploads")
                             Spacer()
                             Menu {
                                 Button("Upload All") {
@@ -139,13 +107,11 @@ struct SettingsScreen: View {
                             } label: {
                                 Image(systemName: "ellipsis")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(AppConstants.secondaryText)
-                                    .frame(width: 28, height: 28)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .fill(AppConstants.darkCardBackground)
-                                    )
+                                    .foregroundColor(.white.opacity(0.7))
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Color.white.opacity(0.08)))
                             }
+                            .accessibilityLabel("Upload Actions")
                         }
 
                         if uploadManager.queue.isEmpty {
@@ -171,10 +137,20 @@ struct SettingsScreen: View {
                             }
                         }
                     }
+                    .id(Self.uploadsSectionID)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+                .scrollTargetLayout()
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
                 .padding(.bottom, 40)
+            }
+            .scrollPosition($scrollPosition)
+            .onChange(of: showUploads, initial: true) { _, show in
+                guard show else { return }
+                showUploads = false
+                withAnimation {
+                    scrollPosition.scrollTo(id: Self.uploadsSectionID, anchor: .top)
+                }
             }
         }
         .task {
@@ -199,6 +175,34 @@ struct SettingsScreen: View {
         } message: {
             Text("This will remove your server pairing. You'll need to scan a QR code again to reconnect.")
         }
+    }
+
+    @ViewBuilder
+    private var pairingStatus: some View {
+        StatusPill(status: pairingManager.isServerReachable ? .connected : .notConnected)
+        if pairingManager.isServerReachable, let url = pairingManager.serverURL {
+            Text(url)
+                .font(.montserrat(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.75))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
+
+    @ViewBuilder
+    private var pairingButtons: some View {
+        PillButton(
+            icon: "qrcode",
+            label: "Re-pair",
+            tint: AppConstants.journeyGreen,
+            action: { showQRScanner = true }
+        )
+        PillButton(
+            icon: "xmark.circle",
+            label: "Disconnect",
+            tint: AppConstants.redAction,
+            action: { showDisconnectAlert = true }
+        )
     }
 
     private func loadUserProfile() async {
@@ -231,9 +235,9 @@ struct ProfileHeaderView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(profile.fullName)
-                    .font(.montserrat(size: 20, weight: .semibold))
+                    .font(.montserrat(size: 20, weight: .heavy))
                     .foregroundColor(.white)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 if profile.username != profile.fullName {
                     Text("\(profile.username)")
                         .font(.montserrat(size: 13))
@@ -244,21 +248,7 @@ struct ProfileHeaderView: View {
             Spacer()
         }
         .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [AppConstants.darkCardBackground, AppConstants.darkCardBackground.opacity(0.75)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(AppConstants.darkCardBorder.opacity(0.5), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.35), radius: 14, x: 0, y: 6)
-        )
+        .background(SettingsCardBackground())
     }
 
     @ViewBuilder
@@ -290,11 +280,35 @@ struct ProfileHeaderView: View {
             Text(profile.initials)
                 .font(.montserrat(size: 22, weight: .semibold))
                 .foregroundColor(AppConstants.journeyGreen)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
         }
     }
 }
 
-// MARK: - Settings Components
+private struct SettingsSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.montserrat(size: 11, weight: .semibold))
+            .tracking(1.2)
+            .foregroundColor(.white.opacity(0.5))
+            .padding(.leading, 2)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+private struct SettingsCardBackground: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: JourneyCardView.cornerRadius, style: .continuous)
+            .fill(AppConstants.darkCardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: JourneyCardView.cornerRadius, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+    }
+}
 
 struct SettingsSection<Content: View>: View {
     @ViewBuilder let content: Content
@@ -303,21 +317,7 @@ struct SettingsSection<Content: View>: View {
             content
         }
         .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [AppConstants.darkCardBackground, AppConstants.darkCardBackground.opacity(0.75)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(AppConstants.darkCardBorder.opacity(0.5), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.35), radius: 14, x: 0, y: 6)
-        )
+        .background(SettingsCardBackground())
     }
 }
 
@@ -343,7 +343,7 @@ struct SettingsToggle: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(spacing: 14) {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(iconColor.opacity(0.15))
                 .frame(width: 32, height: 32)
@@ -358,11 +358,11 @@ struct SettingsToggle: View {
                     .foregroundColor(.white)
                 if let detail {
                     Text(detail)
-                        .font(.montserrat(size: 13))
+                        .font(.montserrat(size: 12))
                         .foregroundColor(AppConstants.secondaryText)
                 }
             }
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
             Toggle("", isOn: $isOn)
                 .labelsHidden()
                 .tint(AppConstants.journeyGreen)
@@ -390,17 +390,15 @@ private struct PillButton: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.system(size: 13, weight: .semibold))
-                Text(label).font(.montserrat(size: 14, weight: .semibold))
+                Text(label)
+                    .font(.montserrat(size: 14, weight: .semibold))
+                    .lineLimit(1)
             }
             .foregroundColor(tint)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(
-                Capsule().fill(tint.opacity(0.15))
-            )
-            .overlay(
-                Capsule().stroke(tint.opacity(0.3), lineWidth: 0.5)
-            )
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.horizontal, 12)
+            .background(Capsule().fill(Color.white.opacity(0.08)))
+            .contentShape(.capsule)
         }
         .buttonStyle(.plain)
     }
@@ -437,7 +435,6 @@ struct UploadQueueRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            // Status icon in circle
             Group {
                 switch item.status {
                 case .complete:

@@ -1,4 +1,13 @@
+// Root tab view of the app.
+
 import SwiftUI
+
+private enum AppTab: Hashable {
+    case record
+    case journeys
+    case settings
+    case search
+}
 
 struct ContentView: View {
     private enum RootScreen {
@@ -7,11 +16,16 @@ struct ContentView: View {
     }
 
     @Environment(PairingManager.self) private var pairingManager
-    @State private var selectedTab = 0
+    @Environment(LocationService.self) private var locationService
+    @State private var selectedTab = AppTab.record
     @State private var currentRoot: RootScreen = ServerPairing.stored == nil ? .welcome : .home
     @State private var rootOpacity = 1.0
     @State private var rootTransitionTask: Task<Void, Never>?
     @State private var isLocked = false
+    @State private var library = JourneyLibrary()
+    @State private var searchText = ""
+    @State private var journeyToReveal: Date?
+    @State private var showUploads = false
 
     private let welcomeFadeDuration = 0.25
     private let homeFadeDuration = 0.5
@@ -29,6 +43,13 @@ struct ContentView: View {
         .onChange(of: pairingManager.isPaired) { _, isPaired in
             handlePairingChange(isPaired)
         }
+        .onChange(of: pairingManager.serverURL) {
+            library = JourneyLibrary()
+            searchText = ""
+        }
+        .task(id: pairingManager.serverURL) {
+            library.detailStore.resumeInterruptedUploads()
+        }
         .onDisappear {
             rootTransitionTask?.cancel()
         }
@@ -45,22 +66,41 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
     private var homeRoot: some View {
-        VStack(spacing: 0) {
-            Group {
-                switch selectedTab {
-                case 0:
-                    HomeScreen(isLocked: $isLocked)
-                case 1:
-                    JourneysScreen()
-                default:
-                    SettingsScreen()
-                }
+        TabView(selection: $selectedTab) {
+            Tab("Record", systemImage: "record.circle.fill", value: AppTab.record) {
+                HomeScreen(
+                    isLocked: $isLocked,
+                    isActive: selectedTab == .record,
+                    onViewJourney: { startedAt in
+                        journeyToReveal = startedAt
+                        selectedTab = .journeys
+                    },
+                    onViewUploads: {
+                        showUploads = true
+                        selectedTab = .settings
+                    }
+                )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            CustomTabBar(selectedTab: $selectedTab)
+            Tab("Journeys", systemImage: "point.bottomleft.forward.to.point.topright.scurvepath.fill", value: AppTab.journeys) {
+                JourneysScreen(title: "Journeys", library: library, journeyToReveal: $journeyToReveal)
+            }
+
+            Tab("Settings", systemImage: "gearshape.fill", value: AppTab.settings) {
+                SettingsScreen(showUploads: $showUploads)
+            }
+
+            Tab(value: AppTab.search, role: .search) {
+                JourneysScreen(title: "Search", library: library, searchText: $searchText)
+            }
+        }
+        .tint(AppConstants.journeyGreen)
+        .tabViewSearchActivation(.searchTabSelection)
+        .tabViewBottomAccessory(isEnabled: locationService.isRecording && selectedTab != .record) {
+            RecordingAccessory {
+                selectedTab = .record
+            }
         }
     }
 
@@ -81,7 +121,7 @@ struct ContentView: View {
                 try? await Task.sleep(nanoseconds: secondsToNanoseconds(welcomeFadeDuration))
                 guard !Task.isCancelled else { return }
 
-                selectedTab = 0
+                selectedTab = .record
                 currentRoot = .home
                 rootOpacity = 0
 
@@ -90,7 +130,7 @@ struct ContentView: View {
                 }
             }
         } else {
-            selectedTab = 0
+            selectedTab = .record
             currentRoot = .welcome
             rootOpacity = 1
         }

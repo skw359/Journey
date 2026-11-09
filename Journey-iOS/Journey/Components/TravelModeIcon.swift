@@ -1,3 +1,5 @@
+// Icon for a journey's travel mode.
+
 import SwiftUI
 
 struct TravelModeIcon: View {

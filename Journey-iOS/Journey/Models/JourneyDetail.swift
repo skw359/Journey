@@ -1,3 +1,5 @@
+// Full journey data decoded from the server.
+
 import Foundation
 import CoreLocation
 
@@ -23,27 +25,21 @@ struct JourneyDetail: Codable {
     let watchRecorded: Bool?
     let profileTimeMs: [Double]?
     let profileDistMi: [Double]?
-    let profileElevM: [Double]?
+    let profileElevM: [Double?]?
     let profileSpeedMph: [Double]?
     let travelMode: String?
     let waypoints: [JourneyWaypoint]?
-    /// The journey's photos and videos, in upload order (the order the server returns).
-    /// Variable so uploads and deletes can update a loaded journey without refetching it.
     var photos: [JourneyPhoto]?
     let weather: JourneyWeather?
 
-    /// Photos and videos the server has finished converting, in upload order.
     var viewableMedia: [JourneyPhoto] {
         (photos ?? []).filter { $0.isViewable }
     }
 
-    /// Images that represent the viewable media: each photo, or a converted video's poster.
     var previewFilenames: [String] {
         viewableMedia.compactMap(\.previewFilename)
     }
 
-    /// Matches the server's journey cover (`coverPhoto` in the journey list): the first item
-    /// in upload order that has a preview image.
     var coverFilename: String? {
         previewFilenames.first
     }
@@ -96,10 +92,6 @@ struct JourneyWaypoint: Codable {
     let label: String?
 }
 
-/// A photo or video on a journey. The server keeps both in a journey's `photos`, telling them
-/// apart by `kind`. HEIC photos and videos are stored as uploaded with `status` "processing",
-/// then converted in the background (HEIC to JPEG, video to an H.264 MP4 with a poster
-/// image), which gives them a new `filename` and the status "ready", or "failed".
 struct JourneyPhoto: Codable, Equatable {
     let id: String
     let filename: String?
@@ -107,11 +99,8 @@ struct JourneyPhoto: Codable, Equatable {
     let mimetype: String?
     let size: Int?
     let uploadedAt: String?
-    /// "photo" or "video". Missing from servers that predate videos.
     let kind: String?
-    /// "processing", "ready" or "failed". Missing from servers that predate conversion.
     let status: String?
-    /// Videos only: a JPEG frame from the converted video.
     let posterFilename: String?
     let durationMs: Int?
     let width: Int?
@@ -121,19 +110,15 @@ struct JourneyPhoto: Codable, Equatable {
     var isProcessing: Bool { status == "processing" }
     var isFailed: Bool { status == "failed" }
 
-    /// Converted and ready to show. Items still converting, or that couldn't be, can't be opened.
     var isViewable: Bool {
         (status ?? "ready") == "ready" && !(filename ?? "").isEmpty
     }
 
-    /// The image that represents this item in previews: the photo itself, or a converted
-    /// video's poster.
     var previewFilename: String? {
         guard isViewable else { return nil }
         return isVideo ? posterFilename : filename
     }
 
-    /// e.g. "0:42" or "1:02:05"
     var durationText: String? {
         guard let durationMs, durationMs > 0 else { return nil }
         let total = Int((Double(durationMs) / 1000).rounded())
@@ -145,7 +130,6 @@ struct JourneyPhoto: Codable, Equatable {
             : String(format: "%d:%02d", minutes, seconds)
     }
 
-    /// "3 photos", "1 video", "3 photos and 1 video", as the web app describes media.
     static func describeCounts(photos: Int, videos: Int) -> String {
         var parts: [String] = []
         if photos > 0 || videos == 0 { parts.append("\(photos) photo\(photos == 1 ? "" : "s")") }

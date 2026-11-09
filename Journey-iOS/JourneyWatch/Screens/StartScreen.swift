@@ -1,106 +1,85 @@
+// Idle screen with the start button, GPS status and settings.
+
 import SwiftUI
 
 struct StartScreen: View {
-    @Binding var showSettings: Bool
-    @Binding var obtainedGPS: Bool
-    @ObservedObject var recorder: JourneyRecorder
-    var startRecording: () -> Void
-    @State private var showIndoorExplanation = false
+    let recorder: JourneyRecorder
+    @State private var showsSettings = false
+    @State private var showsIndoorInfo = false
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
-                VStack {
-                    Button(action: startRecording) {
-                        HStack(alignment: .center, spacing: 10) {
-                            Image("recordsymbol")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: geometry.size.width > 176 ? 30 : 20,
-                                       height: geometry.size.width > 176 ? 30 : 20)
-                                .foregroundColor(obtainedGPS ? Color(hex: "#00ff81") : Color.gray)
-                            if geometry.size.width > 176 {
-                                Text(obtainedGPS ? "Record Journey" : "Searching GPS")
-                                    .fontWeight(.bold)
-                                    .foregroundColor(obtainedGPS ? .white : Color.gray)
-                            } else {
-                                Text(obtainedGPS ? "Record" : "Searching")
-                                    .fontWeight(.bold)
-                                    .foregroundColor(obtainedGPS ? .white : Color.gray)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(obtainedGPS ? Color(hex: "#0c3617") : Color(hex: "#222223"))
-                        .cornerRadius(15)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .disabled(!obtainedGPS)
-                    .overlay(
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Spacer()
-                                Image(systemName: "info.circle")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(Color(hex: "#2cdbae"))
-                                Text("Don't use indoors.")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color.white)
-                                    .padding()
-                                Spacer()
-                            }
-                            .background(geometry.size.width > 176 ? Color(hex: "#000000") : Color.clear)
-                            .cornerRadius(100)
-                            .frame(width: 180)
-                            .offset(y: 80)
-                            .onTapGesture {
-                                showIndoorExplanation = true
-                            }
-                            Spacer()
-                        }
-                    )
-                }
-                Button(action: {
-                    showSettings = true
-                }) {
-                    Image(systemName: "gear")
-                        .font(.title)
-                        .foregroundColor(.white)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .offset(x: 10, y: -90)
+        VStack(spacing: 0) {
+            Button { showsSettings = true } label: {
+                Image(systemName: "gear").font(.title2)
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
+
+            Button(action: recorder.start) {
+                HStack(spacing: 8) {
+                    Image(systemName: "circle.fill")
+                        .foregroundStyle(recorder.hasFix ? Theme.accent : Theme.dim)
+                    ViewThatFits(in: .horizontal) {
+                        Text(recorder.hasFix ? "Record Journey" : "Searching GPS")
+                        Text(recorder.hasFix ? "Record" : "Searching")
+                    }
+                    .foregroundStyle(recorder.hasFix ? .white : Theme.dim)
+                }
+            }
+            .buttonStyle(.wide(recorder.hasFix ? Theme.primaryButton : Theme.secondaryButton))
+            .disabled(!recorder.hasFix)
+
+            Spacer(minLength: 0)
+
+            Button { showsIndoorInfo = true } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "info.circle").foregroundStyle(Theme.caption)
+                    Text("Don't use indoors.")
+                }
+                .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
         }
-        .sheet(isPresented: $showIndoorExplanation) {
-            IndoorExplanation()
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 36)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showsSettings) { SettingsSheet() }
+        .sheet(isPresented: $showsIndoorInfo) {
+            InfoSheet(title: "Why can't Journey be used indoors?", paragraphs: [
+                "Journey relies on satellite signals to accurately track your location and movements. When indoors, these signals can be significantly weakened or blocked by buildings and other structures, leading to inaccurate or no location data.",
+                "For the best experience and most accurate tracking:",
+                "• Use the app outdoors.",
+                "• Avoid areas with tall buildings or dense tree cover",
+                "• Allow a few moments for GPS signal acquisition",
+                "Using the app indoors may result in incomplete or inaccurate data."
+            ]) { EmptyView() }
         }
     }
 }
 
-struct IndoorExplanation: View {
+private struct SettingsSheet: View {
+    @AppStorage("usePreciseUnits") private var usePreciseUnits = false
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Why can't Journey be used indoors?")
-                    .font(.headline)
-                    .padding(.bottom)
-                    .bold()
-
-                Text("Journey relies on satellite signals to accurately track your location and movements. When indoors, these signals can be significantly weakened or blocked by buildings and other structures, leading to inaccurate or no location data.")
-
-                Text("For the best experience and most accurate tracking:")
-                    .padding(.top)
-
-                Text("• Use the app outdoors.")
-                Text("• Avoid areas with tall buildings or dense tree cover")
-                Text("• Allow a few moments for GPS signal acquisition")
-
-                Text("Using the app indoors may result in incomplete or inaccurate data.")
-                    .padding(.top)
+            VStack(spacing: 10) {
+                Text("Settings").font(.headline)
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("Use Precise Units", isOn: $usePreciseUnits)
+                        .toggleStyle(.switch)
+                    Text("Display values with two decimal places.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.dim)
+                }
+                .padding(10)
+                .background(Color(hex: 0x1C1C1E), in: .rect(cornerRadius: 12))
             }
-            .padding()
+            .padding(.horizontal, 8)
         }
     }
 }

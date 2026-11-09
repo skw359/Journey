@@ -1,3 +1,5 @@
+// Starts, updates and ends the recording Live Activity.
+
 import ActivityKit
 import Foundation
 

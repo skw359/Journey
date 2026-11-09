@@ -1,3 +1,5 @@
+// Color helpers.
+
 import SwiftUI
 
 extension Color {

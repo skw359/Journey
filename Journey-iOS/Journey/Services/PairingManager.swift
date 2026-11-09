@@ -1,3 +1,5 @@
+// Pairs with a server from a QR code and checks that it is reachable.
+
 import Foundation
 import SwiftUI
 
@@ -22,7 +24,6 @@ final class PairingManager {
         }
     }
 
-    /// Parses a QR code string in format: journey://pair?server=X&token=Y
     func parseQRCode(_ string: String) -> (server: String, token: String)? {
         guard let components = URLComponents(string: string),
               components.scheme == "journey",
@@ -37,7 +38,6 @@ final class PairingManager {
         return (server: server, token: token)
     }
 
-    /// Pairs with a server by storing credentials and validating the connection
     func pair(serverURL: String, token: String) async -> Bool {
         let pairing = ServerPairing(serverURL: serverURL, bearerToken: token)
         pairing.save()
@@ -48,7 +48,6 @@ final class PairingManager {
             self.isServerReachable = false
         }
 
-        // Validate connection
         let reachable = await pingServer(baseURL: pairing.baseURL, token: token)
 
         await MainActor.run {

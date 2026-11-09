@@ -1,7 +1,8 @@
+// Formats durations for display.
+
 import Foundation
 
 enum DurationFormatter {
-    /// Formats seconds into display string: "0:00", "0:59", "1:00", "59:59", "1:00:00"
     static func format(_ totalSeconds: Int) -> String {
         let clampedSeconds = max(0, totalSeconds)
         let hours = clampedSeconds / 3600
@@ -13,14 +14,12 @@ enum DurationFormatter {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    /// Formats seconds into "0h 8m" style for journey list
     static func formatCompact(_ totalSeconds: Int) -> String {
         let hours = totalSeconds / 3600
         let minutes = (totalSeconds % 3600) / 60
         return "\(hours)h \(minutes)m"
     }
 
-    /// Formats a "0h 22m" style duration as "22 min" or "1 hr 5 min"
     static func formatReadable(compact duration: String?) -> String {
         guard let duration else { return "\u{2014}" }
         let seconds = parseCompact(duration)
@@ -32,7 +31,6 @@ enum DurationFormatter {
         return "\(minutes) min"
     }
 
-    /// Parses duration string like "0h 22m" into total seconds
     static func parseCompact(_ duration: String) -> Int {
         var hours = 0
         var minutes = 0

@@ -1,7 +1,7 @@
+// Journey card for the journeys list.
+
 import SwiftUI
 
-/// Photo-first journey card for the journeys list: a miniature of the story page's hero,
-/// so tapping it zooms naturally into the full-screen view.
 struct JourneyCardView: View {
     static let height: CGFloat = 240
     static let cornerRadius: CGFloat = 24
@@ -13,8 +13,6 @@ struct JourneyCardView: View {
 
     private var detail: JourneyDetail? { store.detail(journey.id) }
 
-    /// The first converted photo or video poster. The list's own cover shows until the journey
-    /// loads, which then keeps up with uploads and deletes made since the list was fetched.
     private var coverPhoto: String? {
         if let detail { return detail.coverFilename }
         return journey.coverPhoto
@@ -47,7 +45,6 @@ struct JourneyCardView: View {
         .task(id: store.generation) {
             await store.load(journey.id)
         }
-        // A new cover, e.g. after the first photo is uploaded or the old one deleted
         .onChange(of: coverPhoto) {
             photoFailed = false
         }
@@ -66,7 +63,6 @@ struct JourneyCardView: View {
                 JourneyRouteSnapshotView(
                     journeyID: journey.id,
                     coordinates: detail.routeCoordinates,
-                    // Keep the route clear of the caption
                     insets: UIEdgeInsets(top: 22, left: 28, bottom: Self.height * 0.54, right: 28)
                 )
             }
@@ -100,7 +96,6 @@ struct JourneyCardView: View {
     }
 }
 
-/// Gentle press-down feedback for tappable cards.
 struct JourneyCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

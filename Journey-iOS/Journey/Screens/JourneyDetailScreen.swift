@@ -1,13 +1,11 @@
+// Journey detail screen with its story pages, photos and charts.
+
 import SwiftUI
 import MapKit
 import PhotosUI
 import AVKit
 import Combine
 
-// MARK: - Journey Story Pager
-
-/// Full-screen, photography-first journey pages. Swipe sideways between journeys and
-/// scroll down on a page for its stats, charts and photos.
 struct JourneyDetailScreen: View {
     let journeys: [JourneySummary]
     let store: JourneyDetailStore
@@ -22,8 +20,8 @@ struct JourneyDetailScreen: View {
     @State private var showRouteCard = false
     @State private var showPhotoPicker = false
     @State private var pickedPhotos: [PhotosPickerItem] = []
-    /// The journey the photo picker was opened for.
     @State private var photoPickerJourneyID: String?
+    @State private var mapIsRevealed = false
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -48,6 +46,38 @@ struct JourneyDetailScreen: View {
         store.detail(selectedID)
     }
 
+    private var fullscreenMapDetail: JourneyDetail? {
+        showFullscreenMap ? selectedDetail : nil
+    }
+
+    private static let mapFade = Animation.easeInOut(duration: 0.35)
+
+    private func openFullscreenMap() {
+        mapIsRevealed = false
+        withAnimation(Self.mapFade) { showFullscreenMap = true }
+    }
+
+    private func revealFullscreenMap() {
+        guard !mapIsRevealed else { return }
+        withAnimation(Self.mapFade) { mapIsRevealed = true }
+    }
+
+    private func heroMapRect(for detail: JourneyDetail, in proxy: GeometryProxy) -> MKMapRect? {
+        guard detail.previewFilenames.isEmpty,
+              (scrollState.offsets[selectedID] ?? 0) == 0,
+              detail.routeCoordinates.count >= 2 else { return nil }
+        let safeArea = proxy.safeAreaInsets
+        let pageSize = CGSize(
+            width: proxy.size.width + safeArea.leading + safeArea.trailing,
+            height: proxy.size.height + safeArea.top + safeArea.bottom
+        )
+        return RouteSnapshotCache.mapRect(
+            fitting: detail.routeCoordinates,
+            in: pageSize,
+            insets: JourneyStoryPage.heroRouteInsets(pageHeight: pageSize.height, safeArea: safeArea)
+        )
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let safeArea = proxy.safeAreaInsets
@@ -63,7 +93,8 @@ struct JourneyDetailScreen: View {
                             scrollState: scrollState,
                             isActive: journey.id == selectedID,
                             safeArea: safeArea,
-                            onOpenMap: { showFullscreenMap = true },
+                            mapIsOpen: showFullscreenMap && journey.id == selectedID,
+                            onOpenMap: { openFullscreenMap() },
                             onOpenRouteCard: { showRouteCard = true },
                             onAddPhotos: { addPhotos(to: journey.id) }
                         )
@@ -88,11 +119,36 @@ struct JourneyDetailScreen: View {
                         showRenameAlert = true
                     },
                     onAddPhotos: { addPhotos(to: selectedID) },
-                    onOpenMap: { showFullscreenMap = true },
+                    onOpenMap: { openFullscreenMap() },
                     onOpenRouteCard: { showRouteCard = true }
                 )
+                .opacity(showFullscreenMap ? 0 : 1)
             }
             .ignoresSafeArea()
+            .accessibilityHidden(fullscreenMapDetail != nil)
+
+            if let detail = fullscreenMapDetail {
+                let heroRect = heroMapRect(for: detail, in: proxy)
+
+                FullscreenMapScreen(
+                    coordinates: detail.routeCoordinates,
+                    userLocation: nil,
+                    pointCount: detail.coordinates?.count ?? 0,
+                    distanceMiles: detail.distanceDouble,
+                    initialCameraMode: .overview,
+                    initialMapRect: heroRect,
+                    showsEndMarker: true,
+                    onMapRendered: revealFullscreenMap,
+                    onClose: { withAnimation(Self.mapFade) { showFullscreenMap = false } }
+                )
+                .opacity(heroRect != nil || mapIsRevealed ? 1 : 0.01)
+                .transition(.opacity)
+                .task {
+                    try? await Task.sleep(for: .seconds(1.2))
+                    guard !Task.isCancelled else { return }
+                    revealFullscreenMap()
+                }
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .alert("Rename Journey", isPresented: $showRenameAlert) {
@@ -100,24 +156,12 @@ struct JourneyDetailScreen: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { rename(selectedID, to: newName) }
         }
-        .fullScreenCover(isPresented: $showFullscreenMap) {
-            if let detail = selectedDetail {
-                FullscreenMapScreen(
-                    coordinates: detail.routeCoordinates,
-                    userLocation: nil,
-                    pointCount: detail.coordinates?.count ?? 0,
-                    distanceMiles: detail.distanceDouble,
-                    initialCameraMode: .overview
-                )
-            }
-        }
+        .interactiveDismissDisabled(fullscreenMapDetail != nil)
         .fullScreenCover(isPresented: $showRouteCard) {
             if let detail = selectedDetail {
                 RouteCardView(detail: detail)
             }
         }
-        // The server takes JPEG, HEIC and video as they are, converting HEIC and video
-        // itself; other image formats are converted before upload
         .photosPicker(
             isPresented: $showPhotoPicker,
             selection: $pickedPhotos,
@@ -130,7 +174,6 @@ struct JourneyDetailScreen: View {
             if let id = photoPickerJourneyID {
                 store.uploadMedia(items, to: id)
             }
-            // Each pick starts with nothing selected
             pickedPhotos = []
         }
         .alert(
@@ -172,7 +215,6 @@ struct JourneyDetailScreen: View {
         }
     }
 
-    /// Loads the visible journey first, then its neighbours so swipes land on a ready page.
     private func prefetchAroundSelection() async {
         let index = selectedIndex
         await store.load(selectedID)
@@ -183,49 +225,46 @@ struct JourneyDetailScreen: View {
     }
 }
 
-// MARK: - Shared State
-
-/// Journey details shared by the list cards and the story pages, so each journey is
-/// fetched once and opening one from the list is instant.
 @Observable
 final class JourneyDetailStore {
-    /// Bumped by `markAllStale()`; views key their load tasks on it so visible ones refetch.
     private(set) var generation = 0
-    /// One observable entry per journey, so a load only re-renders the views showing that
-    /// journey rather than every card and page.
     @ObservationIgnored private var entries: [String: Entry] = [:]
     @ObservationIgnored private var loadedGeneration: [String: Int] = [:]
     @ObservationIgnored private var inFlight: [String: Task<Void, Never>] = [:]
-    /// Journeys whose media is being polled while the server converts it.
     @ObservationIgnored private var mediaPolls: [String: Task<Void, Never>] = [:]
 
     @Observable
     final class Entry {
         fileprivate(set) var detail: JourneyDetail?
         fileprivate(set) var loadFailed = false
-        /// Photos and videos picked for this journey that haven't finished uploading, oldest first.
         fileprivate(set) var pendingUploads: [PendingUpload] = []
-        /// Previews of items uploaded from this device that the server is still converting,
-        /// by media id, so their tiles keep showing the picture.
         fileprivate(set) var localPreviews: [String: UIImage] = [:]
         fileprivate(set) var uploadError: String?
-        /// Bumped whenever this device adds or deletes media, so a poll that was in flight
-        /// meanwhile doesn't put back a deleted item or drop a new one.
         @ObservationIgnored fileprivate var mediaRevision = 0
     }
 
-    /// A photo or video on its way to the server, shown in place until it's added to the journey.
     @Observable
     final class PendingUpload: Identifiable {
         let id = UUID()
         let isVideo: Bool
         fileprivate(set) var preview: UIImage?
-        /// Share of the file sent, once sending has started.
         fileprivate(set) var progress: Double?
+        @ObservationIgnored fileprivate var work: Task<[String], Error>?
+        @ObservationIgnored fileprivate var isCancelled = false
 
         init(isVideo: Bool) {
             self.isVideo = isVideo
         }
+
+        func cancel() {
+            isCancelled = true
+            work?.cancel()
+        }
+    }
+
+    private enum UploadSource {
+        case picked(PhotosPickerItem)
+        case resumed(ChunkedUploadJob)
     }
 
     func detail(_ id: String) -> JourneyDetail? { entry(id).detail }
@@ -236,7 +275,6 @@ final class JourneyDetailStore {
 
     func localPreviews(_ id: String) -> [String: UIImage] { entry(id).localPreviews }
 
-    /// e.g. "2 photos and 1 video", while uploads to the journey are in progress.
     func uploadingLabel(_ id: String) -> String? {
         let pending = entry(id).pendingUploads
         guard !pending.isEmpty else { return nil }
@@ -255,8 +293,6 @@ final class JourneyDetailStore {
         return entry
     }
 
-    /// Fetches run in unstructured tasks so a cancelled caller (e.g. a fast swipe)
-    /// doesn't abort a load another view is waiting on.
     func load(_ id: String, force: Bool = false) async {
         if let pending = inFlight[id] {
             await pending.value
@@ -274,7 +310,6 @@ final class JourneyDetailStore {
                 if entry.mediaRevision == revision {
                     settleMedia(from: entry.detail?.photos ?? [], to: detail.photos ?? [], in: entry)
                 } else {
-                    // Media added or deleted here while this was loading is newer
                     detail.photos = entry.detail?.photos
                 }
                 entry.detail = detail
@@ -289,56 +324,42 @@ final class JourneyDetailStore {
         await task.value
     }
 
-    /// Refetches each journey the next time it's shown (e.g. after pull-to-refresh),
-    /// keeping the old details on screen until the new ones arrive.
     func markAllStale() {
         generation += 1
     }
 
-    // MARK: Photos and Videos
-
-    /// Uploads photos and videos picked for a journey one at a time, adding each to the
-    /// journey as the server accepts it so its pages and card update as they go. One request
-    /// per item gives each its own progress and lets one failure leave the rest in place.
-    /// HEIC photos and videos come back "processing" and are swapped in once converted.
     func uploadMedia(_ items: [PhotosPickerItem], to id: String) {
         guard !items.isEmpty else { return }
-        let entry = entry(id)
+        let sources = items.map { UploadSource.picked($0) }
         let pending = items.map { PendingUpload(isVideo: MediaUploadEncoder.isVideo($0)) }
+        runUploads(sources, pending, to: id)
+    }
+
+    func resumeInterruptedUploads() {
+        let jobs = VideoUploadQueue.shared.claimInterrupted()
+        for (id, journeyJobs) in Dictionary(grouping: jobs, by: \.journeyID) {
+            runUploads(journeyJobs.map(UploadSource.resumed), journeyJobs.map { _ in PendingUpload(isVideo: true) }, to: id)
+        }
+    }
+
+    private func runUploads(_ sources: [UploadSource], _ pending: [PendingUpload], to id: String) {
+        let entry = entry(id)
         entry.pendingUploads.append(contentsOf: pending)
         entry.uploadError = nil
 
         Task {
-            // Gives the uploads time to finish if the app is sent to the background
-            let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Upload journey media")
-            defer { UIApplication.shared.endBackgroundTask(backgroundTask) }
+            UploadBackgroundTime.shared.begin()
+            defer { UploadBackgroundTime.shared.end() }
 
             var problems: [String] = []
-            for (item, placeholder) in zip(items, pending) {
+            for (source, placeholder) in zip(sources, pending) {
+                let work = Task { try await send(source, placeholder, to: id, entry: entry) }
+                placeholder.work = work
+                if placeholder.isCancelled { work.cancel() }
                 do {
-                    let prepared = try await MediaUploadEncoder.prepare(item)
-                    defer { prepared.discard() }
-                    placeholder.preview = prepared.preview
-                    let result = try await APIService.shared.uploadMedia([prepared.file], toJourney: id) { sent in
-                        Task { @MainActor in
-                            // Each percent is plenty; the delegate reports far more often
-                            if sent >= 1 || sent - (placeholder.progress ?? 0) >= 0.01 {
-                                placeholder.progress = sent
-                            }
-                        }
-                    }
-                    for uploaded in result.photos {
-                        // A HEIC photo's original moves to its JPEG filename once converted
-                        if let data = prepared.photoData, let filename = uploaded.filename {
-                            JourneyPhotoCache.shared.insertOriginal(data, for: filename)
-                        }
-                        if uploaded.isProcessing {
-                            entry.localPreviews[uploaded.id] = prepared.preview
-                        }
-                    }
-                    problems += (result.skipped ?? []).map(\.reason)
-                    add(result.photos, to: entry)
-                    watchProcessingMedia(id)
+                    problems += try await work.value
+                } catch is CancellationError {
+                } catch let error as URLError where error.code == .cancelled {
                 } catch {
                     print("Failed to upload media: \(error)")
                     problems.append(error.localizedDescription)
@@ -349,11 +370,72 @@ final class JourneyDetailStore {
             if let reason = problems.first {
                 let videos = pending.filter(\.isVideo).count
                 let noun = videos == 0 ? "photos" : videos == pending.count ? "videos" : "items"
-                entry.uploadError = items.count == 1
+                entry.uploadError = pending.count == 1
                     ? reason
-                    : "\(problems.count) of \(items.count) \(noun) couldn't be uploaded. \(reason)"
+                    : "\(problems.count) of \(pending.count) \(noun) couldn't be uploaded. \(reason)"
             }
         }
+    }
+
+    private func send(
+        _ source: UploadSource,
+        _ placeholder: PendingUpload,
+        to id: String,
+        entry: Entry
+    ) async throws -> [String] {
+        let queue = VideoUploadQueue.shared
+        let onProgress: @MainActor (Double) -> Void = { placeholder.progress = $0 }
+
+        switch source {
+        case .resumed(let job):
+            placeholder.preview = await MediaUploadEncoder.videoPreview(queue.fileURL(for: job))
+            let result = try await queue.upload(job, onProgress: onProgress)
+            return add(result, preview: placeholder.preview, photoData: nil, to: entry, id: id)
+
+        case .picked(let item):
+            let prepared = try await MediaUploadEncoder.prepare(item)
+            placeholder.preview = prepared.preview
+            switch prepared.contents {
+            case .video(let video):
+                if Task.isCancelled {
+                    video.discard()
+                    throw CancellationError()
+                }
+                guard let job = try await queue.enqueue(video, journeyID: id) else { return [] }
+                let result = try await queue.upload(job, onProgress: onProgress)
+                return add(result, preview: prepared.preview, photoData: nil, to: entry, id: id)
+
+            case .photo(let file):
+                let result = try await APIService.shared.uploadMedia([file], toJourney: id) { sent in
+                    Task { @MainActor in
+                        if sent >= 1 || sent - (placeholder.progress ?? 0) >= 0.01 {
+                            placeholder.progress = sent
+                        }
+                    }
+                }
+                return add(result, preview: prepared.preview, photoData: file.data, to: entry, id: id)
+            }
+        }
+    }
+
+    private func add(
+        _ result: APIService.MediaUploadResult,
+        preview: UIImage?,
+        photoData: Data?,
+        to entry: Entry,
+        id: String
+    ) -> [String] {
+        for uploaded in result.photos {
+            if let photoData, let filename = uploaded.filename {
+                JourneyPhotoCache.shared.insertOriginal(photoData, for: filename)
+            }
+            if uploaded.isProcessing {
+                entry.localPreviews[uploaded.id] = preview
+            }
+        }
+        add(result.photos, to: entry)
+        watchProcessingMedia(id)
+        return (result.skipped ?? []).map(\.reason)
     }
 
     func deleteMedia(_ item: JourneyPhoto, from id: String) async throws {
@@ -364,10 +446,6 @@ final class JourneyDetailStore {
         entry.localPreviews[item.id] = nil
     }
 
-    /// Polls a journey's media while the server converts uploads (HEIC to JPEG, video to
-    /// MP4), swapping each in as it's ready, as the web app does. Photos take seconds and
-    /// videos minutes, so photos are checked more often. One poll per journey at a time, until
-    /// nothing is left converting; calling this while one runs does nothing.
     func watchProcessingMedia(_ id: String) {
         guard mediaPolls[id] == nil else { return }
         let entry = entry(id)
@@ -386,7 +464,6 @@ final class JourneyDetailStore {
         }
     }
 
-    /// Adds items the server just stored, unless a poll already brought them in.
     private func add(_ uploaded: [JourneyPhoto], to entry: Entry) {
         let existing = entry.detail?.photos ?? []
         entry.mediaRevision += 1
@@ -395,7 +472,6 @@ final class JourneyDetailStore {
         }
     }
 
-    /// Puts a polled media list in place.
     private func apply(_ media: [JourneyPhoto], to entry: Entry) {
         let previous = entry.detail?.photos ?? []
         guard media != previous else { return }
@@ -403,8 +479,6 @@ final class JourneyDetailStore {
         entry.detail?.photos = media
     }
 
-    /// Tidies up after items that finished converting between two media lists, and calls out
-    /// any that couldn't be converted.
     private func settleMedia(from previous: [JourneyPhoto], to media: [JourneyPhoto], in entry: Entry) {
         var failedPhotos = 0
         var failedVideos = 0
@@ -418,7 +492,6 @@ final class JourneyDetailStore {
             }
         }
 
-        // Converted items just appear; only failures are called out, as on the web
         var messages: [String] = []
         if failedVideos > 0 {
             messages.append(failedVideos == 1 ? "A video couldn't be converted." : "\(failedVideos) videos couldn't be converted.")
@@ -432,14 +505,10 @@ final class JourneyDetailStore {
     }
 }
 
-/// Vertical scroll offset of each page. Only the floating chrome reads it, so per-frame
-/// scroll updates don't re-render the pages themselves.
 @Observable
 final class JourneyStoryScrollState {
     var offsets: [String: CGFloat] = [:]
 }
-
-// MARK: - Floating Chrome
 
 private struct JourneyStoryChrome: View {
     let scrollState: JourneyStoryScrollState
@@ -449,7 +518,6 @@ private struct JourneyStoryChrome: View {
     let safeArea: EdgeInsets
     let hasRoute: Bool
     let canAddPhotos: Bool
-    /// What's still uploading to the visible journey, e.g. "2 photos and 1 video".
     let uploadingLabel: String?
     let onClose: () -> Void
     let onRename: () -> Void
@@ -458,11 +526,9 @@ private struct JourneyStoryChrome: View {
     let onOpenRouteCard: () -> Void
 
     var body: some View {
-        // 0 on the hero, 1 once the details have scrolled up under the status bar
         let progress = min(max((scrollState.offsets[selectedID] ?? 0) / 240, 0), 1)
 
         ZStack(alignment: .top) {
-            // Solid behind the status bar, fading out below the buttons
             LinearGradient(
                 stops: [
                     .init(color: .black, location: 0),
@@ -506,8 +572,6 @@ private struct JourneyStoryChrome: View {
                     .menuStyle(.button)
                     .accessibilityLabel("Journey actions")
                 }
-                // The system glass style: an interactive .glassEffect inside a plain
-                // button swallows taps before the button's action runs
                 .buttonStyle(.glass)
                 .buttonBorderShape(.circle)
                 .padding(.horizontal, 20)
@@ -548,36 +612,33 @@ private struct JourneyStoryChrome: View {
     }
 }
 
-// MARK: - Story Page
-
 private struct JourneyStoryPage: View, Equatable {
     let summary: JourneySummary
     let store: JourneyDetailStore
     let scrollState: JourneyStoryScrollState
     let isActive: Bool
     let safeArea: EdgeInsets
+    let mapIsOpen: Bool
     let onOpenMap: () -> Void
     let onOpenRouteCard: () -> Void
     let onAddPhotos: () -> Void
 
-    /// Ignores the action closures, which are new on every render, so a swipe only
-    /// re-renders the pages whose `isActive` changed rather than every page in the pager.
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.summary == rhs.summary && lhs.isActive == rhs.isActive && lhs.safeArea == rhs.safeArea
+            && lhs.mapIsOpen == rhs.mapIsOpen
             && lhs.store === rhs.store && lhs.scrollState === rhs.scrollState
+    }
+
+    static func heroRouteInsets(pageHeight: CGFloat, safeArea: EdgeInsets) -> UIEdgeInsets {
+        UIEdgeInsets(top: safeArea.top + 72, left: 44, bottom: pageHeight * 0.48, right: 44)
     }
 
     @State private var scrollPosition = ScrollPosition(edge: .top)
     @State private var photosUnavailable = false
     @State private var viewerItem: MediaViewerItem?
     @State private var deleteError: String?
-    /// Whether the sections below the hero are built. The pager builds neighbouring pages
-    /// ahead of time and lazy stacks build about a screen ahead, which would build every
-    /// neighbour's charts during swipes. So they wait until this page has settled as the
-    /// visible one, or is scrolled.
     @State private var showsDetails = false
 
-    /// The photo or video the viewer opens on, by media id.
     private struct MediaViewerItem: Identifiable {
         let id: String
     }
@@ -590,12 +651,15 @@ private struct JourneyStoryPage: View, Equatable {
 
     private var detail: JourneyDetail? { store.detail(summary.id) }
 
-    /// The photos and video posters the hero steps through.
     private var previewFilenames: [String] {
         detail?.previewFilenames ?? []
     }
 
     private var showsPhotos: Bool { !previewFilenames.isEmpty && !photosUnavailable }
+
+    private var showsRouteBackdrop: Bool {
+        !showsPhotos && (detail?.routeCoordinates.count ?? 0) >= 2
+    }
 
     private var hasProcessingMedia: Bool {
         detail?.photos?.contains(where: \.isProcessing) == true
@@ -604,8 +668,6 @@ private struct JourneyStoryPage: View, Equatable {
     var body: some View {
         GeometryReader { geometry in
             ScrollView(.vertical) {
-                // Lazy, so the details' later sections (charts, route map, photos) are built
-                // as they're scrolled toward
                 LazyVStack(spacing: 0) {
                     hero(size: geometry.size)
 
@@ -626,7 +688,6 @@ private struct JourneyStoryPage: View, Equatable {
                             onAddPhotos: onAddPhotos
                         )
                     } else {
-                        // Keeps the page scrollable until the details are built
                         Color.black
                             .frame(height: geometry.size.height)
                     }
@@ -658,12 +719,9 @@ private struct JourneyStoryPage: View, Equatable {
         } message: { message in
             Text(message)
         }
-        // Photos added after every earlier one failed to load get another chance
         .onChange(of: previewFilenames) {
             photosUnavailable = false
         }
-        // Like the web app with the journey it has open, check on uploads the server is
-        // still converting, e.g. ones made elsewhere or before the app was last closed
         .onChange(of: isActive && hasProcessingMedia, initial: true) { _, watch in
             if watch { store.watchProcessingMedia(summary.id) }
         }
@@ -672,34 +730,27 @@ private struct JourneyStoryPage: View, Equatable {
         }
         .task(id: isActive) {
             guard isActive, !showsDetails else { return }
-            // Let the open zoom or the swipe finish first, and skip pages swiped past
             try? await Task.sleep(for: .milliseconds(700))
             guard !Task.isCancelled else { return }
             showsDetails = true
         }
     }
 
-    // MARK: Hero
-
     private func hero(size: CGSize) -> some View {
         ZStack(alignment: .bottomLeading) {
             heroBackdrop(size: size)
                 .frame(width: size.width, height: size.height)
-                // Parallax: the backdrop drifts slower than the page as it scrolls away
                 .visualEffect { content, proxy in
                     let minY = proxy.frame(in: .scrollView).minY
                     return content.offset(y: minY < 0 ? -minY * 0.35 : 0)
                 }
                 .clipped()
 
-            // The gradients and caption let taps through to the photos' previous/next zones
             Group {
-                // Keeps the status bar and floating buttons legible on bright photos
                 LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom)
                     .frame(height: safeArea.top + 120)
                     .frame(maxHeight: .infinity, alignment: .top)
 
-                // Transparent at mid-screen, deepening to black so the hero runs into the details
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0),
@@ -717,6 +768,7 @@ private struct JourneyStoryPage: View, Equatable {
                     .padding(.bottom, max(safeArea.bottom, 16) + 44)
                     .modifier(FadeBelowChrome(chromeHeight: safeArea.top + 56))
             }
+            .opacity(mapIsOpen ? 0 : 1)
             .allowsHitTesting(false)
         }
         .frame(width: size.width, height: size.height)
@@ -733,12 +785,16 @@ private struct JourneyStoryPage: View, Equatable {
             .padding(.trailing, 14)
             .padding(.bottom, max(safeArea.bottom, 16) + 1)
             .modifier(FadeBelowChrome(chromeHeight: safeArea.top + 56))
+            .opacity(mapIsOpen ? 0 : 1)
             .accessibilityLabel("Show details")
         }
         .contentShape(Rectangle())
-        // Unless there are photos to step through, which take the tap themselves
         .onTapGesture {
-            scrollToDetails(pageHeight: size.height)
+            if showsRouteBackdrop {
+                onOpenMap()
+            } else {
+                scrollToDetails(pageHeight: size.height)
+            }
         }
     }
 
@@ -751,14 +807,13 @@ private struct JourneyStoryPage: View, Equatable {
                     photosUnavailable = true
                 }
             }
-        } else if let detail, detail.routeCoordinates.count >= 2 {
+        } else if showsRouteBackdrop, let detail {
             ZStack {
                 heroPlaceholder
                 JourneyRouteSnapshotView(
                     journeyID: summary.id,
                     coordinates: detail.routeCoordinates,
-                    // Keep the route between the floating buttons and the caption
-                    insets: UIEdgeInsets(top: safeArea.top + 72, left: 44, bottom: size.height * 0.48, right: 44),
+                    insets: Self.heroRouteInsets(pageHeight: size.height, safeArea: safeArea),
                     lineWidth: 4
                 )
             }
@@ -795,7 +850,6 @@ private struct JourneyStoryPage: View, Equatable {
                 .lineHeight(.exact(points: 37))
                 .foregroundStyle(.white)
                 .lineLimit(3)
-                .minimumScaleFactor(0.75)
                 .shadow(color: .black.opacity(0.25), radius: 12, y: 2)
 
             JourneyMetadataRow(summary: summary)
@@ -803,7 +857,6 @@ private struct JourneyStoryPage: View, Equatable {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// For items the viewer can't open: ones still converting, or that couldn't be converted.
     private func deleteMedia(_ item: JourneyPhoto) {
         Task {
             do {
@@ -822,8 +875,6 @@ private struct JourneyStoryPage: View, Equatable {
     }
 }
 
-/// Fades hero text out as it scrolls up toward the floating buttons, so it never
-/// lingers behind the status bar once the details are showing.
 private struct FadeBelowChrome: ViewModifier {
     let chromeHeight: CGFloat
 
@@ -835,10 +886,6 @@ private struct FadeBelowChrome: ViewModifier {
     }
 }
 
-// MARK: - Hero Photo Slideshow
-
-/// Crossfades through a journey's photos with a slow zoom while its page is on screen.
-/// Tapping the left or right half steps back or forward; swipes still page between journeys.
 private struct HeroPhotoSlideshow: View {
     let filenames: [String]
     let isActive: Bool
@@ -847,17 +894,14 @@ private struct HeroPhotoSlideshow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var index = 0
     @State private var failed: Set<String> = []
-    /// The way the photos last moved, so a photo that fails to load is skipped in that direction.
     @State private var direction = 1
 
     private struct Tick: Equatable {
         let index: Int
         let isActive: Bool
-        /// Restarts the timer when photos are added or removed, e.g. a second one uploaded.
         let photoCount: Int
     }
 
-    /// Index of the photo showing, kept in range when photos are deleted.
     private var current: Int { min(index, filenames.count - 1) }
 
     private var showableCount: Int {
@@ -874,8 +918,6 @@ private struct HeroPhotoSlideshow: View {
             .id(filename)
             .transition(.opacity)
         }
-        // Takes taps ahead of the hero's own tap (scroll to the details), which still
-        // applies when there's only one photo
         .overlay {
             if showableCount > 1 {
                 HStack(spacing: 0) {
@@ -887,8 +929,6 @@ private struct HeroPhotoSlideshow: View {
         .task(id: Tick(index: index, isActive: isActive, photoCount: filenames.count)) {
             guard isActive, showableCount > 1 else { return }
 
-            // Decode both neighbours first, so a tap either way or the next crossfade never
-            // shows a blank frame. Restarting on every change also restarts the timer after a tap.
             let next = neighbor(of: current, by: 1)
             let previous = neighbor(of: current, by: -1)
             for neighbor in next == previous ? [next] : [next, previous] {
@@ -918,7 +958,6 @@ private struct HeroPhotoSlideshow: View {
         withAnimation(.easeOut(duration: 0.3)) { index = target }
     }
 
-    /// The nearest photo `offset` steps away that hasn't failed to load, wrapping around.
     private func neighbor(of start: Int, by offset: Int) -> Int {
         let count = filenames.count
         var candidate = start
@@ -956,15 +995,9 @@ private struct KenBurnsPhoto: View {
     }
 }
 
-// MARK: - Details
-
-/// The sections below a story page's hero. Its body is a list of separate views rather than
-/// one stack, so each section is its own row of the page's LazyVStack and is only built once
-/// it's scrolled near.
 private struct JourneyStoryDetails: View {
     let detail: JourneyDetail?
     let journeyID: String
-    /// Every photo and video on the journey in upload order, including ones still converting.
     let media: [JourneyPhoto]
     let localPreviews: [String: UIImage]
     let pendingUploads: [JourneyDetailStore.PendingUpload]
@@ -978,7 +1011,6 @@ private struct JourneyStoryDetails: View {
     let onAddPhotos: () -> Void
 
     @AppStorage(AppConstants.useMetricUnitsKey) private var useMetricUnits = false
-    /// An item the viewer can't open, tapped to offer deleting it.
     @State private var unviewableItem: JourneyPhoto?
 
     private enum ProfileChart: Hashable {
@@ -998,7 +1030,6 @@ private struct JourneyStoryDetails: View {
     }()
 
     var body: some View {
-        // Modifiers on a Group apply to each section separately, keeping them separate rows
         Group {
             if let detail {
                 summary(detail)
@@ -1024,9 +1055,6 @@ private struct JourneyStoryDetails: View {
         .background(Color.black)
     }
 
-    // MARK: Sections
-
-    /// Distance, stats and actions: the first thing under the hero.
     private func summary(_ detail: JourneyDetail) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             distanceLede(detail)
@@ -1045,7 +1073,7 @@ private struct JourneyStoryDetails: View {
 
             hairline
 
-            actions(hasRoute: detail.routeCoordinates.count >= 2)
+            actions
         }
         .padding(.top, 12)
     }
@@ -1088,35 +1116,18 @@ private struct JourneyStoryDetails: View {
         }
     }
 
-    private func actions(hasRoute: Bool) -> some View {
-        HStack(spacing: 12) {
-            Button(action: onOpenRouteCard) {
-                Label("Route Card", systemImage: "map.fill")
-                    .font(.montserrat(size: 15, weight: .semibold))
-                    .foregroundStyle(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Capsule().fill(AppConstants.journeyGreen))
-            }
-
-            Button(action: onOpenMap) {
-                Label("Map", systemImage: "arrow.up.left.and.arrow.down.right")
-                    .font(.montserrat(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        Capsule()
-                            .fill(AppConstants.darkCardBackground)
-                            .overlay(Capsule().stroke(AppConstants.darkCardBorder, lineWidth: 1))
-                    )
-            }
-            .disabled(!hasRoute)
+    private var actions: some View {
+        Button(action: onOpenRouteCard) {
+            Label("Route Card", systemImage: "map.fill")
+                .font(.montserrat(size: 15, weight: .semibold))
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Capsule().fill(AppConstants.journeyGreen))
         }
         .buttonStyle(.plain)
     }
 
-    /// A row per chart, so each one is only built as it's scrolled to.
     @ViewBuilder
     private func charts(for detail: JourneyDetail) -> some View {
         let charts = profileCharts(for: detail)
@@ -1140,20 +1151,31 @@ private struct JourneyStoryDetails: View {
         return charts
     }
 
-    /// Equatable so re-rendering the page (e.g. when a swipe changes which page is active)
-    /// doesn't redo charts whose data hasn't changed.
     @ViewBuilder
     private func profileChart(_ chart: ProfileChart, detail: JourneyDetail) -> some View {
         let distMi = detail.profileDistMi ?? []
+        let timesMs = detail.profileTimeMs ?? []
         switch chart {
         case .elevation:
-            ElevationChart(distancesMi: distMi, elevationsM: detail.profileElevM ?? [])
-                .equatable()
+            ElevationChart(
+                distancesMi: distMi,
+                elevationsM: detail.profileElevM ?? [],
+                timesMs: timesMs,
+                topElevationM: detail.topElevation.flatMap(Double.init),
+                lowestElevationM: detail.lowestElevation.flatMap(Double.init)
+            )
+            .equatable()
         case .speed:
-            SpeedChart(distancesMi: distMi, speedsMph: detail.profileSpeedMph ?? [])
-                .equatable()
+            SpeedChart(
+                distancesMi: distMi,
+                speedsMph: detail.profileSpeedMph ?? [],
+                timesMs: timesMs,
+                topSpeedMph: detail.topSpeed.flatMap(Double.init),
+                averageSpeedMph: detail.avgSpeed.flatMap(Double.init)
+            )
+            .equatable()
         case .acceleration:
-            AccelerationChart(distancesMi: distMi, speedsMph: detail.profileSpeedMph ?? [], timesMs: detail.profileTimeMs ?? [])
+            AccelerationChart(distancesMi: distMi, speedsMph: detail.profileSpeedMph ?? [], timesMs: timesMs)
                 .equatable()
         }
     }
@@ -1173,7 +1195,6 @@ private struct JourneyStoryDetails: View {
 
                 Spacer()
 
-                // The empty state is its own add button
                 if !isEmpty {
                     Button(action: onAddPhotos) {
                         Label("Add", systemImage: "plus")
@@ -1239,10 +1260,7 @@ private struct JourneyStoryDetails: View {
 
     private var photoStrip: some View {
         ScrollView(.horizontal) {
-            // Lazy so thumbnails download and decode as they're scrolled into view
             LazyHStack(spacing: 10) {
-                // Keyed by id so deleting an item doesn't hand its tile to another. Items the
-                // server is still converting, or couldn't, keep their place, as on the web.
                 ForEach(media, id: \.id) { item in
                     Button {
                         if item.isViewable {
@@ -1260,7 +1278,6 @@ private struct JourneyStoryDetails: View {
                     .buttonStyle(.plain)
                 }
 
-                // Uploads land after the existing items, matching the server's order
                 ForEach(pendingUploads) { upload in
                     PendingUploadTile(upload: upload)
                 }
@@ -1289,8 +1306,6 @@ private struct JourneyStoryDetails: View {
         .padding(.vertical, 60)
     }
 
-    // MARK: Building Blocks
-
     private var hairline: some View {
         Rectangle()
             .fill(Color.white.opacity(0.1))
@@ -1312,8 +1327,6 @@ private struct JourneyStoryDetails: View {
         }
         .padding(.top, 36)
     }
-
-    // MARK: Formatting
 
     private func stats(for detail: JourneyDetail) -> [StoryStat] {
         let speedUnit = JourneyUnits.speedUnit(useMetric: useMetricUnits)
@@ -1359,7 +1372,6 @@ private struct JourneyStoryDetails: View {
         "\(Int(JourneyUnits.elevation(fromMeters: meters, useMetric: useMetricUnits).rounded()))"
     }
 
-    /// e.g. "Walked · Tue, Apr 14 · 09:12 – 10:04"
     private func timeline(for detail: JourneyDetail) -> String? {
         var parts: [String] = []
         switch detail.travelMode {
@@ -1380,8 +1392,6 @@ private struct JourneyStoryDetails: View {
         return parts.isEmpty ? nil : parts.joined(separator: " \u{00B7} ")
     }
 }
-
-// MARK: - Stat Cell
 
 private struct StoryStat: Identifiable {
     let label: String
@@ -1427,9 +1437,6 @@ private struct StoryStatCell: View {
     }
 }
 
-// MARK: - Media Tiles
-
-/// A strip tile for a converted photo, or a video's poster with its length.
 private struct MediaTile: View {
     let item: JourneyPhoto
 
@@ -1437,10 +1444,8 @@ private struct MediaTile: View {
         Color.clear
             .overlay {
                 if let preview = item.previewFilename {
-                    // The server's reduced copy; a video's is its poster's
                     JourneyPhotoView(filename: preview, maxPixelSize: 480, thumbnail: true)
                 } else {
-                    // A video the server couldn't take a poster from
                     Image(systemName: "film")
                         .font(.system(size: 30))
                         .foregroundStyle(.white.opacity(0.35))
@@ -1476,8 +1481,6 @@ private struct MediaTile: View {
     }
 }
 
-/// A strip tile for an item the server is still converting, or couldn't convert: its upload
-/// preview (when it was uploaded from this device), dimmed, under a spinner or a warning.
 private struct MediaStatusTile: View {
     let item: JourneyPhoto
     let preview: UIImage?
@@ -1518,8 +1521,6 @@ private struct MediaStatusTile: View {
             .accessibilityLabel(accessibilityText)
     }
 
-    /// Photos convert in seconds, looking like the end of their upload, so only videos and
-    /// failures say anything.
     private var caption: String? {
         if item.isFailed { return item.isVideo ? "Couldn't convert" : "Couldn't process" }
         return item.isVideo ? "Converting" : nil
@@ -1535,8 +1536,6 @@ private struct MediaStatusTile: View {
     }
 }
 
-/// A strip tile for a photo or video still uploading: its preview, dimmed, under a ring
-/// showing how much has been sent, or a spinner before and after sending.
 private struct PendingUploadTile: View {
     let upload: JourneyDetailStore.PendingUpload
 
@@ -1567,6 +1566,10 @@ private struct PendingUploadTile: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(upload.isVideo ? "Uploading video" : "Uploading photo")
             .accessibilityValue(upload.progress.map { "\(Int($0 * 100)) percent" } ?? "")
+            .accessibilityAction(named: "Cancel Upload") { upload.cancel() }
+            .contextMenu {
+                Button("Cancel Upload", systemImage: "xmark", role: .destructive) { upload.cancel() }
+            }
     }
 }
 
@@ -1587,14 +1590,10 @@ private struct UploadProgressRing: View {
     }
 }
 
-// MARK: - Media Viewer
-
 private struct JourneyMediaViewer: View {
     let journeyID: String
     let store: JourneyDetailStore
 
-    /// Id of the item showing. Items are keyed by id rather than position so deleting one,
-    /// or a video finishing converting, doesn't shift which is selected.
     @State private var selection: String
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
@@ -1607,7 +1606,6 @@ private struct JourneyMediaViewer: View {
         _selection = State(initialValue: startID)
     }
 
-    /// Read from the store so the viewer follows uploads, conversions and deletes.
     private var media: [JourneyPhoto] {
         store.detail(journeyID)?.viewableMedia ?? []
     }
@@ -1653,7 +1651,6 @@ private struct JourneyMediaViewer: View {
         if let filename = item.filename {
             if item.isVideo {
                 JourneyVideoPage(video: item, filename: filename, isSelected: item.id == selection)
-                    // Keeps the player's controls clear of the buttons above and the home indicator
                     .padding(.top, safeArea.top + 52)
                     .padding(.bottom, safeArea.bottom)
             } else {
@@ -1727,7 +1724,6 @@ private struct JourneyMediaViewer: View {
                 if remaining.isEmpty {
                     dismiss()
                 } else {
-                    // Show the item that slid into its place, or the new last one
                     selection = remaining[min(index, remaining.count - 1)]
                 }
             } catch {
@@ -1738,8 +1734,6 @@ private struct JourneyMediaViewer: View {
     }
 }
 
-/// A converted video in the viewer: its poster until the video can play, then the player,
-/// playing while it's the page on screen, as the web viewer autoplays.
 private struct JourneyVideoPage: View {
     let video: JourneyPhoto
     let filename: String
@@ -1748,7 +1742,6 @@ private struct JourneyVideoPage: View {
     @State private var player: AVPlayer?
     @State private var isReady = false
     @State private var failed = false
-    /// Whether this page holds the audio session (see `VideoPlaybackAudio`).
     @State private var holdsAudio = false
 
     var body: some View {
@@ -1820,9 +1813,6 @@ private struct JourneyVideoPage: View {
     }
 }
 
-/// Lets videos play their sound with the ringer switched off, as in Photos, and hands audio
-/// back to whatever was playing before once no video page is playing. Counted, since the
-/// next page can start before the last one stops when swiping between videos.
 private enum VideoPlaybackAudio {
     private static var holders = 0
 

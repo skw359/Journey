@@ -1,3 +1,5 @@
+// Metric and imperial unit conversions.
+
 import Foundation
 
 enum JourneyUnits {

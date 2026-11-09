@@ -1,6 +1,7 @@
+// Category pill and metadata row shown in journey captions.
+
 import SwiftUI
 
-/// Green travel-mode pill ("WALK", "DRIVE", …) shown on journey heroes and cards.
 struct JourneyCategoryPill: View {
     let travelMode: String?
     var fontSize: CGFloat = 11
@@ -26,7 +27,6 @@ struct JourneyCategoryPill: View {
     }
 }
 
-/// Location, distance and duration with small icons, shown under journey titles.
 struct JourneyMetadataRow: View {
     let summary: JourneySummary
     var fontSize: CGFloat = 12
@@ -51,7 +51,6 @@ struct JourneyMetadataRow: View {
         .foregroundStyle(.white.opacity(0.82))
     }
 
-    /// First and last city passed, e.g. "San Jose → Palo Alto"
     private var locationText: String? {
         let cities = (summary.citiesPassed ?? []).filter { !$0.isEmpty }
         guard let first = cities.first else { return nil }

@@ -1,7 +1,8 @@
+// Formats distances for display.
+
 import Foundation
 
 enum DistanceFormatter {
-    /// Formats distance for display: 0.00, 0.01, 0.5, 5.2, 100, 1,000
     static func format(_ miles: Double, useMetric: Bool = false) -> String {
         formatValue(value(fromMiles: miles, useMetric: useMetric))
     }

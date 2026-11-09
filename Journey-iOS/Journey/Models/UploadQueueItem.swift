@@ -1,3 +1,5 @@
+// Queued upload and its status.
+
 import Foundation
 
 enum UploadStatus: Codable, Equatable {
@@ -11,7 +13,7 @@ struct UploadQueueItem: Codable, Identifiable, Equatable {
     let id: UUID
     let fileName: String
     let fileRelativePath: String
-    let source: String  // "iphone" or "watch"
+    let source: String
     let createdAt: Date
     var status: UploadStatus
 
@@ -21,7 +23,6 @@ struct UploadQueueItem: Codable, Identifiable, Equatable {
     }
 
     var tripId: String {
-        // Extract timestamp from filename like "route_1774908247377.zip"
         fileName.replacingOccurrences(of: "route_", with: "")
                 .replacingOccurrences(of: ".zip", with: "")
     }

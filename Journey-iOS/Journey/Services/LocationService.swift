@@ -1,3 +1,5 @@
+// Location tracking and journey recording.
+
 import Foundation
 import UIKit
 import CoreLocation
@@ -7,38 +9,30 @@ import os.log
 
 @Observable
 final class LocationService: NSObject {
-    // MARK: - Recording State
     var isRecording = false
     var duration: TimeInterval = 0
     var totalSeconds: Int = 0
     var pointCount = 0
 
-    // MARK: - Metrics
     var distanceMeters: CLLocationDistance = 0
     var currentSpeedMps: CLLocationSpeed = 0
     var topSpeedMph: Double = 0
     var averageSpeedMph: Double = 0
 
-    // MARK: - Location
     var latestLocation: CLLocation?
     var routeCoordinates: [CLLocationCoordinate2D] = []
     var gpsConnected = false
-    var gpsAccuracy: CLLocationAccuracy?
 
-    // MARK: - Computed
     var distanceMiles: Double { distanceMeters / 1609.344 }
     var currentSpeedMph: Double { max(currentSpeedMps * 2.23694, 0) }
 
-    // MARK: - Private: Location Manager
     private let locationManager = CLLocationManager()
     private var lastDistanceLocation: CLLocation?
 
-    // MARK: - Private: Motion Window
     private var recent: [CLLocation] = []
     private let windowSeconds: TimeInterval = 10
     private let maxRecentLocations = 100
 
-    // MARK: - Private: GPS Spike Filtering (7-layer, ported from watch)
     private var lastValidLocation: CLLocation?
     private let maxReasonableSpeed: CLLocationSpeed = 4000000000.0
     private let maxAcceleration: Double = 5000000000.0
@@ -48,7 +42,6 @@ final class LocationService: NSObject {
     private var validLocationCount = 0
     private let warmupLocationCount = 5
 
-    // MARK: - Private: Recording Artifacts
     private var csvURL: URL?
     private var zipURL: URL?
     private var fileHandle: FileHandle?
@@ -60,7 +53,6 @@ final class LocationService: NSObject {
     private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Journey", category: "LocationService")
 
-    // MARK: - Init
     override init() {
         super.init()
         locationManager.delegate = self
@@ -90,7 +82,6 @@ final class LocationService: NSObject {
         }
         let canUseBackgroundLocation = hasBackgroundLocationMode && isAuthorizedForLocation && isRecording
 
-        // Core Location asserts if background updates are enabled before the app is eligible for them.
         locationManager.showsBackgroundLocationIndicator = canUseBackgroundLocation
         locationManager.allowsBackgroundLocationUpdates = canUseBackgroundLocation
     }
@@ -143,7 +134,6 @@ final class LocationService: NSObject {
         guard isRecording else { return }
         Self.log.info("Entering background while recording — ensuring continuous updates")
 
-        // Request extra background execution time during the transition
         endBackgroundTaskIfNeeded()
         backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "JourneyRecording") { [weak self] in
             self?.endBackgroundTaskIfNeeded()
@@ -184,12 +174,9 @@ final class LocationService: NSObject {
         return false
     }
 
-    // MARK: - Public Controls
-
     func startRecording() {
         guard !isRecording else { return }
 
-        // Prepare CSV
         let fileName = "route_\(Int64(Date().timeIntervalSince1970 * 1000)).csv"
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         csvURL = docs.appendingPathComponent(fileName)
@@ -213,7 +200,6 @@ final class LocationService: NSObject {
         routeCoordinates.removeAll()
         recent.removeAll()
 
-        // Reset GPS filtering
         lastValidLocation = nil
         recentValidSpeeds.removeAll()
         validLocationCount = 0
@@ -241,7 +227,6 @@ final class LocationService: NSObject {
 
         locationManager.startUpdatingLocation()
 
-        // Timer for elapsed time — add to .common mode so it fires in background
         updateTimer?.invalidate()
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self, let start = self.recordingStartTime else { return }
@@ -255,7 +240,6 @@ final class LocationService: NSObject {
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
     }
 
-    /// Stops recording and returns the ZIP file URL for upload
     func stopRecording() -> URL? {
         guard isRecording else { return nil }
 
@@ -267,7 +251,6 @@ final class LocationService: NSObject {
         updateTimer?.invalidate()
         updateTimer = nil
 
-        // Flush and close CSV
         try? fileHandle?.synchronize()
         try? fileHandle?.close()
         fileHandle = nil
@@ -279,7 +262,6 @@ final class LocationService: NSObject {
             resultURL = zipURL
         }
 
-        // Reset
         isRecording = false
         recordingStartTime = nil
         duration = 0
@@ -313,30 +295,23 @@ final class LocationService: NSObject {
         return resultURL
     }
 
-    // MARK: - GPS Spike Filtering (7-layer, ported from watch JourneyRecorder)
-
     private func isValidLocation(_ location: CLLocation) -> Bool {
-        // Layer 1: Horizontal accuracy
         guard location.horizontalAccuracy >= 0,
               location.horizontalAccuracy <= minAccuracy else {
             return false
         }
-        // Layer 2: Coordinate bounds
         guard abs(location.coordinate.latitude) <= 90,
               abs(location.coordinate.longitude) <= 180 else {
             return false
         }
-        // Layer 3: Vertical accuracy
         if location.verticalAccuracy >= 0 && location.verticalAccuracy > 100 {
             return false
         }
-        // First location is always valid
         guard let lastValid = lastValidLocation else {
             return true
         }
         let distance = location.distance(from: lastValid)
         let timeInterval = location.timestamp.timeIntervalSince(lastValid.timestamp)
-        // Layer 4: Time interval validation
         guard timeInterval > 0.1 else { return false }
         guard timeInterval < 30.0 else {
             validLocationCount = 0
@@ -344,16 +319,13 @@ final class LocationService: NSObject {
             return true
         }
         let impliedSpeed = distance / timeInterval
-        // Warmup: less strict during first N locations
         if validLocationCount < warmupLocationCount {
             if impliedSpeed > maxReasonableSpeed { return false }
             return true
         }
-        // Layer 5: Max speed check
         if impliedSpeed > maxReasonableSpeed {
             return false
         }
-        // Layer 6: Reported vs implied speed
         if location.speed >= 0 {
             let reportedSpeed = location.speed
             if reportedSpeed < 5.0 && impliedSpeed > 15.0 {
@@ -364,7 +336,6 @@ final class LocationService: NSObject {
                 return false
             }
         }
-        // Layer 7: Acceleration + speed history
         if !recentValidSpeeds.isEmpty {
             let avgRecentSpeed = recentValidSpeeds.reduce(0, +) / Double(recentValidSpeeds.count)
             let maxRecentSpeed = recentValidSpeeds.max() ?? 0
@@ -378,7 +349,6 @@ final class LocationService: NSObject {
                 return false
             }
         }
-        // Accuracy degradation check
         if location.horizontalAccuracy > lastValid.horizontalAccuracy * 3.0 {
             if impliedSpeed > 10.0 {
                 return false
@@ -404,8 +374,6 @@ final class LocationService: NSObject {
             recentValidSpeeds.removeFirst()
         }
     }
-
-    // MARK: - CSV Write
 
     private func writeCSV(_ loc: CLLocation) {
         guard let h = fileHandle else { return }
@@ -433,8 +401,6 @@ final class LocationService: NSObject {
         }
     }
 
-    // MARK: - Metrics Update
-
     private func updateMetrics(with location: CLLocation) {
         guard isRecording else { return }
         let currentSpeed = max(location.speed, 0)
@@ -442,7 +408,6 @@ final class LocationService: NSObject {
         currentSpeedMps = currentSpeed
 
         if let lastLoc = lastDistanceLocation {
-            // Distance (only count movement > 0.4 m/s, segments < 1000m)
             if currentSpeed > 0.4 {
                 let newDistance = location.distance(from: lastLoc)
                 if newDistance.isFinite && newDistance >= 0 && newDistance < 1000 {
@@ -460,8 +425,6 @@ final class LocationService: NSObject {
         lastDistanceLocation = location
     }
 }
-
-// MARK: - CLLocationManagerDelegate
 
 extension LocationService: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -488,14 +451,11 @@ extension LocationService: CLLocationManagerDelegate {
             }
         }
 
-        // Update GPS state
         if let loc = validatedLocations.last ?? locations.last {
             gpsConnected = true
-            gpsAccuracy = loc.horizontalAccuracy
             latestLocation = lastValidLocation ?? loc
         }
 
-        // Update motion window
         let windowCutoff = Date().addingTimeInterval(-windowSeconds)
         recent = recent.filter { $0.timestamp >= windowCutoff }
         for loc in validatedLocations {
@@ -503,13 +463,11 @@ extension LocationService: CLLocationManagerDelegate {
             recent.append(loc)
         }
 
-        // Smoothed speed
         let speeds = recent.map(\.speed).filter { $0 >= 0 }
         if !speeds.isEmpty {
             currentSpeedMps = max(speeds.reduce(0, +) / Double(speeds.count), 0)
         }
 
-        // During recording: write + update metrics
         if isRecording {
             refreshElapsedTime()
             for loc in validatedLocations {
@@ -532,7 +490,6 @@ extension LocationService: CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         gpsConnected = false
-        gpsAccuracy = nil
 
         if isRecording, let recordingStartTime {
             liveActivityManager.update(
@@ -548,7 +505,6 @@ extension LocationService: CLLocationManagerDelegate {
     func locationManagerDidPauseLocationUpdates(_ manager: CLLocationManager) {
         Self.log.warning("System paused location updates")
         guard isRecording else { return }
-        // Immediately restart — we never want pauses during a journey
         manager.stopUpdatingLocation()
         manager.startUpdatingLocation()
         Self.log.info("Restarted location updates after system pause")

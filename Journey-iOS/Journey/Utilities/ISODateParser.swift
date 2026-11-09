@@ -1,3 +1,5 @@
+// Parses ISO 8601 dates.
+
 import Foundation
 
 enum ISODateParser {
@@ -9,8 +11,12 @@ enum ISODateParser {
 
     private static let withoutFractionalSeconds = ISO8601DateFormatter()
 
-    /// Parses server timestamps with or without milliseconds, e.g. "2026-04-14T16:12:00.000Z"
+    private static var parsed: [String: Date?] = [:]
+
     static func date(from string: String) -> Date? {
-        withFractionalSeconds.date(from: string) ?? withoutFractionalSeconds.date(from: string)
+        if let known = parsed[string] { return known }
+        let date = withFractionalSeconds.date(from: string) ?? withoutFractionalSeconds.date(from: string)
+        parsed[string] = .some(date)
+        return date
     }
 }

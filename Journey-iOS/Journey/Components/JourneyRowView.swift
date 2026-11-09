@@ -1,3 +1,5 @@
+// Journey row for the journeys list.
+
 import SwiftUI
 
 struct JourneyRowView: View {
