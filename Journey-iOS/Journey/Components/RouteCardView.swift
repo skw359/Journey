@@ -1,3 +1,5 @@
+// Route card with a map preview.
+
 import SwiftUI
 import MapKit
 
@@ -84,7 +86,6 @@ struct RouteCardView: View {
                 Spacer()
             }
 
-            // Recenter button (visible only after the user moves the map)
             if hasUserMovedMap {
                 VStack {
                     Spacer()
@@ -114,8 +115,6 @@ struct RouteCardView: View {
     }
 }
 
-// MARK: - Clean Route Map (no annotations, interaction disabled)
-
 struct RouteCardMapView: UIViewRepresentable {
     let coordinates: [CLLocationCoordinate2D]
     @Binding var hasUserMovedMap: Bool
@@ -133,13 +132,11 @@ struct RouteCardMapView: UIViewRepresentable {
         mapView.showsTraffic = false
         mapView.showsBuildings = false
 
-        // Muted style hides city/road labels for a clean look
         let config = MKStandardMapConfiguration(emphasisStyle: .muted)
         config.pointOfInterestFilter = .excludingAll
         config.showsTraffic = false
         mapView.preferredConfiguration = config
 
-        // Detect user-driven movement so the recenter button can appear
         let pan = UIPanGestureRecognizer(target: context.coordinator,
                                          action: #selector(Coordinator.handleUserGesture(_:)))
         pan.delegate = context.coordinator
@@ -160,7 +157,6 @@ struct RouteCardMapView: UIViewRepresentable {
     func updateUIView(_ mapView: MKMapView, context: Context) {
         context.coordinator.parent = self
 
-        // Add the polyline once when coordinates first arrive
         if mapView.overlays.isEmpty, coordinates.count >= 2 {
             let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
             mapView.addOverlay(polyline)
@@ -168,7 +164,6 @@ struct RouteCardMapView: UIViewRepresentable {
             context.coordinator.lastRecenterToken = recenterToken
         }
 
-        // Refit when the recenter button bumps the token
         if context.coordinator.lastRecenterToken != recenterToken {
             context.coordinator.lastRecenterToken = recenterToken
             context.coordinator.fitPolyline(in: mapView, animated: true)

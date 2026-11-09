@@ -1,3 +1,5 @@
+// Server URL and token for the paired account.
+
 import Foundation
 
 struct ServerPairing {
@@ -20,7 +22,7 @@ struct ServerPairing {
     }
 
     func save() {
-        KeychainHelper.save(key: AppConstants.keychainTokenKey, string: bearerToken)
+        _ = KeychainHelper.save(key: AppConstants.keychainTokenKey, string: bearerToken)
         UserDefaults.standard.set(serverURL, forKey: AppConstants.serverURLKey)
         UserDefaults.standard.set(true, forKey: AppConstants.hasCompletedPairingKey)
     }

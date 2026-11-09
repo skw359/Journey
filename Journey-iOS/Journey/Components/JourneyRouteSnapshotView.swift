@@ -1,13 +1,11 @@
+// Static route map snapshots and their cache.
+
 import SwiftUI
 import MapKit
 
-/// A rendered image of a journey's route on the dark map. Used instead of a live MKMapView for
-/// non-interactive maps (list cards, story heroes and previews): creating map views stalls the
-/// main thread, which would stutter list scrolling and the story pager.
 struct JourneyRouteSnapshotView: View {
     let journeyID: String
     let coordinates: [CLLocationCoordinate2D]
-    /// Space kept clear around the route, e.g. for overlaid text.
     var insets = UIEdgeInsets(top: 40, left: 40, bottom: 40, right: 40)
     var lineWidth: CGFloat = 3.5
 
@@ -55,8 +53,6 @@ struct RouteSnapshotRequest: Equatable {
     }
 }
 
-// MARK: - Snapshot Cache
-
 final class RouteSnapshotCache {
     static let shared = RouteSnapshotCache()
 
@@ -102,7 +98,6 @@ final class RouteSnapshotCache {
         let endMarker: UIImage
     }
 
-    /// Runs off the main actor: drawing a full-screen route image takes long enough to drop frames.
     @concurrent
     private nonisolated static func render(
         coordinates: [CLLocationCoordinate2D],
@@ -146,11 +141,9 @@ final class RouteSnapshotCache {
         }
     }
 
-    /// The map area that puts the route inside `size` minus `insets`.
-    private nonisolated static func mapRect(fitting coordinates: [CLLocationCoordinate2D], in size: CGSize, insets: UIEdgeInsets) -> MKMapRect {
+    nonisolated static func mapRect(fitting coordinates: [CLLocationCoordinate2D], in size: CGSize, insets: UIEdgeInsets) -> MKMapRect {
         var route = MKPolyline(coordinates: coordinates, count: coordinates.count).boundingMapRect
 
-        // Short routes would otherwise zoom to street level
         let minimumSide = MKMapPointsPerMeterAtLatitude(coordinates[0].latitude) * 300
         route = route.insetBy(dx: -max(0, minimumSide - route.width) / 2, dy: -max(0, minimumSide - route.height) / 2)
 

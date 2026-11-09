@@ -1,22 +1,16 @@
+// Journey photo view and its image cache.
+
 import SwiftUI
 import ImageIO
 
-// MARK: - Photo Cache
-
-/// Downsampled journey photos kept in memory, keyed by server filename, copy and target size.
-/// Recently downloaded originals are kept too, so the hero and its thumbnail share one download.
-/// Gallery tiles otherwise load the reduced copy the server makes (`/photos/thumb/`).
 final class JourneyPhotoCache {
     static let shared = JourneyPhotoCache()
-    /// Long-edge size for full-screen photos; enough to cover-crop on Pro Max screens.
     static let heroPixelSize: CGFloat = 2400
 
     private let cache = NSCache<NSString, UIImage>()
     private let dataCache = NSCache<NSString, NSData>()
     private var inFlight: [NSString: Task<UIImage?, Never>] = [:]
     private var dataInFlight: [String: Task<Data?, Never>] = [:]
-    /// Cache keys decoded so far per filename and size, so a view can show one while its
-    /// own loads.
     private var decodedKeys: [String: [Int: NSString]] = [:]
 
     private init() {
@@ -28,8 +22,6 @@ final class JourneyPhotoCache {
         cache.object(forKey: cacheKey(filename, maxPixelSize, thumbnail: thumbnail))
     }
 
-    /// The largest copy of `filename` already decoded at any size, e.g. a list card's photo
-    /// while the full-screen page decodes its larger one.
     func largestCachedImage(for filename: String) -> UIImage? {
         let decoded = decodedKeys[filename] ?? [:]
         for size in decoded.keys.sorted(by: >) {
@@ -60,14 +52,10 @@ final class JourneyPhotoCache {
         return image
     }
 
-    /// Seeds the original for a photo just uploaded from this device, so it shows without
-    /// downloading it back.
     func insertOriginal(_ data: Data, for filename: String) {
         dataCache.setObject(data as NSData, forKey: filename as NSString, cost: data.count)
     }
 
-    /// Carries a seeded original over to the file the server converted it to. A HEIC upload
-    /// becomes a JPEG with a new filename, but decodes to the same picture.
     func moveOriginal(from oldFilename: String, to newFilename: String) {
         guard let data = dataCache.object(forKey: oldFilename as NSString) else { return }
         dataCache.removeObject(forKey: oldFilename as NSString)
@@ -75,8 +63,6 @@ final class JourneyPhotoCache {
     }
 
     private func data(for filename: String, thumbnail: Bool) async -> Data? {
-        // An original already here (just uploaded, or shown full-screen) makes any smaller
-        // copy without another download
         if let cached = dataCache.object(forKey: filename as NSString) { return cached as Data }
         let key = thumbnail ? "thumb/\(filename)" : filename
         if thumbnail, let cached = dataCache.object(forKey: key as NSString) { return cached as Data }
@@ -99,7 +85,6 @@ final class JourneyPhotoCache {
         "\(thumbnail ? "thumb/" : "")\(filename)@\(Int(maxPixelSize))" as NSString
     }
 
-    /// Decodes straight to the target size and applies EXIF orientation.
     nonisolated private static func downsample(_ data: Data, maxPixelSize: CGFloat) -> UIImage? {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
@@ -114,19 +99,14 @@ final class JourneyPhotoCache {
     }
 }
 
-// MARK: - Photo View
-
-/// Fills its frame with a server photo using cover cropping, fading in once loaded.
 struct JourneyPhotoView: View {
     let filename: String
     let maxPixelSize: CGFloat
-    /// Loads the server's reduced copy (about 720px wide) rather than the original.
     let thumbnail: Bool
     let contentMode: ContentMode
     let onFailure: (() -> Void)?
 
     @State private var image: UIImage?
-    /// False while `image` is a different-size copy standing in until the requested size loads.
     @State private var isRequestedSize: Bool
 
     init(
@@ -143,8 +123,6 @@ struct JourneyPhotoView: View {
         self.onFailure = onFailure
         let cache = JourneyPhotoCache.shared
         let exact = cache.cachedImage(for: filename, maxPixelSize: maxPixelSize, thumbnail: thumbnail)
-        // Show any copy already in memory so the photo is there from the first frame,
-        // e.g. while zooming into a story from its list card
         _image = State(initialValue: exact ?? cache.largestCachedImage(for: filename))
         _isRequestedSize = State(initialValue: exact != nil)
     }

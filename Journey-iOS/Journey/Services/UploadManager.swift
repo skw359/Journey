@@ -1,3 +1,5 @@
+// Persistent queue of file uploads with retry.
+
 import Foundation
 
 @Observable
@@ -10,7 +12,6 @@ final class UploadManager {
     }
 
     func enqueue(fileURL: URL, source: String) {
-        // Copy file to documents if not already there
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileName = fileURL.lastPathComponent
         let destURL = docs.appendingPathComponent(fileName)
@@ -42,10 +43,8 @@ final class UploadManager {
                 source: item.source,
                 recordingId: item.id.uuidString
             )
-            // Clean up file after successful upload
             try? FileManager.default.removeItem(at: item.fileURL)
 
-            // Remove completed upload from queue to prevent duplicates
             queue.removeAll { $0.id == item.id }
             saveQueue()
 
@@ -98,8 +97,6 @@ final class UploadManager {
         saveQueue()
     }
 
-    // MARK: - Persistence
-
     private var queueFileURL: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         return docs.appendingPathComponent(queueFileName)
@@ -108,7 +105,6 @@ final class UploadManager {
     private func loadQueue() {
         guard let data = try? Data(contentsOf: queueFileURL),
               let items = try? JSONDecoder().decode([UploadQueueItem].self, from: data) else { return }
-        // Remove items that "failed" with HTTP 201 — those actually succeeded
         let cleaned = items.filter { item in
             if case .failed(let msg) = item.status, msg.contains("201") {
                 try? FileManager.default.removeItem(at: item.fileURL)
@@ -117,7 +113,6 @@ final class UploadManager {
             return true
         }
 
-        // Reset any "uploading" items to "queued" (interrupted uploads)
         queue = cleaned.map { item in
             var item = item
             if case .uploading = item.status {

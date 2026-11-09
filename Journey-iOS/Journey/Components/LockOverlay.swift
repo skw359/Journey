@@ -1,3 +1,5 @@
+// Slide-to-unlock overlay that locks the recording screen.
+
 import SwiftUI
 
 struct LockOverlay: View {
@@ -20,24 +22,22 @@ struct LockOverlay: View {
                 VStack(spacing: 20) {
                     Spacer()
 
-                    // App icon and name
-                    HStack(spacing: 10) {
-                        HStack(spacing: 3) {
-                            ForEach(0..<3, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(AppConstants.journeyGreen)
-                                    .frame(width: 6, height: 22)
-                            }
-                        }
-                        Text("JOURNEY")
-                            .font(.montserrat(size: 22, weight: .bold))
+                    HStack(spacing: 8) {
+                        Image("Logo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 24, height: 24)
+                        Text("Journey")
+                            .font(.montserrat(size: 24, weight: .heavy))
                             .foregroundColor(.white)
-                            .tracking(2)
                     }
 
-                    // Duration
                     Text(DurationFormatter.format(locationService.totalSeconds))
-                        .font(.montserrat(size: 64, weight: .bold))
+                        .font(.montserrat(size: 68, weight: .heavy))
+                        .tracking(-1)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .padding(.horizontal, 20)
                         .foregroundColor(.white)
                         .monospacedDigit()
                         .contentTransition(.numericText())
@@ -49,7 +49,6 @@ struct LockOverlay: View {
                         let maxDrag = geo.size.width - knobSize - knobPadding * 2
 
                         ZStack(alignment: .leading) {
-                            // Track background
                             Capsule()
                                 .fill(AppConstants.darkCardBackground)
                                 .overlay(
@@ -59,11 +58,10 @@ struct LockOverlay: View {
 
                             Text("Slide to unlock")
                                 .font(.montserrat(size: 16, weight: .medium))
-                                .foregroundColor(Color(hex: "#3A3A3C"))
+                                .foregroundColor(AppConstants.secondaryText)
                                 .frame(maxWidth: .infinity)
                                 .opacity(1.0 - Double(dragOffset / maxDrag))
 
-                            // Knob
                             Circle()
                                 .fill(.white)
                                 .frame(width: knobSize, height: knobSize)
@@ -97,6 +95,12 @@ struct LockOverlay: View {
                         }
                         .frame(height: sliderHeight)
                         .onAppear { sliderWidth = geo.size.width }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Slide to unlock")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction {
+                            withAnimation { isLocked = false }
+                        }
                     }
                     .frame(height: sliderHeight)
                     .padding(.horizontal, 40)

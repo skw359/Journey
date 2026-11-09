@@ -1,33 +1,59 @@
+// Journeys list screen and its library.
+
 import SwiftUI
 
+@Observable
+final class JourneyLibrary {
+    private(set) var journeys: [JourneySummary] = []
+    private(set) var isLoading = false
+    private(set) var errorMessage: String?
+    var selectedFilter: JourneyFilter = .all
+    let detailStore = JourneyDetailStore()
+
+    func load() async {
+        if journeys.isEmpty { isLoading = true }
+        if errorMessage != nil { errorMessage = nil }
+        do {
+            let fetched = try await APIService.shared.fetchJourneys()
+            if fetched != journeys { journeys = fetched }
+        } catch {
+            if !Task.isCancelled {
+                errorMessage = "Failed to load journeys: \(error.localizedDescription)"
+            }
+        }
+        if isLoading { isLoading = false }
+    }
+}
+
 struct JourneysScreen: View {
-    @State private var journeys: [JourneySummary] = []
-    @State private var searchText = ""
-    @State private var selectedFilter: JourneyFilter = .all
-    @State private var isLoading = false
-    @State private var errorMessage: String?
+    let title: String
+    let library: JourneyLibrary
+    var searchText: Binding<String>?
+    var journeyToReveal: Binding<Date?> = .constant(nil)
+
     @State private var presentedJourney: JourneySummary?
-    /// The journey showing in the detail view. Read only by small child views, so swiping
-    /// between journeys doesn't re-render this screen.
     @State private var focus = JourneyFocus()
     @State private var needsReloadAfterDetail = false
-    /// Shared with the full-screen view so a journey loaded for its card opens instantly.
-    @State private var detailStore = JourneyDetailStore()
     @State private var titleState = JourneysTitleState()
     @Namespace private var journeyTransition
 
-    private var filteredJourneys: [JourneySummary] {
-        var result = journeys
+    private var isSearchTab: Bool { searchText != nil }
 
-        // Search filter
-        if !searchText.isEmpty {
+    private var query: String { searchText?.wrappedValue ?? "" }
+
+    private var detailStore: JourneyDetailStore { library.detailStore }
+
+    private var filteredJourneys: [JourneySummary] {
+        var result = library.journeys
+
+        if !query.isEmpty {
             result = result.filter {
-                ($0.name ?? "").localizedCaseInsensitiveContains(searchText) ||
-                ($0.citiesPassed ?? []).joined(separator: " ").localizedCaseInsensitiveContains(searchText)
+                ($0.name ?? "").localizedCaseInsensitiveContains(query) ||
+                ($0.citiesPassed ?? []).joined(separator: " ").localizedCaseInsensitiveContains(query)
             }
         }
 
-        switch selectedFilter {
+        switch library.selectedFilter {
         case .all:
             break
         case .past7Days:
@@ -51,7 +77,6 @@ struct JourneysScreen: View {
         }
     }
 
-    /// Journeys in the order the list shows them, so the detail pager swipes in the same order.
     private var orderedJourneys: [JourneySummary] {
         groupedJourneys.flatMap { $0.1 }
     }
@@ -61,28 +86,21 @@ struct JourneysScreen: View {
             journeyList
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.black.ignoresSafeArea())
-                .navigationTitle("Journeys")
-                // One compact bar row instead of the large-title layout, which reserves an
-                // empty row above the title. Our own title replaces the system one.
+                .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar(removing: .title)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        JourneysTitle(state: titleState)
+                        JourneysTitle(title: title, state: titleState)
                     }
                     .sharedBackgroundVisibility(.hidden)
                 }
-                // System search under the title; slides away as the list scrolls
-                .searchable(
-                    text: $searchText,
-                    placement: .navigationBarDrawer(displayMode: .automatic),
-                    prompt: "Search Journeys"
-                )
+                .modifier(JourneySearchField(text: searchText))
                 .fullScreenCover(item: $presentedJourney, onDismiss: {
                     focus.journeyID = nil
                     guard needsReloadAfterDetail else { return }
                     needsReloadAfterDetail = false
-                    Task { await loadJourneys() }
+                    Task { await library.load() }
                 }) { journey in
                     JourneyDetailScreen(
                         journeys: orderedJourneys,
@@ -95,28 +113,35 @@ struct JourneysScreen: View {
                 }
         }
         .task {
-            await loadJourneys()
+            await refresh()
         }
     }
 
     @ViewBuilder
     private var journeyList: some View {
-        if isLoading && journeys.isEmpty {
+        @Bindable var library = library
+
+        if library.isLoading && library.journeys.isEmpty {
             ProgressView()
                 .tint(AppConstants.journeyGreen)
-        } else if let error = errorMessage, journeys.isEmpty {
+        } else if let error = library.errorMessage, library.journeys.isEmpty {
             Text(error)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .padding()
         } else {
+            let sections = groupedJourneys
+
             ScrollViewReader { scrollProxy in
                 ScrollView {
                     LazyVStack(spacing: 14, pinnedViews: .sectionHeaders) {
-                        // Inside the scroll view so the navigation bar can track scrolling
-                        FilterChips(selected: $selectedFilter)
+                        FilterChips(selected: $library.selectedFilter)
 
-                        ForEach(groupedJourneys, id: \.0) { section, items in
+                        if sections.isEmpty {
+                            emptyState
+                        }
+
+                        ForEach(sections, id: \.0) { section, items in
                             Section {
                                 ForEach(items) { journey in
                                     Button {
@@ -147,17 +172,15 @@ struct JourneysScreen: View {
                     .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
-                // Opaque edge under the navigation bar so cards don't show through
-                // above the pinned date headers
+                .scrollDismissesKeyboard(.immediately)
                 .scrollEdgeEffectStyle(.hard, for: .top)
-                // Shrink the title over the first stretch of scrolling, like the search bar
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
                     min(max(geometry.contentOffset.y + geometry.contentInsets.top, 0), JourneysTitle.compactDistance).rounded()
                 } action: { _, offset in
                     titleState.compactProgress = offset / JourneysTitle.compactDistance
                 }
                 .refreshable {
-                    await loadJourneys()
+                    await library.load()
                     detailStore.markAllStale()
                 }
                 .background {
@@ -167,27 +190,72 @@ struct JourneysScreen: View {
         }
     }
 
-    private func loadJourneys() async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            let fetched = try await APIService.shared.fetchJourneys()
-            journeys = fetched
-        } catch {
-            errorMessage = "Failed to load journeys: \(error.localizedDescription)"
+    @ViewBuilder
+    private var emptyState: some View {
+        Group {
+            if !query.isEmpty {
+                ContentUnavailableView.search(text: query)
+            } else if library.selectedFilter != .all {
+                ContentUnavailableView(
+                    "No Matching Journeys",
+                    systemImage: "line.3.horizontal.decrease.circle",
+                    description: Text("No journeys match this filter.")
+                )
+            } else {
+                ContentUnavailableView(
+                    "No Journeys Yet",
+                    systemImage: "point.bottomleft.forward.to.point.topright.scurvepath",
+                    description: Text("Journeys you record will appear here.")
+                )
+            }
         }
-        isLoading = false
+        .padding(.top, 60)
+    }
+
+    private func refresh() async {
+        if isSearchTab, !library.journeys.isEmpty { return }
+
+        let hadJourneys = !library.journeys.isEmpty
+        await library.load()
+        if hadJourneys {
+            detailStore.markAllStale()
+        }
+        revealRequestedJourney()
+    }
+
+    private func revealRequestedJourney() {
+        guard let startedAt = journeyToReveal.wrappedValue else { return }
+        journeyToReveal.wrappedValue = nil
+
+        let earliest = startedAt.addingTimeInterval(-120)
+        guard let journey = library.journeys
+            .filter({ ($0.startDate ?? .distantPast) >= earliest })
+            .max(by: { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) })
+        else { return }
+
+        library.selectedFilter = .all
+        focus.journeyID = journey.id
+        presentedJourney = journey
     }
 }
 
-// MARK: - Detail Focus
+private struct JourneySearchField: ViewModifier {
+    let text: Binding<String>?
+
+    func body(content: Content) -> some View {
+        if let text {
+            content.searchable(text: text, prompt: "Search Journeys")
+        } else {
+            content
+        }
+    }
+}
 
 @Observable
 final class JourneyFocus {
     var journeyID: String?
 }
 
-/// Zooms the detail view out of, and back into, the card of the journey it's showing.
 private struct ZoomFromFocusedCard: ViewModifier {
     let focus: JourneyFocus
     let fallbackID: String
@@ -198,7 +266,6 @@ private struct ZoomFromFocusedCard: ViewModifier {
     }
 }
 
-/// Keeps the card for the journey swiped to on screen so the dismiss zoom lands on it.
 private struct FocusedCardScroller: View {
     let focus: JourneyFocus
     let scrollProxy: ScrollViewProxy
@@ -212,25 +279,20 @@ private struct FocusedCardScroller: View {
     }
 }
 
-// MARK: - Title
-
-/// How far the list has scrolled toward the compact title (0 at the top, 1 once compact).
-/// Kept out of the screen's own state so scrolling re-renders only the title, not the cards.
 @Observable
 final class JourneysTitleState {
     var compactProgress: CGFloat = 0
 }
 
 private struct JourneysTitle: View {
-    /// Points of scrolling over which the title shrinks.
     static let compactDistance: CGFloat = 60
-    /// 28pt at rest, about 20pt once compact.
     private static let compactScale: CGFloat = 0.72
 
+    let title: String
     let state: JourneysTitleState
 
     var body: some View {
-        Text("Journeys")
+        Text(title)
             .font(.montserrat(size: 28, weight: .heavy))
             .foregroundColor(.white)
             .fixedSize()

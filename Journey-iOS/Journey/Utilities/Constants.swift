@@ -1,3 +1,5 @@
+// Font helper, colors and keys used across the app.
+
 import SwiftUI
 
 extension Font {
@@ -27,8 +29,6 @@ enum AppConstants {
     static let electricBlue = Color(hex: "#32ADE6")
     static let secondaryText = Color(hex: "#8E8E93")
 
-    // Read from Journey/JourneyConfig.plist, which is git-ignored (copy
-    // Config/JourneyConfig.example.plist). Without it, geocoding is skipped.
     static let geocodeBaseURL: String? = {
         guard let url = Bundle.main.url(forResource: "JourneyConfig", withExtension: "plist"),
               let config = NSDictionary(contentsOf: url),

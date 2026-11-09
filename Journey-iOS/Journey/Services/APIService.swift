@@ -1,3 +1,5 @@
+// Client for the Journey server API.
+
 import Foundation
 import AVFoundation
 
@@ -5,7 +7,6 @@ enum APIError: Error, LocalizedError {
     case notPaired
     case invalidURL
     case httpError(Int)
-    /// An HTTP error whose JSON body named the reason, e.g. `{ "error": "Journey not found" }`.
     case serverError(Int, String)
     case decodingError(Error)
     case networkError(Error)
@@ -79,16 +80,12 @@ final class APIService: Sendable {
         return request
     }
 
-    // MARK: - Health Check
-
     func ping() async throws -> Bool {
         let request = try authenticatedRequest(path: "/ping")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
         return String(data: data, encoding: .utf8) == "pong"
     }
-
-    // MARK: - Profile
 
     func fetchMe() async throws -> Profile {
         let request = try authenticatedRequest(path: "/api/auth/me")
@@ -107,8 +104,6 @@ final class APIService: Sendable {
             throw APIError.decodingError(error)
         }
     }
-
-    // MARK: - Journeys
 
     func fetchJourneys() async throws -> [JourneySummary] {
         let request = try authenticatedRequest(path: "/api/routes")
@@ -162,11 +157,6 @@ final class APIService: Sendable {
         }
     }
 
-    // MARK: - Photos and Videos
-
-    /// Server path of a stored photo, video or video poster. With `thumbnail`, the reduced
-    /// copy the server makes for gallery tiles (720px wide); a video has none of its own, so
-    /// ask for its poster's.
     private func photoPath(_ filename: String, thumbnail: Bool = false) -> String {
         let encodedPath = filename
             .split(separator: "/")
@@ -185,8 +175,6 @@ final class APIService: Sendable {
         return data
     }
 
-    /// A converted video, streamed from the server (which answers the Range requests seeking
-    /// makes) with the pairing token, since AVPlayer can't be handed a URLRequest.
     func videoAsset(filename: String) throws -> AVURLAsset {
         let request = try authenticatedRequest(path: photoPath(filename))
         guard let url = request.url else { throw APIError.invalidURL }
@@ -198,8 +186,6 @@ final class APIService: Sendable {
         let photos: [JourneyPhoto]
     }
 
-    /// A journey's photos and videos on their own, which is lighter than the journey itself.
-    /// The web app polls it while uploads convert, and so does this app.
     func fetchJourneyMedia(id: String) async throws -> [JourneyPhoto] {
         let request = try authenticatedRequest(path: "/api/routes/\(id)/photos")
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -214,9 +200,7 @@ final class APIService: Sendable {
     }
 
     struct MediaUploadResult: Decodable {
-        /// The items as the server stored them. HEIC photos and videos come back "processing".
         let photos: [JourneyPhoto]
-        /// Files the server turned down without failing the request, e.g. a photo over 50 MB.
         let skipped: [Skipped]?
 
         struct Skipped: Decodable {
@@ -229,9 +213,6 @@ final class APIService: Sendable {
         let error: String
     }
 
-    /// Adds photos and videos to a journey with the same request the web app makes: a
-    /// multipart POST with each file under the `photos` field. The server replies once the
-    /// files are stored and converts HEIC photos and videos afterwards.
     func uploadMedia(
         _ files: [MediaUploadFile],
         toJourney id: String,
@@ -240,8 +221,6 @@ final class APIService: Sendable {
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = try authenticatedRequest(path: "/api/routes/\(id)/photos", method: "POST")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        // How long the connection may sit idle, not the whole upload, which for a long video
-        // over a slow link takes minutes
         request.timeoutInterval = 120
 
         let bodyURL = try await Task.detached(priority: .userInitiated) {
@@ -265,6 +244,12 @@ final class APIService: Sendable {
         }
     }
 
+    func mediaUploadRequest(path: String, method: String) throws -> URLRequest {
+        var request = try authenticatedRequest(path: path, method: method)
+        request.timeoutInterval = 120
+        return request
+    }
+
     func deletePhoto(id photoID: String, fromJourney journeyID: String) async throws {
         let request = try authenticatedRequest(path: "/api/routes/\(journeyID)/photos/\(photoID)", method: "DELETE")
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -277,8 +262,6 @@ final class APIService: Sendable {
         }
     }
 
-    /// Writes the multipart body to a temporary file for URLSession to send from, since a video
-    /// can run to hundreds of megabytes. Built off the main thread.
     nonisolated private static func writeUploadBody(_ files: [MediaUploadFile], boundary: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("upload-\(UUID().uuidString)")
         guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
@@ -291,16 +274,7 @@ final class APIService: Sendable {
                 try output.write(contentsOf: Data("--\(boundary)\r\n".utf8))
                 try output.write(contentsOf: Data("Content-Disposition: form-data; name=\"photos\"; filename=\"\(file.filename)\"\r\n".utf8))
                 try output.write(contentsOf: Data("Content-Type: \(file.mimeType)\r\n\r\n".utf8))
-                switch file.contents {
-                case .data(let data):
-                    try output.write(contentsOf: data)
-                case .file(let source):
-                    let input = try FileHandle(forReadingFrom: source)
-                    defer { try? input.close() }
-                    while let chunk = try input.read(upToCount: 4 << 20), !chunk.isEmpty {
-                        try output.write(contentsOf: chunk)
-                    }
-                }
+                try output.write(contentsOf: file.data)
                 try output.write(contentsOf: Data("\r\n".utf8))
             }
             try output.write(contentsOf: Data("--\(boundary)--\r\n".utf8))
@@ -311,16 +285,12 @@ final class APIService: Sendable {
         return url
     }
 
-    // MARK: - Upload
-
     struct UploadResponse: Codable {
         let accepted: Bool?
         let saved: Bool?
         let reason: String?
     }
 
-    /// `recordingId` stays the same across retries, so the server returns the journey it
-    /// already stored instead of saving a duplicate when an earlier response was lost.
     func uploadJourney(fileURL: URL, source: String, recordingId: String) async throws -> UploadResponse {
         guard let pairing = ServerPairing.stored else { throw APIError.notPaired }
         guard let url = URL(string: "\(pairing.baseURL)/upload") else { throw APIError.invalidURL }
@@ -341,7 +311,6 @@ final class APIService: Sendable {
         body.append("Content-Disposition: form-data; name=\"source\"\r\n\r\n".data(using: .utf8)!)
         body.append("\(source)\r\n".data(using: .utf8)!)
 
-        // Recording id field
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"recordingId\"\r\n\r\n".data(using: .utf8)!)
         body.append("\(recordingId)\r\n".data(using: .utf8)!)
@@ -352,7 +321,6 @@ final class APIService: Sendable {
         body.append(fileData)
         body.append("\r\n".data(using: .utf8)!)
 
-        // End
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
         request.httpBody = body
@@ -365,7 +333,6 @@ final class APIService: Sendable {
     }
 }
 
-/// Reports how much of an upload's body has been sent.
 nonisolated private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, Sendable {
     let onProgress: @Sendable (Double) -> Void
 

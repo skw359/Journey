@@ -1,3 +1,5 @@
+// First-launch welcome and pairing screen.
+
 import SwiftUI
 import UIKit
 
@@ -13,11 +15,10 @@ struct WelcomeScreen: View {
     @State private var showQRScanner = false
     @State private var isPairingAfterScan = false
 
-    // Phase tracking
     private enum AnimationPhase {
-        case typingJourney      // "Welcome to Journey."
-        case deletingJourney    // deleting "Journey."
-        case typingTagline      // "the first-class timeline platform."
+        case typingJourney
+        case deletingJourney
+        case typingTagline
         case done
     }
     @State private var phase: AnimationPhase = .typingJourney
@@ -29,16 +30,13 @@ struct WelcomeScreen: View {
     private let baseText = "Welcome to "
     private let journeyWord = "Journey."
     private let tagline = "the first-class timeline platform."
-    // "first-class" starts at index 4, ends at index 15 (exclusive) in tagline
-    private let firstClassRange = (4, 15) // "first-class"
+    private let firstClassRange = (4, 15)
 
     private let green = Color(hex: "#00d67e")
 
-    // Returns attributed-style segments for the current displayedText + phase
     private var textSegments: [(String, Color)] {
         switch phase {
         case .typingJourney, .deletingJourney:
-            // displayedText may be partial through "Welcome to " or into "Journey."
             let len = displayedText.count
             let baselen = baseText.count
             if len <= baselen {
@@ -48,17 +46,22 @@ struct WelcomeScreen: View {
             return [(baseText, .white), (journeyPart, green)]
 
         case .typingTagline, .done:
-            // displayedText = "Welcome to " + partial/full tagline
             let taglinePart = String(displayedText.dropFirst(baseText.count))
             return [(baseText, .white)] + taglineSegments(typed: taglinePart)
-
         }
     }
 
-    // Splits the typed portion of the tagline into white/green segments
+    private var attributedTagline: AttributedString {
+        var result = AttributedString()
+        for (text, color) in textSegments {
+            var piece = AttributedString(text)
+            piece.foregroundColor = color
+            result.append(piece)
+        }
+        return result
+    }
+
     private func taglineSegments(typed: String) -> [(String, Color)] {
-        // tagline = "the first-class timeline platform."
-        // "first-class" = indices 4..<15
         let lo = firstClassRange.0
         let hi = firstClassRange.1
         let len = typed.count
@@ -66,16 +69,13 @@ struct WelcomeScreen: View {
         var segments: [(String, Color)] = []
 
         if len <= lo {
-            // Haven't reached "first-class" yet
             segments.append((typed, .white))
         } else if len <= hi {
-            // Inside "first-class"
             let before = String(typed.prefix(lo))
             let colored = String(typed.dropFirst(lo))
             if !before.isEmpty { segments.append((before, .white)) }
             if !colored.isEmpty { segments.append((colored, green)) }
         } else {
-            // Past "first-class"
             let before = String(typed.prefix(lo))
             let colored = String(typed.prefix(hi).dropFirst(lo))
             let after = String(typed.dropFirst(hi))
@@ -103,11 +103,7 @@ struct WelcomeScreen: View {
                     VStack {
                         Spacer()
 
-                        textSegments
-                            .reduce(Text("")) { result, segment in
-                                result + Text(segment.0)
-                                    .foregroundColor(segment.1)
-                            }
+                        Text(attributedTagline)
                             .font(.montserrat(size: 30, weight: .bold))
                             .padding()
                             .opacity(textOpacity)
@@ -200,8 +196,6 @@ struct WelcomeScreen: View {
             }
         }
     }
-
-    // MARK: - Animation Steps
 
     private func startTypingAnimationIfNeeded() {
         guard !hasStartedTypingAnimation else { return }

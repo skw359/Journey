@@ -1,3 +1,5 @@
+// Card showing a single statistic.
+
 import SwiftUI
 
 struct StatCard: View {

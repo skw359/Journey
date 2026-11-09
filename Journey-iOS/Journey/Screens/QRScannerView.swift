@@ -1,3 +1,5 @@
+// QR code scanner used to pair with a server.
+
 import SwiftUI
 import AVFoundation
 
@@ -98,7 +100,6 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
     }
 
     private func setupUI() {
-        // Close button
         let closeButton = UIButton(type: .system)
         closeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
         closeButton.tintColor = .white
@@ -106,7 +107,6 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         view.addSubview(closeButton)
 
-        // Scan frame
         let scanFrame = UIView()
         scanFrame.layer.borderColor = AppConstants.journeyGreenUIColor.cgColor
         scanFrame.layer.borderWidth = 2

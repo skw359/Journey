@@ -1,15 +1,20 @@
+// App entry point.
+
 import SwiftUI
-import WatchConnectivity
 
 @main
 struct JourneyApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var pairingManager = PairingManager()
     @State private var locationService = LocationService()
-    @State private var uploadManager = UploadManager()
-    @State private var connectivityManager = PhoneConnectivityManager()
+    @State private var uploadManager: UploadManager
+    private let connectivityManager: PhoneConnectivityManager
 
     init() {
+        let uploadManager = UploadManager()
+        _uploadManager = State(initialValue: uploadManager)
+        connectivityManager = PhoneConnectivityManager(uploadManager: uploadManager)
+
         if let navFont = UIFont(name: "Montserrat-Regular", size: 17),
            let navLargeFont = UIFont(name: "Montserrat-Bold", size: 34) {
             UINavigationBar.appearance().titleTextAttributes = [.font: navFont]
@@ -24,9 +29,8 @@ struct JourneyApp: App {
                 .environment(pairingManager)
                 .environment(locationService)
                 .environment(uploadManager)
-                .environment(connectivityManager)
                 .onAppear {
-                    connectivityManager.configure(uploadManager: uploadManager)
+                    VideoUploadQueue.shared.removeOrphans()
                     Task { await pairingManager.checkServerReachability() }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
@@ -35,6 +39,8 @@ struct JourneyApp: App {
                         locationService.appDidEnterBackground()
                     case .active:
                         locationService.appDidBecomeActive()
+                        UploadBackgroundTime.shared.appDidBecomeActive()
+                        VideoUploadQueue.shared.appDidBecomeActive()
                     default:
                         break
                     }

@@ -1,7 +1,7 @@
+// Page dots for the journey story pager.
+
 import SwiftUI
 
-/// Page dots for the journey story pager. The active page is a wide white capsule; long lists
-/// show a sliding window whose clipped edges shrink to hint at more pages.
 struct StoryPageIndicator: View {
     let count: Int
     let current: Int

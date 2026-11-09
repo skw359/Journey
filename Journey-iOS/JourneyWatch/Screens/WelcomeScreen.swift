@@ -1,66 +1,50 @@
+// First-launch welcome screen.
+
 import SwiftUI
 
 struct WelcomeScreen: View {
-    @Binding var showWelcomeScreen: Bool
+    private static let features = [
+        "Real-time tracking of distance, speed, elevation, and more.",
+        "Built-in compass, waypoints, and smart high altitude alerts to keep you safe.",
+        "Location awareness with live area details.",
+        "Set target speeds and get alerted when you hit your marks.",
+        "No phone required.*"
+    ]
+
+    let onStart: () -> Void
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text("Welcome to Journey.")
-                    .font(.title3)
-                    .fontWeight(.bold)
+                    .font(.title3.bold())
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity)
 
                 Text("The travel companion so good that adventure becomes second nature.")
                     .font(.headline)
-                    .multilineTextAlignment(.leading)
 
-                VStack(alignment: .leading, spacing: 15) {
-                    featureText("Real-time tracking of distance, speed, elevation, and more.")
-                    featureText("Built-in compass, waypoints, and smart high altitude alerts to keep you safe.")
-                    featureText("Location awareness with live area details.")
-                    featureText("Set target speeds and get alerted when you hit your marks.")
-                    featureText("No phone required.*")
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Self.features, id: \.self) { feature in
+                        HStack(alignment: .top) {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.caption)
+                            Text(feature).font(.subheadline)
+                        }
+                    }
                 }
-                .padding()
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(10)
+                .padding(10)
+                .background(.white.opacity(0.1), in: .rect(cornerRadius: 10))
 
                 Text("TLDR: Active outdoor tracking and navigation tailored for adventurers.")
                     .font(.caption)
-                    .multilineTextAlignment(.leading)
-                    .padding()
 
-                Button(action: {
-                    showWelcomeScreen = false
-                    UserDefaults.standard.set(true, forKey: "showWelcomeScreen")
-                }) {
-                    Text("Start")
-                        .fontWeight(.bold)
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.white)
-                        .cornerRadius(10)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding()
+                Button("Start", action: onStart)
+                    .buttonStyle(.wide(.white))
+                    .foregroundStyle(.black)
             }
-            .padding()
+            .padding(.horizontal, 8)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(hex: "#1e4c40").edgesIgnoringSafeArea(.all))
-        .foregroundColor(.white)
-    }
-
-    private func featureText(_ text: String) -> some View {
-        HStack(alignment: .top) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(Color(hex: "#05df73"))
-            Text(text)
-                .font(.subheadline)
-        }
+        .background(Color(hex: 0x1E4C40).ignoresSafeArea())
     }
 }

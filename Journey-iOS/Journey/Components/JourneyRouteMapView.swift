@@ -1,8 +1,8 @@
+// Map view that draws a journey's route.
+
 import SwiftUI
 import MapKit
 
-/// Static route map used as a journey backdrop and preview. Touches pass through so the
-/// surrounding pager and scroll view keep their gestures; open FullscreenMapScreen to explore.
 struct JourneyRouteMapView: UIViewRepresentable {
     let coordinates: [CLLocationCoordinate2D]
     var edgePadding = UIEdgeInsets(top: 40, left: 40, bottom: 40, right: 40)
@@ -51,10 +51,6 @@ struct JourneyRouteMapView: UIViewRepresentable {
     }
 }
 
-// MARK: - Fitting Map View
-
-/// Keeps the route framed whenever the view's size or padding changes, which SwiftUI
-/// only settles after the first layout pass.
 final class RouteFittingMapView: MKMapView {
     var edgePadding: UIEdgeInsets = .zero {
         didSet {
@@ -102,7 +98,6 @@ final class RouteFittingMapView: MKMapView {
         setVisibleMapRect(paddedRouteRect(routeLine.boundingMapRect), edgePadding: clampedPadding, animated: false)
     }
 
-    /// Short routes would otherwise zoom to street level.
     private func paddedRouteRect(_ rect: MKMapRect) -> MKMapRect {
         let minimumSide = MKMapPointsPerMeterAtLatitude(rect.origin.coordinate.latitude) * 300
         let dx = max(0, minimumSide - rect.width) / 2
@@ -110,7 +105,6 @@ final class RouteFittingMapView: MKMapView {
         return rect.insetBy(dx: -dx, dy: -dy)
     }
 
-    /// Scales padding down when it would leave no room for the route.
     private var clampedPadding: UIEdgeInsets {
         var padding = edgePadding
         let maxVertical = max(bounds.height - 80, 0)
@@ -129,8 +123,6 @@ final class RouteFittingMapView: MKMapView {
     }
 }
 
-// MARK: - Route Markers
-
 final class RouteEndpointAnnotation: NSObject, MKAnnotation {
     let coordinate: CLLocationCoordinate2D
     let isStart: Bool
@@ -142,7 +134,6 @@ final class RouteEndpointAnnotation: NSObject, MKAnnotation {
 }
 
 enum RouteMarkerImages {
-    /// Green circle with a white border
     static let start: UIImage = {
         let size: CGFloat = 14
         return UIGraphicsImageRenderer(size: CGSize(width: size, height: size)).image { _ in
@@ -155,7 +146,6 @@ enum RouteMarkerImages {
         }
     }()
 
-    /// Red square with a white flag
     static let end: UIImage = {
         let size: CGFloat = 28
         return UIGraphicsImageRenderer(size: CGSize(width: size, height: size)).image { _ in

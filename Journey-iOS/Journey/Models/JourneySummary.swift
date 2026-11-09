@@ -1,3 +1,5 @@
+// Journey summary used in the journeys list.
+
 import Foundation
 
 struct JourneySummary: Codable, Identifiable, Hashable {
@@ -11,7 +13,6 @@ struct JourneySummary: Codable, Identifiable, Hashable {
     let watchRecorded: Bool?
     let waypointCount: Int?
     let photoCount: Int?
-    /// The first converted photo or video poster, as the server picks it for list cards.
     let coverPhoto: String?
     let travelMode: String?
     let avgSpeed: String?
@@ -36,8 +37,6 @@ struct JourneySummary: Codable, Identifiable, Hashable {
         return ISODateParser.date(from: endTime)
     }
 
-    // Shared because creating a DateFormatter is slow, and these run for every journey
-    // each time the list renders
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"

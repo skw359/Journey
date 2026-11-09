@@ -1,3 +1,5 @@
+// Fullscreen map of a journey.
+
 import SwiftUI
 import MapKit
 
@@ -6,23 +8,37 @@ struct FullscreenMapScreen: View {
     @AppStorage(AppConstants.useMetricUnitsKey) private var useMetricUnits = false
     @State private var cameraMode: LiveMapCameraMode
     @State private var mapStyle: LiveMapStyle = .standard
+    @State private var mapIsLive: Bool
     let coordinates: [CLLocationCoordinate2D]
     let userLocation: CLLocationCoordinate2D?
     let pointCount: Int
     let distanceMiles: Double
+    let onClose: (() -> Void)?
+    let initialMapRect: MKMapRect?
+    let showsEndMarker: Bool
+    let onMapRendered: (() -> Void)?
 
     init(
         coordinates: [CLLocationCoordinate2D],
         userLocation: CLLocationCoordinate2D?,
         pointCount: Int,
         distanceMiles: Double,
-        initialCameraMode: LiveMapCameraMode = .followUser
+        initialCameraMode: LiveMapCameraMode = .followUser,
+        initialMapRect: MKMapRect? = nil,
+        showsEndMarker: Bool = false,
+        onMapRendered: (() -> Void)? = nil,
+        onClose: (() -> Void)? = nil
     ) {
         self.coordinates = coordinates
         self.userLocation = userLocation
         self.pointCount = pointCount
         self.distanceMiles = distanceMiles
-        _cameraMode = State(initialValue: initialCameraMode)
+        self.initialMapRect = initialMapRect
+        self.showsEndMarker = showsEndMarker
+        self.onMapRendered = onMapRendered
+        self.onClose = onClose
+        _cameraMode = State(initialValue: initialMapRect == nil ? initialCameraMode : .manual)
+        _mapIsLive = State(initialValue: initialMapRect == nil)
     }
 
     var body: some View {
@@ -35,38 +51,45 @@ struct FullscreenMapScreen: View {
                 isRecording: true,
                 onUserInteraction: {
                     cameraMode = .manual
-                }
+                },
+                initialMapRect: initialMapRect,
+                showsEndMarker: showsEndMarker,
+                onRendered: onMapRendered,
+                onUserGesture: { mapIsLive = true }
             )
+            .opacity(mapIsLive ? 1 : 0.02)
+            .onChange(of: cameraMode) { mapIsLive = true }
+            .onChange(of: mapStyle) { mapIsLive = true }
             .ignoresSafeArea()
 
             VStack {
                 HStack {
                     Button {
-                        dismiss()
+                        if let onClose {
+                            onClose()
+                        } else {
+                            dismiss()
+                        }
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(Color.black.opacity(0.7)))
+                        chromeIcon("xmark")
                     }
+                    .accessibilityLabel("Close")
                     Spacer()
                     Menu {
                         mapStyleButton(.standard, title: "Standard")
                         mapStyleButton(.hybrid, title: "Hybrid")
                         mapStyleButton(.satellite, title: "Satellite")
                     } label: {
-                        Image(systemName: mapStyle.iconName)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(Color.black.opacity(0.7)))
+                        chromeIcon(mapStyle.iconName)
                     }
+                    .menuStyle(.button)
                     .accessibilityLabel("Map style")
                     .accessibilityValue(mapStyle.accessibilityLabel)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .padding(.horizontal, 20)
+                .padding(.top, 6)
 
                 Spacer()
 
@@ -83,42 +106,45 @@ struct FullscreenMapScreen: View {
 
                         Text("\(pointCount) pts")
                             .font(.montserrat(size: 14))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.white.opacity(0.7))
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.7))
-                    )
+                    .padding(.vertical, 12)
+                    .glassEffect(.regular, in: .capsule)
 
                     Spacer()
 
-                    VStack(spacing: 8) {
+                    VStack(spacing: 10) {
                         Button {
                             cameraMode = .overview
                         } label: {
-                            Image(systemName: "scope")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(cameraMode == .overview ? AppConstants.journeyGreen : .white)
-                                .frame(width: 40, height: 40)
-                                .background(Circle().fill(Color.black.opacity(0.7)))
+                            chromeIcon("scope", tint: cameraMode == .overview ? AppConstants.journeyGreen : .white)
                         }
+                        .accessibilityLabel("Show Whole Route")
                         Button {
                             cameraMode = .followUser
                         } label: {
-                            Image(systemName: "location.fill")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(cameraMode == .followUser ? AppConstants.journeyGreen : .white)
-                                .frame(width: 40, height: 40)
-                                .background(Circle().fill(Color.black.opacity(0.7)))
+                            chromeIcon(
+                                cameraMode == .followUser ? "location.fill" : "location",
+                                tint: cameraMode == .followUser ? AppConstants.journeyGreen : .white
+                            )
                         }
+                        .accessibilityLabel("Follow My Location")
                     }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
                 .padding(.bottom, 60)
             }
         }
+    }
+
+    private func chromeIcon(_ systemName: String, tint: Color = .white) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: 26, height: 26)
     }
 
     @ViewBuilder

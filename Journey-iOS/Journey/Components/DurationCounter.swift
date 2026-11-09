@@ -1,3 +1,5 @@
+// Live elapsed-time counter.
+
 import SwiftUI
 
 struct DurationCounter: View {

@@ -1,3 +1,5 @@
+// Reverse geocoding of locations into place names.
+
 import Foundation
 import CoreLocation
 
@@ -26,7 +28,6 @@ final class GeocodingService {
 
     private func updateCity(_ location: CLLocation) {
         let now = Date()
-        // Skip if the last lookup was under 30s ago and we've moved under 500m
         if let lastTime = lastCityLookupTime, now.timeIntervalSince(lastTime) < 30 {
             if let lastLoc = lastCityLookupLocation, location.distance(from: lastLoc) < 500 {
                 return

@@ -1,3 +1,5 @@
+// Live map shown while recording.
+
 import SwiftUI
 import MapKit
 
@@ -53,6 +55,46 @@ enum LiveMapStyle: CaseIterable {
     }
 }
 
+final class AttributionHiddenMapView: MKMapView {
+    var initialVisibleRect: MKMapRect?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        hideAttribution(in: self)
+        if let rect = initialVisibleRect, window != nil, bounds.width > 1, bounds.height > 1 {
+            initialVisibleRect = nil
+            setVisibleMapRect(partInsideSafeArea(of: rect), animated: false)
+        }
+    }
+
+    private func partInsideSafeArea(of rect: MKMapRect) -> MKMapRect {
+        let mapPointsPerX = rect.width / bounds.width
+        let mapPointsPerY = rect.height / bounds.height
+        return MKMapRect(
+            x: rect.minX + safeAreaInsets.left * mapPointsPerX,
+            y: rect.minY + safeAreaInsets.top * mapPointsPerY,
+            width: rect.width - (safeAreaInsets.left + safeAreaInsets.right) * mapPointsPerX,
+            height: rect.height - (safeAreaInsets.top + safeAreaInsets.bottom) * mapPointsPerY
+        )
+    }
+
+    override func didAddSubview(_ subview: UIView) {
+        super.didAddSubview(subview)
+        hideAttribution(in: subview)
+    }
+
+    private func hideAttribution(in view: UIView) {
+        for subview in view.subviews {
+            let name = String(describing: type(of: subview))
+            if name.contains("Attribution") || name.contains("AppleLogo") {
+                subview.isHidden = true
+            } else {
+                hideAttribution(in: subview)
+            }
+        }
+    }
+}
+
 struct LiveMapView: UIViewRepresentable {
     let coordinates: [CLLocationCoordinate2D]
     let userLocation: CLLocationCoordinate2D?
@@ -60,24 +102,42 @@ struct LiveMapView: UIViewRepresentable {
     let mapStyle: LiveMapStyle
     let isRecording: Bool
     var onUserInteraction: (() -> Void)? = nil
+    var obscuredInsets: UIEdgeInsets = .zero
+    var overviewPadding = UIEdgeInsets(top: 48, left: 32, bottom: 48, right: 32)
+    var compassTopInset: CGFloat?
+    var initialMapRect: MKMapRect?
+    var showsEndMarker = false
+    var onRendered: (() -> Void)?
+    var onUserGesture: (() -> Void)?
 
     func makeUIView(context: Context) -> MKMapView {
-        let mapView = MKMapView()
+        let mapView = AttributionHiddenMapView()
+        mapView.initialVisibleRect = initialMapRect
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
         mapView.isZoomEnabled = true
         mapView.isScrollEnabled = true
         mapView.isRotateEnabled = true
         mapView.overrideUserInterfaceStyle = .dark
-        mapView.layer.cornerRadius = 16
-        mapView.clipsToBounds = true
         context.coordinator.applyMapStyle(on: mapView, style: mapStyle)
+        if let compassTopInset {
+            mapView.showsCompass = false
+            let compass = MKCompassButton(mapView: mapView)
+            compass.compassVisibility = .adaptive
+            compass.translatesAutoresizingMaskIntoConstraints = false
+            mapView.addSubview(compass)
+            NSLayoutConstraint.activate([
+                compass.topAnchor.constraint(equalTo: mapView.safeAreaLayoutGuide.topAnchor, constant: compassTopInset),
+                compass.trailingAnchor.constraint(equalTo: mapView.safeAreaLayoutGuide.trailingAnchor, constant: -21)
+            ])
+        }
         return mapView
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
         context.coordinator.parent = self
         context.coordinator.applyMapStyle(on: mapView, style: mapStyle)
+        let insetsDidChange = context.coordinator.applyObscuredInsets(on: mapView)
 
         let routeDidChange = context.coordinator.syncRoute(on: mapView, coordinates: coordinates)
 
@@ -91,21 +151,23 @@ struct LiveMapView: UIViewRepresentable {
             context.coordinator.applyFollowCamera(on: mapView, userLocation: userLocation)
         case .overview:
             context.coordinator.hasShownInitialRegion = true
-            if routeDidChange || context.coordinator.lastCameraMode != .overview {
+            if routeDidChange || insetsDidChange || context.coordinator.lastCameraMode != .overview {
                 context.coordinator.applyOverviewCamera(
                     on: mapView,
                     fallbackCoordinate: coordinates.first ?? userLocation,
-                    animated: false
+                    animated: context.coordinator.lastCameraMode != nil && !routeDidChange
                 )
             }
         case .manual:
             if !context.coordinator.hasShownInitialRegion {
                 context.coordinator.hasShownInitialRegion = true
-                context.coordinator.applyOverviewCamera(
-                    on: mapView,
-                    fallbackCoordinate: coordinates.first ?? userLocation,
-                    animated: false
-                )
+                if initialMapRect == nil {
+                    context.coordinator.applyOverviewCamera(
+                        on: mapView,
+                        fallbackCoordinate: coordinates.first ?? userLocation,
+                        animated: false
+                    )
+                }
             }
         }
 
@@ -125,6 +187,7 @@ struct LiveMapView: UIViewRepresentable {
         private var isPerformingProgrammaticCameraChange = false
         private var routeOverlay: MKPolyline?
         private var startAnnotation: MKPointAnnotation?
+        private var endAnnotation: RouteEndpointAnnotation?
         private var renderedCoordinateCount = 0
         private var renderedFirstCoordinate: CLLocationCoordinate2D?
         private var renderedLastCoordinate: CLLocationCoordinate2D?
@@ -136,10 +199,20 @@ struct LiveMapView: UIViewRepresentable {
         func applyMapStyle(on mapView: MKMapView, style: LiveMapStyle) {
             guard lastMapStyle != style else { return }
 
-            mapView.mapType = style.mapType
+            if style == .standard {
+                mapView.preferredConfiguration = MKStandardMapConfiguration(emphasisStyle: .muted)
+            } else {
+                mapView.mapType = style.mapType
+            }
             mapView.pointOfInterestFilter = .excludingAll
             mapView.showsTraffic = false
             lastMapStyle = style
+        }
+
+        func applyObscuredInsets(on mapView: MKMapView) -> Bool {
+            guard parent.obscuredInsets != .zero, mapView.layoutMargins != parent.obscuredInsets else { return false }
+            mapView.layoutMargins = parent.obscuredInsets
+            return true
         }
 
         @discardableResult
@@ -169,7 +242,19 @@ struct LiveMapView: UIViewRepresentable {
             }
 
             syncStartAnnotation(on: mapView, coordinate: firstCoordinate)
+            syncEndAnnotation(on: mapView, coordinates: coordinates)
             return true
+        }
+
+        private func syncEndAnnotation(on mapView: MKMapView, coordinates: [CLLocationCoordinate2D]) {
+            if let endAnnotation {
+                mapView.removeAnnotation(endAnnotation)
+                self.endAnnotation = nil
+            }
+            guard parent.showsEndMarker, coordinates.count >= 2, let last = coordinates.last else { return }
+            let annotation = RouteEndpointAnnotation(coordinate: last, isStart: false)
+            endAnnotation = annotation
+            mapView.addAnnotation(annotation)
         }
 
         func applyFollowCamera(on mapView: MKMapView, userLocation: CLLocationCoordinate2D?) {
@@ -202,7 +287,7 @@ struct LiveMapView: UIViewRepresentable {
                 applyProgrammaticCameraChange {
                     mapView.setVisibleMapRect(
                         overlay.boundingMapRect,
-                        edgePadding: UIEdgeInsets(top: 48, left: 32, bottom: 48, right: 32),
+                        edgePadding: parent.overviewPadding,
                         animated: animated
                     )
                 }
@@ -279,6 +364,14 @@ struct LiveMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if annotation is MKUserLocation { return nil }
+            if annotation is RouteEndpointAnnotation {
+                let id = "EndMarker"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: id)
+                    ?? MKAnnotationView(annotation: annotation, reuseIdentifier: id)
+                view.annotation = annotation
+                view.image = RouteMarkerImages.end
+                return view
+            }
             let id = "StartPin"
             var view = mapView.dequeueReusableAnnotationView(withIdentifier: id)
             if view == nil {
@@ -298,7 +391,12 @@ struct LiveMapView: UIViewRepresentable {
             return view
         }
 
+        func mapViewDidFinishRenderingMap(_ mapView: MKMapView, fullyRendered: Bool) {
+            parent.onRendered?()
+        }
+
         func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+            if isUserInteractionDrivingRegionChange(on: mapView) { parent.onUserGesture?() }
             guard !isPerformingProgrammaticCameraChange else { return }
             guard parent.cameraMode != .manual else { return }
             guard !hasPendingManualUnlock else { return }

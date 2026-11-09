@@ -1,3 +1,5 @@
+// Filter chips for the journeys list.
+
 import SwiftUI
 
 enum JourneyFilter: String, CaseIterable {
