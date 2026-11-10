@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Header from './components/Header';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const loadDashboard = () => import('./pages/Dashboard');
 const loadTopJourneys = () => import('./pages/TopJourneys');
@@ -203,31 +204,33 @@ export default function App() {
       <div className="route-transition-stage">
         <Suspense fallback={null}>
           <div className="route-transition-content">
-            <Routes location={displayLocation}>
-              <Route path="/" element={<Navigate to="/journeys" replace />} />
-              <Route
-                path="/journeys"
-                element={<Dashboard sidebarCollapsed={sidebarCollapsed.journeys} searchValue={searchValue} />}
-              />
-              <Route
-                path="/topjourneys"
-                element={<TopJourneys sidebarCollapsed={sidebarCollapsed.topjourneys} />}
-              />
-              <Route path="/heatmap" element={<Navigate to="/atlas?view=heatmap" replace />} />
-              <Route path="/alltime" element={<Navigate to="/atlas" replace />} />
-              <Route path="/atlas" element={<Atlas sidebarCollapsed={sidebarCollapsed.atlas} />} />
-              <Route
-                path="/recently-deleted"
-                element={<RecentlyDeleted sidebarCollapsed={sidebarCollapsed.recentlyDeleted} searchValue={searchValue} />}
-              />
-              <Route path="/funstats" element={<FunStats />} />
-              <Route path="/marco" element={<Marco />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/pair" element={<PairClient />} />
-              <Route path="/api.html" element={<ApiDocs />} />
-              <Route path="/api-docs" element={<ApiDocs />} />
-              <Route path="*" element={<Navigate to="/journeys" replace />} />
-            </Routes>
+            <ErrorBoundary key={displayedPath}>
+              <Routes location={displayLocation}>
+                <Route path="/" element={<Navigate to="/journeys" replace />} />
+                <Route
+                  path="/journeys"
+                  element={<Dashboard sidebarCollapsed={sidebarCollapsed.journeys} searchValue={searchValue} />}
+                />
+                <Route
+                  path="/topjourneys"
+                  element={<TopJourneys sidebarCollapsed={sidebarCollapsed.topjourneys} />}
+                />
+                <Route path="/heatmap" element={<Navigate to="/atlas?view=heatmap" replace />} />
+                <Route path="/alltime" element={<Navigate to="/atlas" replace />} />
+                <Route path="/atlas" element={<Atlas sidebarCollapsed={sidebarCollapsed.atlas} />} />
+                <Route
+                  path="/recently-deleted"
+                  element={<RecentlyDeleted sidebarCollapsed={sidebarCollapsed.recentlyDeleted} searchValue={searchValue} />}
+                />
+                <Route path="/funstats" element={<FunStats />} />
+                <Route path="/marco" element={<Marco />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/pair" element={<PairClient />} />
+                <Route path="/api.html" element={<ApiDocs />} />
+                <Route path="/api-docs" element={<ApiDocs />} />
+                <Route path="*" element={<Navigate to="/journeys" replace />} />
+              </Routes>
+            </ErrorBoundary>
           </div>
         </Suspense>
         <div className="route-transition-backdrop" aria-hidden="true" />

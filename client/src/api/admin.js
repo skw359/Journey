@@ -22,3 +22,6 @@ export const listUsers = () => request('/api/admin/users', undefined, 'Failed to
 export const setUserAdmin = (id, isAdmin) =>
   request(`/api/admin/users/${encodeURIComponent(id)}`, json('PATCH', { isAdmin }), 'Failed to update account');
 export const removeUser = (id) => request(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Failed to delete account');
+// -> { temporaryPassword }: shown once, for the admin to pass on.
+export const resetUserPassword = (id) =>
+  request(`/api/admin/users/${encodeURIComponent(id)}/reset-password`, { method: 'POST' }, 'Failed to reset the password');

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { listInvites, createInvite, revokeInvite, listUsers, setUserAdmin, removeUser } from '../api/admin';
+import { listInvites, createInvite, revokeInvite, listUsers, setUserAdmin, removeUser, resetUserPassword } from '../api/admin';
 
 const STATUS_LABELS = { pending: 'Waiting', used: 'Used', expired: 'Expired', revoked: 'Revoked' };
 
@@ -15,6 +15,7 @@ export default function AdminAccountsPanel() {
   const [days, setDays] = useState('7');
   const [newInvite, setNewInvite] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [resetResult, setResetResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,6 +58,14 @@ export default function AdminAccountsPanel() {
     } catch {
       setCopied(false);
     }
+  };
+
+  const handleResetPassword = (account) => {
+    if (!window.confirm(`Reset the password for ${account.username}? They will be signed out everywhere and need the new password to sign in.`)) return;
+    run(async () => {
+      const { temporaryPassword } = await resetUserPassword(account.id);
+      setResetResult({ username: account.username, temporaryPassword });
+    });
   };
 
   const handleRemove = (account) => {
@@ -135,6 +144,20 @@ export default function AdminAccountsPanel() {
       )}
 
       <h3 className="settings-field-label" style={{ marginTop: 20 }}>Accounts</h3>
+      {resetResult && (
+        <div className="settings-connection-status success">
+          <div>
+            New password for {resetResult.username}. Pass it on; it won&apos;t be shown again, and they
+            can change it under Account once signed in.
+          </div>
+          <code style={{ wordBreak: 'break-all' }}>{resetResult.temporaryPassword}</code>
+          <div className="settings-btn-row">
+            <button className="settings-btn settings-btn-secondary" onClick={() => setResetResult(null)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
       {users.map((account) => (
         <div key={account.id} className="settings-storage-row">
           <div className="settings-item-copy">
@@ -153,6 +176,9 @@ export default function AdminAccountsPanel() {
                 disabled={busy}
               >
                 {account.isAdmin ? 'Remove Admin' : 'Make Admin'}
+              </button>
+              <button className="settings-btn settings-btn-secondary" onClick={() => handleResetPassword(account)} disabled={busy}>
+                Reset Password
               </button>
               <button className="settings-btn settings-btn-danger" onClick={() => handleRemove(account)} disabled={busy}>
                 Delete

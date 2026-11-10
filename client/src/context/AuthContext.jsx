@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as authApi from '../api/auth';
+import { onUnauthorized } from '../api/apiFetch';
 
 const AuthContext = createContext(null);
 
@@ -12,6 +13,9 @@ export function AuthProvider({ children }) {
   const [migrationCount, setMigrationCount] = useState(0);
   const [marcoEnabled, setMarcoEnabled] = useState(false);
   const [registration, setRegistration] = useState('invite-only');
+  // The session ended while the app was open, so the sign-in page can say why it appeared.
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const signedInRef = useRef(false);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -33,11 +37,39 @@ export function AuthProvider({ children }) {
     checkStatus();
   }, [checkStatus]);
 
+  useEffect(() => {
+    signedInRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  // A 401 while signed in: the session lapsed, or a password change ended it. A wrong password
+  // also answers 401, so ask the server whether the session is really gone before acting.
+  useEffect(() => {
+    let asking = false;
+    return onUnauthorized(async () => {
+      if (asking || !signedInRef.current) return;
+      asking = true;
+      try {
+        const data = await authApi.getAuthStatus();
+        if (!data.isAuthenticated && signedInRef.current) {
+          setUser(null);
+          setIsAuthenticated(false);
+          setIsSetup(data.isSetup);
+          setSessionExpired(true);
+        }
+      } catch {
+        // Offline: leave things as they are; the next request will ask again.
+      } finally {
+        asking = false;
+      }
+    });
+  }, []);
+
   const login = useCallback(async (credentials) => {
     const data = await authApi.login(credentials);
     setUser(data.user);
     setIsAuthenticated(true);
     setIsSetup(true);
+    setSessionExpired(false);
   }, []);
 
   const register = useCallback(async (credentials) => {
@@ -96,6 +128,7 @@ export function AuthProvider({ children }) {
       marcoEnabled,
       setMarcoEnabled,
       registration,
+      sessionExpired,
     }}>
       {children}
     </AuthContext.Provider>

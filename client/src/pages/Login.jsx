@@ -5,7 +5,7 @@ import VisualCanvas from './VisualCanvas';
 import './Login.css';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, sessionExpired } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +26,7 @@ export default function Login() {
   };
 
   const handleForgotPassword = () => {
-    setError('Password reset is not available yet. Contact your administrator.');
+    setError('Ask your server admin to reset your password. If you are the admin, run "npm run password:reset -- <username>" on the server.');
   };
 
   const handleCreateAccount = () => {
@@ -64,6 +64,9 @@ export default function Login() {
 
           <form className="login-form" onSubmit={handleSubmit}>
             {error && <div className="login-error" role="alert">{error}</div>}
+            {!error && sessionExpired && (
+              <div className="login-error" role="status">You were signed out. Sign in again to continue.</div>
+            )}
 
             <div className="input-group">
               <div className="input-wrapper">
