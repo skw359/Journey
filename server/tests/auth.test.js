@@ -196,6 +196,22 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
         assert.equal((await phone.get('/api/fun-stats')).status, 401);
         assert.equal((await phone.post('/api/pairing/tokens', { json: {} })).status, 401);
 
+        // Express matches paths case-insensitively and ignores a trailing slash, so the
+        // restriction has to hold for every spelling of a web-only path.
+        const doomed = await h.uploadJourney(admin, h.journeyZip(h.lineRows({ count: 150, lat: 52 })));
+        assert.equal(doomed.status, 201);
+        assert.equal((await phone.delete(`/api/routes/${doomed.data.id}`)).status, 200, 'a device may move a journey to Trash');
+        for (const spelling of ['TRASH', 'Trash', 'trash/', 'TRASH/']) {
+            assert.equal((await phone.get(`/api/routes/${spelling}`)).status, 403, `GET ${spelling}`);
+            assert.equal((await phone.delete(`/api/routes/${spelling}`)).status, 403, `DELETE ${spelling}`);
+        }
+        assert.equal((await phone.get('/api/routes/Cities-Status')).status, 403);
+        assert.equal((await phone.post('/api/routes/COMBINE', { json: { journeyIds: ['a', 'b'] } })).status, 403);
+        const trash = await admin.get('/api/routes/trash');
+        assert.equal(trash.data.length, 1, 'Recently Deleted was not emptied');
+        assert.equal((await phone.delete(`/api/routes/trash/${trash.data[0].id}`)).status, 403);
+        assert.equal((await admin.get('/api/routes/trash')).data.length, 1);
+
         // A QR code nobody scanned stops working.
         const unscanned = await admin.post('/api/pairing/tokens', { json: {} });
         await pool.query("UPDATE pairing_tokens SET pending_until = NOW() - INTERVAL '1 second' WHERE id = $1", [unscanned.data.id]);
@@ -203,6 +219,23 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
         // A device unused for too long has to pair again.
         await pool.query("UPDATE pairing_tokens SET last_used_at = NOW() - INTERVAL '400 days' WHERE id = $1", [created.data.id]);
         assert.equal((await phone.get('/api/routes')).status, 401);
+    });
+
+    await t.test('every journeys route is web-only unless listed here', () => {
+        // A new route under /api/routes has to be added to this list or take webOnly.
+        const deviceRoutes = new Set(['GET /', 'GET /:id', 'PATCH /:id/name', 'PATCH /:id/travel-mode', 'DELETE /:id']);
+        const journeys = require('../routes/journeys');
+        const seen = new Set();
+        for (const layer of journeys.stack) {
+            assert.ok(layer.route, 'the journeys router only holds routes, so nothing runs ahead of webOnly');
+            for (const method of Object.keys(layer.route.methods)) {
+                const name = `${method.toUpperCase()} ${layer.route.path}`;
+                seen.add(name);
+                const guarded = layer.route.stack[0].handle === journeys.webOnly;
+                assert.equal(guarded, !deviceRoutes.has(name), `${name} ${guarded ? 'should be open to devices' : 'is missing webOnly'}`);
+            }
+        }
+        for (const name of deviceRoutes) assert.ok(seen.has(name), `${name} no longer exists`);
     });
 
     await t.test('plaintext pairing tokens from older versions are migrated to hashes', async () => {

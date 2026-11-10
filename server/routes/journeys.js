@@ -44,6 +44,13 @@ function sendHttpError(res, err) {
     return res.status(err.status).json({ error: err.message, ...err.extra });
 }
 
+// Paired devices (bearer tokens) may list, view, rename, re-mode and trash journeys. Every
+// other route in this file takes webOnly; tests/auth.test.js fails if one is missed.
+function webOnly(req, res, next) {
+    if (req.authMethod === 'session') return next();
+    res.status(403).json({ error: 'Paired devices cannot do this; use the web app' });
+}
+
 function newWaypointId() {
     return `wp-${crypto.randomBytes(8).toString('hex')}`;
 }
@@ -149,7 +156,7 @@ router.get('/', async (req, res) => {
 // restarts; the status endpoints report the live job so a reloaded page picks it back up.
 function geoBackfillRoutes(kind) {
     // GET /api/routes/{cities,places}-status — progress plus the running job, if any
-    router.get(`/${kind}-status`, async (req, res) => {
+    router.get(`/${kind}-status`, webOnly, async (req, res) => {
         try {
             res.json(await getGeoBackfillStatus(req.userId, kind));
         } catch (err) {
@@ -159,7 +166,7 @@ function geoBackfillRoutes(kind) {
     });
 
     // POST /api/routes/reindex-{cities,places} — reset every row to NULL so the backfill recomputes it
-    router.post(`/reindex-${kind}`, async (req, res) => {
+    router.post(`/reindex-${kind}`, webOnly, async (req, res) => {
         try {
             res.json({ reset: await resetGeoBackfill(req.userId, kind) });
         } catch (err) {
@@ -169,7 +176,7 @@ function geoBackfillRoutes(kind) {
     });
 
     // POST /api/routes/backfill-{cities,places} — start the background job, or join the running one
-    router.post(`/backfill-${kind}`, async (req, res) => {
+    router.post(`/backfill-${kind}`, webOnly, async (req, res) => {
         try {
             const { remaining } = await getGeoBackfillStatus(req.userId, kind);
             const started = remaining > 0 && startGeoBackfill(req.userId, kind);
@@ -181,7 +188,7 @@ function geoBackfillRoutes(kind) {
     });
 
     // POST /api/routes/backfill-{cities,places}/stop — routes already done keep their results
-    router.post(`/backfill-${kind}/stop`, async (req, res) => {
+    router.post(`/backfill-${kind}/stop`, webOnly, async (req, res) => {
         try {
             const stopped = stopGeoBackfill(req.userId, kind);
             res.json({ stopped, ...(await getGeoBackfillStatus(req.userId, kind)) });
@@ -199,7 +206,7 @@ geoBackfillRoutes('places');
 // Declared before "/:id" so "trash" is never captured as a route id.
 
 // GET /api/routes/trash — list trashed journeys (lazily purges expired ones first)
-router.get('/trash', async (req, res) => {
+router.get('/trash', webOnly, async (req, res) => {
     try {
         await withTenantClient(req.userId, async (db) => {
             await purgeExpiredTrash(db);
@@ -213,7 +220,7 @@ router.get('/trash', async (req, res) => {
 });
 
 // DELETE /api/routes/trash — permanently empty Trash
-router.delete('/trash', async (req, res) => {
+router.delete('/trash', webOnly, async (req, res) => {
     try {
         await withTenantClient(req.userId, async (db) => {
             const removed = await emptyTrash(db);
@@ -226,7 +233,7 @@ router.delete('/trash', async (req, res) => {
 });
 
 // GET /api/routes/trash/:trashId — full detail of a single trashed journey
-router.get('/trash/:trashId', async (req, res) => {
+router.get('/trash/:trashId', webOnly, async (req, res) => {
     try {
         await withTenantClient(req.userId, async (db) => {
             const detail = await getTrashDetail(db, req.params.trashId);
@@ -240,7 +247,7 @@ router.get('/trash/:trashId', async (req, res) => {
 });
 
 // POST /api/routes/trash/:trashId/restore — restore a trashed journey to the active list
-router.post('/trash/:trashId/restore', async (req, res) => {
+router.post('/trash/:trashId/restore', webOnly, async (req, res) => {
     try {
         const restored = await withTenantTransaction(req.userId, (db) => restoreTrashedJourney(db, req.params.trashId));
         if (!restored) return res.status(404).json({ error: 'Trashed journey not found' });
@@ -260,7 +267,7 @@ router.post('/trash/:trashId/restore', async (req, res) => {
 });
 
 // DELETE /api/routes/trash/:trashId — permanently delete a single trashed journey
-router.delete('/trash/:trashId', async (req, res) => {
+router.delete('/trash/:trashId', webOnly, async (req, res) => {
     try {
         await withTenantClient(req.userId, async (db) => {
             const ok = await permanentlyDeleteTrash(db, req.params.trashId);
@@ -305,7 +312,7 @@ router.get('/:id', async (req, res) => {
             ]);
 
             if (routeResult.rows.length === 0) {
-                return res.status(404).send('Journey not found');
+                return res.status(404).json({ error: 'Journey not found' });
             }
 
             const route = toApiRoute(routeResult.rows[0], waypointsResult.rows, photosResult.rows);
@@ -400,7 +407,7 @@ router.delete('/:id', async (req, res) => {
             origin: TRASH_ORIGIN.USER_DELETED,
             reason: 'Deleted from journeys',
         }));
-        if (!result) return res.status(404).send('Journey not found');
+        if (!result) return res.status(404).json({ error: 'Journey not found' });
         res.status(200).json({ message: 'Journey moved to Trash', trashId: result.trashId });
     } catch (err) {
         log.error('DELETE /api/routes/:id error:', err);
@@ -467,16 +474,16 @@ async function deletePoints(req, res, rawIndices) {
     }
 }
 
-router.delete('/:id/points/:index', (req, res) => deletePoints(req, res, [req.params.index]));
+router.delete('/:id/points/:index', webOnly, (req, res) => deletePoints(req, res, [req.params.index]));
 
 // POST /api/routes/:id/points/delete { indices: [..] } — several points in one go
-router.post('/:id/points/delete', express.json(), (req, res) => {
+router.post('/:id/points/delete', webOnly, express.json(), (req, res) => {
     const indices = req.body?.indices;
     if (!Array.isArray(indices)) return res.status(400).json({ error: 'indices must be a list' });
     return deletePoints(req, res, indices);
 });
 
-router.patch('/:id/waypoints/:wpId', express.json(), async (req, res) => {
+router.patch('/:id/waypoints/:wpId', webOnly, express.json(), async (req, res) => {
     const { label } = req.body || {};
     if (typeof label !== 'string' || !label.trim()) {
         return res.status(400).json({ error: 'Invalid label' });
@@ -504,7 +511,7 @@ router.patch('/:id/waypoints/:wpId', express.json(), async (req, res) => {
 });
 
 // POST /api/routes/combine — merges into the earliest journey, interleaving points by time.
-router.post('/combine', express.json(), async (req, res) => {
+router.post('/combine', webOnly, express.json(), async (req, res) => {
     const { journeyIds, name } = req.body || {};
 
     if (!Array.isArray(journeyIds) || journeyIds.length < 2) {
@@ -612,7 +619,7 @@ router.post('/combine', express.json(), async (req, res) => {
 // POST /api/routes/:id/undo-combine { force? }
 // Later photo/waypoint changes are kept (new photos go to the earliest journey). Refused
 // with 409 if the combined track was edited since, unless force is set.
-router.post('/:id/undo-combine', express.json(), async (req, res) => {
+router.post('/:id/undo-combine', webOnly, express.json(), async (req, res) => {
     const combinedId = req.params.id;
     const force = req.body?.force === true;
 
@@ -700,3 +707,4 @@ router.post('/:id/undo-combine', express.json(), async (req, res) => {
 });
 
 module.exports = router;
+module.exports.webOnly = webOnly;

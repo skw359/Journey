@@ -43,25 +43,6 @@ function bodyDeadline(req, res, next) {
     next();
 }
 
-// Pairing tokens may list, view, rename and trash journeys under /api/routes; everything
-// else there needs a web session.
-const TOKEN_RESERVED = new Set([
-    'trash', 'combine', 'cities-status', 'places-status',
-    'reindex-cities', 'reindex-places', 'backfill-cities', 'backfill-places',
-]);
-function pairingTokenAllowed(method, routePath) {
-    const parts = routePath.split('/').filter(Boolean);
-    if (parts.length === 0) return method === 'GET';
-    if (TOKEN_RESERVED.has(parts[0])) return false;
-    if (parts.length === 1) return method === 'GET' || method === 'DELETE';
-    if (parts.length === 2 && method === 'PATCH') return parts[1] === 'name' || parts[1] === 'travel-mode';
-    return false;
-}
-function limitPairingTokens(req, res, next) {
-    if (req.authMethod !== 'token' || pairingTokenAllowed(req.method, req.path)) return next();
-    res.status(403).json({ error: 'Paired devices cannot do this; use the web app' });
-}
-
 function createApp({ sessionSecret }) {
     if (!sessionSecret) throw new Error('createApp needs a session secret');
     const app = express();
@@ -135,7 +116,8 @@ function createApp({ sessionSecret }) {
     // Large photo/video uploads sent in pieces (protected)
     app.use('/api/routes/:id/uploads', requireAuth, require('./routes/mediaUploads').router);
 
-    app.use('/api/routes', requireAuth, limitPairingTokens, require('./routes/journeys'));
+    // Session or pairing token; the router itself marks which routes are web-only.
+    app.use('/api/routes', requireAuth, require('./routes/journeys'));
 
     app.use('/api/flights', requireSession, require('./routes/flights'));
 
@@ -169,4 +151,4 @@ function createApp({ sessionSecret }) {
     return app;
 }
 
-module.exports = { createApp, pairingTokenAllowed };
+module.exports = { createApp };
