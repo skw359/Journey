@@ -248,3 +248,28 @@ test('session touches are written at most once per interval', () => {
     assert.deepEqual(written, ['a', 'b', 'a'], 'and again once the interval has passed');
     assert.equal(answered, 6, 'every touch calls back, written or not');
 });
+
+test('an export is cut off when the client stops reading, and only a few run at once', async () => {
+    const { EventEmitter } = require('node:events');
+    const { writer, beginExport } = require('../utils/exporter');
+
+    const stuck = Object.assign(new EventEmitter(), { destroyed: false, write: () => false });
+    await assert.rejects(writer(stuck, { stallMs: 30 })('chunk'), /abandoned/);
+    assert.equal(stuck.listenerCount('drain') + stuck.listenerCount('close'), 0, 'no listeners left behind');
+
+    const slow = Object.assign(new EventEmitter(), { destroyed: false, write: () => false });
+    const pending = writer(slow, { stallMs: 1000 })('chunk');
+    setTimeout(() => slow.emit('drain'), 20);
+    await pending;
+
+    const first = beginExport();
+    const second = beginExport();
+    assert.equal(beginExport(), null, 'a third export has to wait');
+    first();
+    first();
+    const third = beginExport();
+    assert.ok(third, 'a finished export frees its slot, once');
+    assert.equal(beginExport(), null);
+    second();
+    third();
+});

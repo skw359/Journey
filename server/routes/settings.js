@@ -133,9 +133,29 @@ router.get('/storage', async (req, res) => {
   }
 });
 
+// What an account that can't manage storage sees: where attachments are and how a move is
+// going, without the server's folders, drive ids, or file names (which carry other accounts'
+// ids).
+function withoutServerDetails(storage, move) {
+  const place = ({ path, letter, volumeId, ...shown }) => shown;
+  return {
+    ...storage,
+    location: place(storage.location),
+    writingTo: place(storage.writingTo),
+    waiting: { ...storage.waiting, places: storage.waiting.places.map(place) },
+    move: {
+      ...move,
+      error: move.error ? 'Moving attachments stopped.' : null,
+      current: move.current && { step: move.current.step, bytes: move.current.bytes, bytesDone: move.current.bytesDone },
+      failed: [],
+    },
+  };
+}
+
 async function attachmentStorageStatus(userId) {
   const [storage, canManage] = await Promise.all([mediaStorage.status(), isAdmin(userId)]);
-  return { canManage, ...storage, move: mediaMove.status() };
+  const move = mediaMove.status();
+  return { canManage, ...(canManage ? { ...storage, move } : withoutServerDetails(storage, move)) };
 }
 
 // Where photos and videos are stored, files still waiting elsewhere, and any move in progress.

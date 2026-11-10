@@ -2,6 +2,24 @@ const { pool, ensureTenantSchema, quoteIdent, toApiRoute } = require('../db');
 
 const BATCH = 25;
 const FORMAT_VERSION = 1;
+// A whole-library export holds a pooled connection and an open transaction for as long as
+// the client takes to read it, so only a couple run at once and one that stops reading is
+// cut off rather than left holding both.
+const MAX_CONCURRENT_EXPORTS = 2;
+const EXPORT_STALL_MS = 60 * 1000;
+let activeExports = 0;
+
+/** Claims an export slot. Returns a function that gives it back, or null when all are taken. */
+function beginExport() {
+    if (activeExports >= MAX_CONCURRENT_EXPORTS) return null;
+    activeExports += 1;
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        activeExports -= 1;
+    };
+}
 
 // One journey as exported: the API detail shape plus fields the API leaves out.
 function exportedJourney(row, waypoints, photos) {
@@ -56,14 +74,19 @@ async function forEachJourney(userId, onJourney) {
     return count;
 }
 
-/** Writes to a stream, waiting while its buffer is full. */
-function writer(stream) {
+/** Writes to a stream, waiting while its buffer is full, but not for longer than stallMs. */
+function writer(stream, { stallMs = EXPORT_STALL_MS } = {}) {
     return (chunk) => new Promise((resolve, reject) => {
         if (stream.destroyed) return reject(new Error('export stream closed'));
         if (stream.write(chunk)) return resolve();
         const onDrain = () => { cleanup(); resolve(); };
         const onClose = () => { cleanup(); reject(new Error('export stream closed')); };
+        const stalled = setTimeout(() => {
+            cleanup();
+            reject(new Error(`export abandoned: the client read nothing for ${Math.round(stallMs / 1000)}s`));
+        }, stallMs);
         const cleanup = () => {
+            clearTimeout(stalled);
             stream.off('drain', onDrain);
             stream.off('close', onClose);
         };
@@ -154,4 +177,4 @@ function toGeoJson(journey) {
     };
 }
 
-module.exports = { forEachJourney, writer, writeNdjson, toGpx, toGeoJson, exportedJourney };
+module.exports = { beginExport, forEachJourney, writer, writeNdjson, toGpx, toGeoJson, exportedJourney };

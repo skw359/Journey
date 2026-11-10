@@ -3,7 +3,7 @@ const zlib = require('zlib');
 const { pipeline } = require('stream');
 const router = express.Router();
 const { pool, queryTenant, withTenantClient } = require('../db');
-const { forEachJourney, writer, writeNdjson, toGpx, toGeoJson, exportedJourney } = require('../utils/exporter');
+const { beginExport, forEachJourney, writer, writeNdjson, toGpx, toGeoJson, exportedJourney } = require('../utils/exporter');
 const log = require('../utils/logger').scope('export');
 
 function today() {
@@ -20,6 +20,11 @@ function openBody(req, res) {
     return gzip;
 }
 
+function exportsBusy(res) {
+    res.set('Retry-After', '30');
+    return res.status(429).json({ error: 'Other exports are still running. Try again in a moment.' });
+}
+
 function failMidStream(res, body, err) {
     log.error('export failed', err);
     if (!res.headersSent) return res.status(500).json({ error: 'Export failed' });
@@ -30,6 +35,8 @@ function failMidStream(res, body, err) {
 
 // GET /api/export/journeys — every journey as newline-delimited JSON, streamed
 router.get('/journeys', async (req, res) => {
+    const done = beginExport();
+    if (!done) return exportsBusy(res);
     let body = res;
     try {
         const { rows: [user] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.userId]);
@@ -46,6 +53,8 @@ router.get('/journeys', async (req, res) => {
         log.info(`exported ${count} journey${count === 1 ? '' : 's'}`);
     } catch (err) {
         failMidStream(res, body, err);
+    } finally {
+        done();
     }
 });
 
@@ -85,6 +94,8 @@ router.get(/^\/journeys\/([^/]+)\.(gpx|geojson)$/, async (req, res) => {
 // GET /database — the original raw dump (a JSON array of journeys), now streamed so it
 // works at any size.
 async function legacyDatabaseDump(req, res) {
+    const done = beginExport();
+    if (!done) return exportsBusy(res);
     let body = res;
     try {
         const { rows: [count] } = await queryTenant(req.userId, 'SELECT COUNT(*)::int AS n FROM routes');
@@ -105,6 +116,8 @@ async function legacyDatabaseDump(req, res) {
         body.end();
     } catch (err) {
         failMidStream(res, body, err);
+    } finally {
+        done();
     }
 }
 

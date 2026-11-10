@@ -10,11 +10,27 @@ const HDR_TRANSFERS = new Set(['arib-std-b67', 'smpte2084']);
 // Newer iPhones add an APAC spatial-audio track ffmpeg can't decode, so pick the audio stream explicitly.
 const DECODABLE_AUDIO = new Set(['aac', 'mp3', 'alac', 'ac3', 'eac3', 'opus', 'vorbis', 'flac']);
 
+// Every ffmpeg/ffprobe run has a deadline, so a file that makes one hang can't hold the single
+// conversion slot forever. Conversions get time in proportion to the video's length.
+const QUICK_TIMEOUT_MS = 2 * 60 * 1000;
+const CONVERT_MIN_TIMEOUT_MS = 30 * 60 * 1000;
+const CONVERT_MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+const CONVERT_SLOWEST_RATIO = 40; // HDR tone mapping of 4K on a small machine is far slower than real time
+
+function convertTimeoutMs(durationMs) {
+    return Math.min(Math.max((durationMs || 0) * CONVERT_SLOWEST_RATIO, CONVERT_MIN_TIMEOUT_MS), CONVERT_MAX_TIMEOUT_MS);
+}
+
 let capabilitiesPromise = null;
 
-function run(cmd, args, onSpawn) {
+function run(cmd, args, onSpawn, timeoutMs = QUICK_TIMEOUT_MS) {
     return new Promise((resolve, reject) => {
         const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+        let timedOut = false;
+        const deadline = setTimeout(() => {
+            timedOut = true;
+            child.kill('SIGKILL');
+        }, timeoutMs);
         try {
             // Keep transcodes from starving the web server on small machines.
             os.setPriority(child.pid, 10);
@@ -27,9 +43,16 @@ function run(cmd, args, onSpawn) {
         let stderr = '';
         child.stdout.on('data', (chunk) => { stdout += chunk; });
         child.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-8000); });
-        child.on('error', reject);
+        child.on('error', (err) => {
+            clearTimeout(deadline);
+            reject(err);
+        });
         child.on('close', (code, signal) => {
+            clearTimeout(deadline);
             if (code === 0) return resolve(stdout);
+            if (timedOut) {
+                return reject(new Error(`${path.basename(cmd)} was stopped after ${Math.round(timeoutMs / 60000)} min without finishing`));
+            }
             const detail = stderr.trim().split('\n').slice(-3).join(' | ');
             reject(new Error(`${path.basename(cmd)} exited with ${signal || code}${detail ? `: ${detail}` : ''}`));
         });
@@ -149,7 +172,7 @@ function convert(input, output, desc, { remux, toneMap }, onSpawn) {
     }
 
     args.push('-map_chapters', '-1', '-movflags', '+faststart', '-max_muxing_queue_size', '1024', '-f', 'mp4', output);
-    return run(FFMPEG_PATH, args, onSpawn);
+    return run(FFMPEG_PATH, args, onSpawn, convertTimeoutMs(desc.durationMs));
 }
 
 function extractPoster(input, output, durationMs, onSpawn) {
@@ -163,6 +186,8 @@ function extractPoster(input, output, durationMs, onSpawn) {
 }
 
 module.exports = {
+    run,
+    convertTimeoutMs,
     getCapabilities,
     probe,
     describe,
