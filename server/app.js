@@ -5,7 +5,7 @@ const session = require('express-session');
 const PgSession = require('connect-pg-simple')(session);
 const { pool } = require('./db');
 const { CLIENT_DIST, PROJECT_ROOT, TRUST_PROXY } = require('./config');
-const { requireSession, requireAuth, requireAdmin } = require('./middleware/auth');
+const { requireSession, requireAuth, requireAdmin, notePairingTokenUse } = require('./middleware/auth');
 const requestLogger = require('./middleware/requestLogger');
 const log = require('./utils/logger').scope('api');
 
@@ -86,8 +86,11 @@ function createApp({ sessionSecret }) {
         app.use(express.static(CLIENT_DIST));
     }
 
-    // Health checks (unprotected); only /health touches the database.
-    app.get('/ping', (req, res) => {
+    // Health checks (unprotected). /ping reads the database only when it carries a pairing
+    // token: the iOS app pings with its token right after scanning a code, and that is what
+    // marks the code as paired.
+    app.get('/ping', async (req, res) => {
+        await notePairingTokenUse(req);
         res.status(200).send('pong');
     });
     app.get('/health', async (req, res) => {

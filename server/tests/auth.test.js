@@ -293,6 +293,31 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
         assert.equal((await phone.get('/api/routes')).status, 401);
     });
 
+    await t.test('scanning a pairing code marks it as paired', async () => {
+        const created = await admin.post('/api/pairing/tokens', { json: { label: 'iPhone' } });
+        const statusOf = async () => (await admin.get('/api/pairing/tokens')).data.find((token) => token.id === created.data.id);
+        assert.equal((await statusOf()).status, 'pending');
+
+        // A ping without a token, or with one that isn't ours, changes nothing.
+        assert.equal((await fetch(`${origin}/ping`)).status, 200);
+        const stranger = await fetch(`${origin}/ping`, { headers: { authorization: `Bearer ${'f'.repeat(64)}` } });
+        assert.equal(await stranger.text(), 'pong');
+        assert.equal((await statusOf()).status, 'pending');
+
+        // The first thing the iOS app does after scanning is ping with its new token.
+        const ping = await fetch(`${origin}/ping`, { headers: { authorization: `Bearer ${created.data.token}` } });
+        assert.equal(ping.status, 200);
+        assert.equal(await ping.text(), 'pong');
+        const paired = await statusOf();
+        assert.equal(paired.status, 'active');
+        assert.equal(paired.pending_until, null);
+        assert.ok(paired.last_used_at);
+
+        // So it no longer lapses when the pending window passes without another request.
+        await pool.query("UPDATE pairing_tokens SET created_at = NOW() - INTERVAL '1 hour' WHERE id = $1", [created.data.id]);
+        assert.equal((await h.agent(origin, { bearer: created.data.token }).get('/api/routes')).status, 200);
+    });
+
     await t.test('every journeys route is web-only unless listed here', () => {
         // A new route under /api/routes has to be added to this list or take webOnly.
         const deviceRoutes = new Set(['GET /', 'GET /:id', 'PATCH /:id/name', 'PATCH /:id/travel-mode', 'DELETE /:id']);
