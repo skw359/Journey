@@ -24,9 +24,17 @@ class OllamaError extends Error {
     }
 }
 
-async function ollamaRequest(baseUrl, path, { method = 'GET', body = null, timeoutMs = 10000 } = {}) {
+// `signal` is the caller's cancel (the user hit stop); it surfaces as code 'aborted', apart
+// from the deadline's 'timeout'.
+async function ollamaRequest(baseUrl, path, { method = 'GET', body = null, timeoutMs = 10000, signal = null } = {}) {
     const url = `${String(baseUrl).replace(/\/+$/, '')}${path}`;
     const controller = new AbortController();
+    let cancelled = false;
+    const cancel = () => { cancelled = true; controller.abort(); };
+    if (signal) {
+        if (signal.aborted) throw new OllamaError('aborted', 'Cancelled before the request started');
+        signal.addEventListener('abort', cancel, { once: true });
+    }
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     let res;
@@ -38,12 +46,14 @@ async function ollamaRequest(baseUrl, path, { method = 'GET', body = null, timeo
             body: body ? JSON.stringify(body) : undefined,
         });
     } catch (err) {
+        if (cancelled) throw new OllamaError('aborted', 'Request cancelled');
         if (err.name === 'AbortError') {
             throw new OllamaError('timeout', `Ollama did not respond within ${Math.round(timeoutMs / 1000)}s (${url})`);
         }
         throw new OllamaError('unreachable', `Could not reach Ollama at ${baseUrl} — ${err.cause?.code || err.message}`);
     } finally {
         clearTimeout(timer);
+        if (signal) signal.removeEventListener('abort', cancel);
     }
 
     if (!res.ok) {
@@ -77,7 +87,7 @@ async function ollamaRequest(baseUrl, path, { method = 'GET', body = null, timeo
  * tokens add latency without helping a six-way function choice. Older Ollama
  * servers that predate the flag reject it with a 400; retry once without.
  */
-async function chatToolSelect({ url, model, system, question, tools, history = [], timeoutMs = 45000 }) {
+async function chatToolSelect({ url, model, system, question, tools, history = [], timeoutMs = 45000, signal = null }) {
     const body = {
         model,
         stream: false,
@@ -93,11 +103,11 @@ async function chatToolSelect({ url, model, system, question, tools, history = [
 
     let data;
     try {
-        data = await ollamaRequest(url, '/api/chat', { method: 'POST', body, timeoutMs });
+        data = await ollamaRequest(url, '/api/chat', { method: 'POST', body, timeoutMs, signal });
     } catch (err) {
         if (err.code === 'http_error' && /think/i.test(err.detail || '')) {
             const { think, ...withoutThink } = body;
-            data = await ollamaRequest(url, '/api/chat', { method: 'POST', body: withoutThink, timeoutMs });
+            data = await ollamaRequest(url, '/api/chat', { method: 'POST', body: withoutThink, timeoutMs, signal });
         } else {
             throw err;
         }
@@ -124,7 +134,7 @@ async function chatToolSelect({ url, model, system, question, tools, history = [
  * templating varies by model family, and this path must work with whatever
  * the user has pulled.
  */
-async function chatAnswer({ url, model, system, user, history = [], timeoutMs = 60000 }) {
+async function chatAnswer({ url, model, system, user, history = [], timeoutMs = 60000, signal = null }) {
     const body = {
         model,
         stream: false,
@@ -139,11 +149,11 @@ async function chatAnswer({ url, model, system, user, history = [], timeoutMs = 
 
     let data;
     try {
-        data = await ollamaRequest(url, '/api/chat', { method: 'POST', body, timeoutMs });
+        data = await ollamaRequest(url, '/api/chat', { method: 'POST', body, timeoutMs, signal });
     } catch (err) {
         if (err.code === 'http_error' && /think/i.test(err.detail || '')) {
             const { think, ...withoutThink } = body;
-            data = await ollamaRequest(url, '/api/chat', { method: 'POST', body: withoutThink, timeoutMs });
+            data = await ollamaRequest(url, '/api/chat', { method: 'POST', body: withoutThink, timeoutMs, signal });
         } else {
             throw err;
         }

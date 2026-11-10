@@ -333,6 +333,31 @@ async function main() {
         await mock.close();
     }
     {
+        // The stop button during tool selection: the request is dropped and reported as
+        // 'aborted', not as a timeout.
+        let dropped = false;
+        const server = http.createServer((req, res) => {
+            res.on('close', () => { dropped = true; });
+        });
+        await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+        const url = `http://127.0.0.1:${server.address().port}`;
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 60);
+        await checkRejects('select: external abort maps to aborted',
+            () => chatToolSelect({ url, model: 'm', system: 's', question: 'q', tools: TOOLS_STUB, signal: controller.signal }),
+            'aborted');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        check('select: aborting closes the Ollama connection', dropped, true);
+        await checkRejects('select: an already-aborted signal never connects',
+            () => chatToolSelect({ url, model: 'm', system: 's', question: 'q', tools: TOOLS_STUB, signal: controller.signal }),
+            'aborted');
+        await checkRejects('answer: external abort maps to aborted',
+            () => chatAnswer({ url, model: 'm', system: 's', user: 'u', signal: AbortSignal.abort() }),
+            'aborted');
+        server.closeAllConnections?.();
+        await new Promise((resolve) => server.close(resolve));
+    }
+    {
         // Older server rejects think → one retry without the flag, still streaming.
         let calls = 0;
         const received = [];

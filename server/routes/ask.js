@@ -173,8 +173,11 @@ router.post('/', async (req, res) => {
         const units = userRows[0]?.unit_preference === 'metric' ? 'metric' : 'imperial';
 
         // Cancel the Ollama generation the moment the browser goes away —
-        // stop button, closed tab, navigation.
+        // stop button, closed tab, navigation. The listener is on the response:
+        // express.json() has already read the request to its end, so the
+        // request's own 'close' fired before this handler ran.
         const abort = new AbortController();
+        res.on('close', () => { if (!res.writableFinished) abort.abort(); });
         let sendEvent = null;
 
         if (wantsStream) {
@@ -186,7 +189,6 @@ router.post('/', async (req, res) => {
             });
             res.flushHeaders?.();
             streamOpen = true;
-            req.on('close', () => abort.abort());
             sendEvent = (event, data) => {
                 if (!res.writableEnded) {
                     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
