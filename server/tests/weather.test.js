@@ -127,4 +127,16 @@ test('weather never sends the exact start point to a third party', { skip: h.ski
         await new Promise((resolve) => setTimeout(resolve, 300));
         assert.equal(thirdParty().length, 0);
     });
+
+    await t.test('a geocoder reply is served as JSON whatever the geocoder calls it', async () => {
+        const usual = h.outbound.handler;
+        h.outbound.handler = (url) => (url.startsWith(`${GEOCODER}/building`)
+            ? new Response('<script>alert(1)</script>', { status: 200, headers: { 'content-type': 'text/html' } })
+            : usual(url));
+        const res = await owner.get('/api/geocode/building?lat=40.7&lon=-74', { raw: true });
+        h.outbound.handler = usual;
+        assert.equal(res.status, 200);
+        assert.equal(res.headers.get('content-type').split(';')[0], 'application/json');
+        assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    });
 });

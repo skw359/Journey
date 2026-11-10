@@ -209,3 +209,42 @@ test('journey names and dates follow the given time zone', () => {
     assert.equal(shiftMonthKey('2025-01', -1), '2024-12');
     assert.equal(shiftMonthKey('2025-12', 1), '2026-01');
 });
+
+test('MIN_ROUTE_MILES falls back to the default unless it is a distance', () => {
+    const { parseMinRouteMiles } = require('../config');
+    assert.equal(parseMinRouteMiles(undefined), 0.25);
+    assert.equal(parseMinRouteMiles(''), 0.25);
+    assert.equal(parseMinRouteMiles('0.5'), 0.5);
+    assert.equal(parseMinRouteMiles('0'), 0);
+    const warn = console.warn;
+    const warnings = [];
+    console.warn = (message) => warnings.push(message);
+    try {
+        // NaN in SQL compares greater than every distance, which hid every journey.
+        for (const bad of ['a quarter', 'O.5', '-1', 'NaN', 'Infinity']) assert.equal(parseMinRouteMiles(bad), 0.25, bad);
+    } finally {
+        console.warn = warn;
+    }
+    assert.equal(warnings.length, 5);
+});
+
+test('session touches are written at most once per interval', () => {
+    const { throttleTouch } = require('../utils/sessionStore');
+    let clock = 1_000_000;
+    const written = [];
+    const store = throttleTouch({ touch: (sid, sess, done) => { written.push(sid); done(); } }, { intervalMs: 60_000, now: () => clock });
+    let answered = 0;
+    const touch = (sid) => store.touch(sid, {}, () => { answered += 1; });
+
+    touch('a');
+    touch('a');
+    touch('b');
+    clock += 59_000;
+    touch('a');
+    assert.deepEqual(written, ['a', 'b'], 'the first touch of each session is written');
+    clock += 2_000;
+    touch('a');
+    touch('a');
+    assert.deepEqual(written, ['a', 'b', 'a'], 'and again once the interval has passed');
+    assert.equal(answered, 6, 'every touch calls back, written or not');
+});

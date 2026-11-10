@@ -10,13 +10,27 @@ const PHOTOS_DIR = path.join(DATA_DIR, 'photos');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const AVATARS_DIR = path.join(DATA_DIR, 'avatars');
 
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-if (!fs.existsSync(AVATARS_DIR)) fs.mkdirSync(AVATARS_DIR, { recursive: true });
+// Called when the app is built, not on import: tools that only read config (the Marco test
+// suite, scripts) shouldn't leave folders behind.
+function ensureDataDirs() {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    fs.mkdirSync(AVATARS_DIR, { recursive: true });
+}
 const CLIENT_DIST = path.join(PROJECT_ROOT, 'client', 'dist');
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const PORT = parseInt(process.env.PORT, 10) || 3003;
-const MIN_ROUTE_MILES = parseFloat(process.env.MIN_ROUTE_MILES || "0.25");
+const DEFAULT_MIN_ROUTE_MILES = 0.25;
+// A value that isn't a number would reach SQL as NaN, which compares greater than every
+// distance and so hides every journey.
+function parseMinRouteMiles(raw) {
+    if (raw == null || String(raw).trim() === '') return DEFAULT_MIN_ROUTE_MILES;
+    const miles = Number(raw);
+    if (Number.isFinite(miles) && miles >= 0) return miles;
+    console.warn(`MIN_ROUTE_MILES="${raw}" is not a distance in miles; using ${DEFAULT_MIN_ROUTE_MILES}`);
+    return DEFAULT_MIN_ROUTE_MILES;
+}
+const MIN_ROUTE_MILES = parseMinRouteMiles(process.env.MIN_ROUTE_MILES);
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '') || undefined;
 // Reverse geocoder (/city, /place, /lookup, /building). Unset turns geocoding off.
 const GEOCODE_BASE_URL = (process.env.GEOCODE_BASE_URL || '').replace(/\/+$/, '') || undefined;
@@ -51,6 +65,8 @@ const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
 const FFPROBE_PATH = process.env.FFPROBE_PATH || 'ffprobe';
 
 module.exports = {
+    ensureDataDirs,
+    parseMinRouteMiles,
     PROJECT_ROOT,
     DATA_DIR,
     PHOTOS_DIR,

@@ -4,9 +4,10 @@ const path = require('path');
 const session = require('express-session');
 const PgSession = require('connect-pg-simple')(session);
 const { pool } = require('./db');
-const { CLIENT_DIST, PROJECT_ROOT, TRUST_PROXY } = require('./config');
+const { CLIENT_DIST, PROJECT_ROOT, TRUST_PROXY, ensureDataDirs } = require('./config');
 const { requireSession, requireAuth, requireAdmin, notePairingTokenUse } = require('./middleware/auth');
 const requestLogger = require('./middleware/requestLogger');
+const { throttleTouch } = require('./utils/sessionStore');
 const log = require('./utils/logger').scope('api');
 
 // Uploads in LONG_UPLOADS have no body deadline; they use idle timeouts instead.
@@ -17,12 +18,39 @@ const LONG_UPLOADS = [
     /^\/api\/routes\/[^/]+\/uploads(\/|$)/,
 ];
 
+const HSTS_MAX_AGE_S = 180 * 24 * 60 * 60;
+
 function securityHeaders(req, res, next) {
     res.set({
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'SAMEORIGIN',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
     });
+    // Only over HTTPS (as the reverse proxy reports it): a browser ignores it on plain HTTP,
+    // and a server reached by LAN address must stay reachable that way.
+    if (req.secure) res.set('Strict-Transport-Security', `max-age=${HSTS_MAX_AGE_S}`);
+    next();
+}
+
+// What the web app loads: its own files, Google Fonts, and Carto map tiles. Inline styles are
+// allowed because React and the map set them; inline scripts are not.
+const CONTENT_SECURITY_POLICY = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https://*.basemaps.cartocdn.com",
+    "media-src 'self' blob:",
+    "connect-src 'self'",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+].join('; ');
+
+function contentSecurityPolicy(req, res, next) {
+    res.set('Content-Security-Policy', CONTENT_SECURITY_POLICY);
     next();
 }
 
@@ -45,6 +73,7 @@ function bodyDeadline(req, res, next) {
 
 function createApp({ sessionSecret }) {
     if (!sessionSecret) throw new Error('createApp needs a session secret');
+    ensureDataDirs();
     const app = express();
     app.disable('x-powered-by');
 
@@ -62,18 +91,29 @@ function createApp({ sessionSecret }) {
         app.use('/landing', express.static(LANDING_DIR, { maxAge: '1h' }));
     }
 
+    // After the landing page, which is static and has inline scripts of its own.
+    app.use(contentSecurityPolicy);
+
+    // The web app's own files need no session either.
+    if (fs.existsSync(CLIENT_DIST)) {
+        app.use(express.static(CLIENT_DIST));
+    }
+
     app.use(express.json());
 
     app.use(session({
-        store: new PgSession({
+        store: throttleTouch(new PgSession({
             pool: { query: (...args) => pool.query(...args) },
             tableName: 'session',
             createTableIfMissing: false,
-        }),
+        })),
         secret: sessionSecret,
         name: 'journey.sid',
         resave: false,
         saveUninitialized: false,
+        // The 30 days run from the last request, not from sign-in, so someone who uses the
+        // app regularly isn't signed out on a schedule.
+        rolling: true,
         cookie: {
             maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
             httpOnly: true,
@@ -81,10 +121,6 @@ function createApp({ sessionSecret }) {
             secure: 'auto',
         },
     }));
-
-    if (fs.existsSync(CLIENT_DIST)) {
-        app.use(express.static(CLIENT_DIST));
-    }
 
     // Health checks (unprotected). /ping reads the database only when it carries a pairing
     // token: the iOS app pings with its token right after scanning a code, and that is what
