@@ -21,6 +21,7 @@ const { archiveUpload, deleteArchiveFiles } = require('../utils/uploadArchive');
 const { IngestError, parseJourneyUpload, journeyName, journeyDate } = require('../utils/journeyIngest');
 const { insertRoute, insertWaypoints } = require('../utils/routeRecords');
 const { refreshDerivedSoon } = require('../utils/journeyDerived');
+const { parseTimeZone } = require('../utils/timeZone');
 const log = require('../utils/logger').scope('upload');
 
 const PARSE_TIMEOUT_MS = 60 * 1000;
@@ -46,12 +47,12 @@ function newWaypointId() {
     return `wp-${crypto.randomBytes(8).toString('hex')}`;
 }
 
-function routeFromUpload({ stats, routeId, source, archiveName, clientUploadId, fingerprint }) {
+function routeFromUpload({ stats, routeId, source, archiveName, clientUploadId, fingerprint, timeZone }) {
     const start = stats.firstTs != null ? new Date(stats.firstTs) : new Date();
     return {
         id: routeId,
-        name: journeyName(start),
-        date: journeyDate(start),
+        name: journeyName(start, timeZone),
+        date: journeyDate(start, timeZone),
         distance: stats.distance,
         duration: stats.duration,
         top_speed: stats.top_speed,
@@ -194,7 +195,8 @@ function computePassedLists(userId, routeId, coordinates) {
         .catch((err) => log.scope('places').error('computation failed', err));
 }
 
-// POST /upload — multipart: journey (zip), source ('watch' | 'iphone'), recordingId (optional)
+// POST /upload — multipart: journey (zip), source ('watch' | 'iphone'), recordingId and
+// timeZone (both optional)
 router.post('/', acceptJourneyFile, async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No journey file uploaded (field "journey")' });
@@ -208,6 +210,8 @@ router.post('/', acceptJourneyFile, async (req, res) => {
         return res.status(400).json({ error: 'Invalid recordingId' });
     }
     const clientUploadId = rawRecordingId || null;
+    // The device's zone, so the journey is named for the day it happened there.
+    const timeZone = parseTimeZone(req.body?.timeZone) || undefined;
 
     let parsed;
     try {
@@ -254,7 +258,7 @@ router.post('/', acceptJourneyFile, async (req, res) => {
 
     const routeId = `journey-${crypto.randomBytes(8).toString('hex')}`;
     const archiveName = await archiveUpload(filePath, req.userId, stats.firstTs);
-    const route = routeFromUpload({ stats, routeId, source, archiveName, clientUploadId, fingerprint });
+    const route = routeFromUpload({ stats, routeId, source, archiveName, clientUploadId, fingerprint, timeZone });
 
     const rejection = stats.count < 2 || stats.totalMiles <= 0
         ? { origin: TRASH_ORIGIN.REJECTED_INSUFFICIENT, reason: 'insufficient_data', note: 'Not enough GPS data to form a journey' }

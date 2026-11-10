@@ -9,6 +9,7 @@ const { statsFromTrack, mergeTracksByTime, trackFromRow } = require('../utils/jo
 const { insertRoute, insertWaypoints, insertPhotoRow } = require('../utils/routeRecords');
 const { journeyDate } = require('../utils/journeyIngest');
 const { refreshDerivedSoon } = require('../utils/journeyDerived');
+const { parseTimeZone } = require('../utils/timeZone');
 const log = require('../utils/logger').scope('journeys');
 const { requeueProcessing } = require('../utils/mediaQueue');
 const {
@@ -513,6 +514,7 @@ router.patch('/:id/waypoints/:wpId', webOnly, express.json(), async (req, res) =
 // POST /api/routes/combine — merges into the earliest journey, interleaving points by time.
 router.post('/combine', webOnly, express.json(), async (req, res) => {
     const { journeyIds, name } = req.body || {};
+    const timeZone = parseTimeZone(req.body?.timeZone) || undefined;
 
     if (!Array.isArray(journeyIds) || journeyIds.length < 2) {
         return res.status(400).json({ error: 'At least two journey IDs are required' });
@@ -579,7 +581,7 @@ router.post('/combine', webOnly, express.json(), async (req, res) => {
             const columns = {
                 ...statsColumns(stats),
                 name: combinedName,
-                date: journeyDate(new Date(stats.start_time)),
+                date: journeyDate(new Date(stats.start_time), timeZone),
                 coordinates: JSON.stringify(stats.coordinates),
                 profile_time_ms: JSON.stringify(stats.profile_time_ms),
                 profile_dist_mi: JSON.stringify(stats.profile_dist_mi),

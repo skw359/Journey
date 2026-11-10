@@ -19,7 +19,35 @@ function isZipClutter(entryPath) {
     return entryPath.startsWith('__MACOSX/') || name.startsWith('._') || name === '.DS_Store';
 }
 
-async function readJourneyCsv(filePath, { maxCsvBytes, maxRows, timeoutMs }) {
+// Timestamps outside this window are a blank or broken cell, not a recording.
+const EARLIEST_TS_MS = Date.UTC(2000, 0, 1);
+const LATEST_TS_MS = Date.UTC(2100, 0, 1);
+// One row is a handful of numbers and a note; anything longer isn't a journey CSV.
+const MAX_ROW_BYTES = 64 * 1024;
+
+// One CSV row as numbers, or null when it has no usable time or position.
+function sampleFromRow(row) {
+    // Number('') is 0, which would read a blank cell as 1 Jan 1970.
+    const rawTs = typeof row.ts_ms === 'string' ? row.ts_ms.trim() : '';
+    const ts = rawTs === '' ? NaN : Number(rawTs);
+    const lat = parseFloat(row.lat);
+    const lon = parseFloat(row.lon);
+    if (!Number.isFinite(ts) || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (ts < EARLIEST_TS_MS || ts > LATEST_TS_MS) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    return {
+        ts,
+        lat,
+        lon,
+        ele: parseFloat(row.ele_m),
+        speedMps: parseFloat(row.speed_ms),
+        waypoint: row.waypoint === '1',
+        note: typeof row.note === 'string' ? row.note.slice(0, 2000) : '',
+    };
+}
+
+// Rows become samples as they stream, so the parsed text of a large CSV is never held at once.
+async function readJourneySamples(filePath, { maxCsvBytes, maxRows, timeoutMs }) {
     let directory;
     try {
         directory = await unzipper.Open.file(filePath);
@@ -41,7 +69,8 @@ async function readJourneyCsv(filePath, { maxCsvBytes, maxRows, timeoutMs }) {
     }
 
     return new Promise((resolve, reject) => {
-        const rows = [];
+        const samples = [];
+        let rowCount = 0;
         let bytes = 0;
         let settled = false;
         let source = null;
@@ -56,7 +85,7 @@ async function readJourneyCsv(filePath, { maxCsvBytes, maxRows, timeoutMs }) {
                 parser?.destroy();
                 reject(err);
             } else {
-                resolve(rows);
+                resolve(samples);
             }
         };
         const timer = setTimeout(() => {
@@ -69,7 +98,7 @@ async function readJourneyCsv(filePath, { maxCsvBytes, maxRows, timeoutMs }) {
             settle(new IngestError('The zip file is corrupt', { code: 'corrupt_zip' }));
             return;
         }
-        parser = csv();
+        parser = csv({ maxRowBytes: MAX_ROW_BYTES });
         source.on('data', (chunk) => {
             bytes += chunk.length;
             // The zip header's size can lie.
@@ -77,11 +106,14 @@ async function readJourneyCsv(filePath, { maxCsvBytes, maxRows, timeoutMs }) {
         });
         source.on('error', () => settle(new IngestError('The zip file is corrupt', { code: 'corrupt_zip' })));
         parser.on('data', (row) => {
-            if (rows.length >= maxRows) {
+            if (settled) return;
+            rowCount += 1;
+            if (rowCount > maxRows) {
                 settle(new IngestError(`The journey has more than ${maxRows} rows`, { status: 413, code: 'too_many_rows' }));
                 return;
             }
-            rows.push(row);
+            const sample = sampleFromRow(row);
+            if (sample) samples.push(sample);
         });
         parser.on('error', (err) => settle(new IngestError(`CSV parse error: ${err.message}`, { code: 'csv_error' })));
         parser.on('end', () => settle(null));
@@ -89,26 +121,9 @@ async function readJourneyCsv(filePath, { maxCsvBytes, maxRows, timeoutMs }) {
     });
 }
 
-// Skips unusable rows, sorts by time if needed, drops exact repeats.
-function samplesFromRows(rows) {
-    let samples = [];
-    for (const row of rows) {
-        const ts = Number(row.ts_ms);
-        const lat = parseFloat(row.lat);
-        const lon = parseFloat(row.lon);
-        if (!Number.isFinite(ts) || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-        if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
-        samples.push({
-            ts,
-            lat,
-            lon,
-            ele: parseFloat(row.ele_m),
-            speedMps: parseFloat(row.speed_ms),
-            waypoint: row.waypoint === '1',
-            note: typeof row.note === 'string' ? row.note.slice(0, 2000) : '',
-        });
-    }
-
+// Sorts by time if needed, drops exact repeats, and collects the waypoints.
+function orderSamples(unordered) {
+    let samples = unordered;
     let ordered = true;
     for (let i = 1; i < samples.length; i++) {
         if (samples[i].ts < samples[i - 1].ts) { ordered = false; break; }
@@ -145,25 +160,46 @@ function contentFingerprint(stats) {
     return `v1:${crypto.createHash('sha256').update(basis).digest('hex')}`;
 }
 
-function journeyName(start) {
-    return `Journey - ${start.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })} - ${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+// Names and the `date` text read in the uploader's zone when it sent one; the server's otherwise.
+function journeyDate(start, timeZone) {
+    return start.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric', timeZone });
 }
 
-function journeyDate(start) {
-    return start.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+function journeyName(start, timeZone) {
+    return `Journey - ${journeyDate(start, timeZone)} - ${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone })}`;
 }
 
-async function parseJourneyUpload(filePath, limits) {
-    const rows = await readJourneyCsv(filePath, limits);
-    const { samples, waypoints } = samplesFromRows(rows);
-    const stats = statsFromSamples(samples);
-    return { stats, waypoints, fingerprint: contentFingerprint(stats) };
+// A parse holds a whole recording in memory, so only a couple run at once; the rest wait
+// their turn. This bounds the heap however many uploads arrive together.
+const MAX_CONCURRENT_PARSES = 2;
+let activeParses = 0;
+const waitingParses = [];
+
+async function withParseSlot(task) {
+    if (activeParses < MAX_CONCURRENT_PARSES) activeParses += 1;
+    else await new Promise((resolve) => waitingParses.push(resolve)); // handed a finished parse's slot
+    try {
+        return await task();
+    } finally {
+        const next = waitingParses.shift();
+        if (next) next();
+        else activeParses -= 1;
+    }
+}
+
+function parseJourneyUpload(filePath, limits) {
+    return withParseSlot(async () => {
+        const { samples, waypoints } = orderSamples(await readJourneySamples(filePath, limits));
+        const stats = statsFromSamples(samples);
+        return { stats, waypoints, fingerprint: contentFingerprint(stats) };
+    });
 }
 
 module.exports = {
     IngestError,
-    readJourneyCsv,
-    samplesFromRows,
+    sampleFromRow,
+    readJourneySamples,
+    orderSamples,
     contentFingerprint,
     journeyName,
     journeyDate,
