@@ -3,12 +3,96 @@ const crypto = require('crypto');
 const router = express.Router();
 const { withTenantTransaction } = require('../db');
 const { formatDuration } = require('../utils/format');
-const { searchFlights, getFlightTrack, getAirports } = require('../utils/flight');
+const { searchFlights, getFlightTrack, getAirports, isFlightId, normalizeFlightNumber } = require('../utils/flight');
 const { fetchAndStoreWeather } = require('../utils/weather');
 const { insertRoute } = require('../utils/routeRecords');
+const { journeyDate } = require('../utils/journeyIngest');
+const { parseTimeZone } = require('../utils/timeZone');
 const { refreshDerivedSoon } = require('../utils/journeyDerived');
 const { computePassedLists } = require('./upload');
 const log = require('../utils/logger').scope('flights');
+
+const MAX_NAME_CHARS = 200;
+const EARLIEST_FLIGHT_MS = Date.UTC(1950, 0, 1);
+const LATEST_FLIGHT_AHEAD_MS = 2 * 365 * 86400000;
+
+class BadRequest extends Error {}
+
+function airportCode(value) {
+    if (typeof value !== 'string' || !/^[A-Za-z]{3}$/.test(value)) {
+        throw new BadRequest('Airport codes must be 3-letter IATA codes');
+    }
+    const code = value.toUpperCase();
+    if (!getAirports()[code]) throw new BadRequest(`Unknown airport code: ${code}`);
+    return code;
+}
+
+function optionalInstant(value, label) {
+    if (value == null || value === '') return null;
+    const ms = typeof value === 'string' ? Date.parse(value) : NaN;
+    if (!Number.isFinite(ms) || ms < EARLIEST_FLIGHT_MS || ms > Date.now() + LATEST_FLIGHT_AHEAD_MS) {
+        throw new BadRequest(`${label} must be an ISO date and time`);
+    }
+    return new Date(ms).toISOString();
+}
+
+// Every field of a flight request, checked once for /search, /track and /import. Nothing
+// from the body reaches the flight service or the database except through here.
+function parseFlightRequest(body, { search = false } = {}) {
+    const input = body && typeof body === 'object' ? body : {};
+    if (!input.departure || !input.arrival || (search && !input.date)) {
+        throw new BadRequest(search
+            ? 'Departure airport, arrival airport, and date are required'
+            : 'Departure and arrival airport codes are required');
+    }
+    const flight = { departure: airportCode(input.departure), arrival: airportCode(input.arrival) };
+
+    if (search) {
+        if (typeof input.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)
+            || !Number.isFinite(Date.parse(`${input.date}T00:00:00Z`))) {
+            throw new BadRequest('Date must be in YYYY-MM-DD format');
+        }
+        flight.date = input.date;
+        flight.departureTime = null;
+        if (input.departureTime != null && input.departureTime !== '') {
+            if (typeof input.departureTime !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.departureTime)) {
+                throw new BadRequest('Departure time must be in HH:MM format');
+            }
+            flight.departureTime = input.departureTime;
+        }
+        flight.flightNumber = null;
+        if (input.flightNumber != null && input.flightNumber !== '') {
+            flight.flightNumber = normalizeFlightNumber(input.flightNumber);
+            if (!flight.flightNumber) throw new BadRequest('Flight numbers are letters and digits, like UA123');
+        }
+        return flight;
+    }
+
+    flight.flightId = null;
+    if (input.flightId != null && input.flightId !== '') {
+        if (!isFlightId(input.flightId)) throw new BadRequest('Invalid flight id');
+        flight.flightId = input.flightId;
+    }
+    flight.departureTime = optionalInstant(input.departureTime, 'Departure time');
+    flight.arrivalTime = optionalInstant(input.arrivalTime, 'Arrival time');
+    if (flight.departureTime && flight.arrivalTime && flight.arrivalTime <= flight.departureTime) {
+        throw new BadRequest('Arrival must be after departure');
+    }
+    flight.name = null;
+    if (input.name != null && input.name !== '') {
+        if (typeof input.name !== 'string') throw new BadRequest('Invalid name');
+        const name = input.name.trim();
+        if (name.length > MAX_NAME_CHARS) throw new BadRequest(`Names are limited to ${MAX_NAME_CHARS} characters`);
+        flight.name = name || null;
+    }
+    return flight;
+}
+
+function sendFlightError(res, err, label, fallback) {
+    if (err instanceof BadRequest) return res.status(400).json({ error: err.message });
+    log.error(`${label} error:`, err);
+    res.status(500).json({ error: fallback });
+}
 
 // GET /api/flights/airports — return airport lookup data for frontend autocomplete
 router.get('/airports', (req, res) => {
@@ -24,53 +108,31 @@ router.get('/airports', (req, res) => {
 // POST /api/flights/search — search for flights matching criteria
 router.post('/search', express.json(), async (req, res) => {
     try {
-        const { departure, arrival, date, departureTime, flightNumber } = req.body;
-
-        if (!departure || !arrival || !date) {
-            return res.status(400).json({ error: 'Departure airport, arrival airport, and date are required' });
-        }
-
-        if (!/^[A-Za-z]{3}$/.test(departure) || !/^[A-Za-z]{3}$/.test(arrival)) {
-            return res.status(400).json({ error: 'Airport codes must be 3-letter IATA codes' });
-        }
-
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-            return res.status(400).json({ error: 'Date must be in YYYY-MM-DD format' });
-        }
-
+        const { departure, arrival, date, departureTime, flightNumber } = parseFlightRequest(req.body, { search: true });
         const flights = await searchFlights(departure, arrival, date, departureTime, flightNumber);
         res.json({ flights });
     } catch (err) {
-        log.error('POST /api/flights/search error:', err);
-        res.status(err.message.includes('Unknown airport') ? 400 : 500).json({ error: err.message });
+        sendFlightError(res, err, 'POST /api/flights/search', 'Flight search failed');
     }
 });
 
 // POST /api/flights/track — get flight track for map preview
 router.post('/track', express.json(), async (req, res) => {
     try {
-        const { flightId, departure, arrival, departureTime, arrivalTime } = req.body;
-
-        if (!departure || !arrival) {
-            return res.status(400).json({ error: 'Departure and arrival airport codes are required' });
-        }
-
+        const { flightId, departure, arrival, departureTime, arrivalTime } = parseFlightRequest(req.body);
         const track = await getFlightTrack(flightId, departure, arrival, departureTime, arrivalTime);
         res.json(track);
     } catch (err) {
-        log.error('POST /api/flights/track error:', err);
-        res.status(500).json({ error: err.message });
+        sendFlightError(res, err, 'POST /api/flights/track', 'Failed to load the flight track');
     }
 });
 
 // POST /api/flights/import — import a flight as a journey
 router.post('/import', express.json(), async (req, res) => {
     try {
-        const { flightId, departure, arrival, departureTime, arrivalTime, name } = req.body;
-
-        if (!departure || !arrival) {
-            return res.status(400).json({ error: 'Departure and arrival airport codes are required' });
-        }
+        const { flightId, departure, arrival, departureTime, arrivalTime, name } = parseFlightRequest(req.body);
+        // Names and dates read in the importer's zone, not the server's.
+        const timeZone = parseTimeZone(req.body?.timeZone) || undefined;
 
         const track = await getFlightTrack(flightId, departure, arrival, departureTime, arrivalTime);
 
@@ -83,12 +145,12 @@ router.post('/import', express.json(), async (req, res) => {
         const durationSec = (endTime.getTime() - startTime.getTime()) / 1000;
 
         const routeId = `journey-${crypto.randomBytes(8).toString('hex')}`;
-        const defaultName = `Flight - ${departure.toUpperCase()} to ${arrival.toUpperCase()} - ${startTime.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}`;
+        const defaultName = `Flight - ${departure} to ${arrival} - ${journeyDate(startTime, timeZone)}`;
 
         const routeData = {
             id: routeId,
             name: name || defaultName,
-            date: startTime.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+            date: journeyDate(startTime, timeZone),
             distance: track.distance,
             duration: formatDuration(durationSec),
             topSpeed: track.topSpeed,
@@ -141,7 +203,7 @@ router.post('/import', express.json(), async (req, res) => {
             travel_mode: routeData.travelMode,
         }));
 
-        log.success(`flight imported · ${departure.toUpperCase()}→${arrival.toUpperCase()} · ${routeData.distance}mi · #${routeData.id} · via ${track.source}`);
+        log.success(`flight imported · ${departure}→${arrival} · ${routeData.distance}mi · #${routeData.id} · via ${track.source}`);
 
         const fullRoute = {
             ...routeData,
@@ -165,8 +227,8 @@ router.post('/import', express.json(), async (req, res) => {
         refreshDerivedSoon(req.userId);
         computePassedLists(req.userId, routeData.id, routeData.coordinates);
     } catch (err) {
-        log.error('POST /api/flights/import error:', err);
-        res.status(500).json({ error: 'Failed to import flight' });
+        if (res.headersSent) return log.error('POST /api/flights/import follow-up failed:', err);
+        sendFlightError(res, err, 'POST /api/flights/import', 'Failed to import flight');
     }
 });
 

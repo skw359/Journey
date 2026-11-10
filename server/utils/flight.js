@@ -171,10 +171,28 @@ function synthesizeTrack(depAirport, arrAirport, departureTime, arrivalTime) {
 // ── FlightAware AeroAPI ──────────────────────────────────────────────
 
 const AEROAPI_BASE = 'https://aeroapi.flightaware.com/aeroapi';
+const AEROAPI_TIMEOUT_MS = 15_000;
+
+// The only values that may be placed in an AeroAPI path. A fa_flight_id looks like
+// "UAL4-1669704000-schedule-1227p"; an ident is an airline code plus number, or a tail number.
+const FLIGHT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9:_-]{0,79}$/;
+const FLIGHT_NUMBER_RE = /^[A-Z0-9]{2,8}$/;
+
+function isFlightId(value) {
+    return typeof value === 'string' && FLIGHT_ID_RE.test(value);
+}
+
+/** "ua 123" -> "UA123"; null if it isn't a flight number. */
+function normalizeFlightNumber(value) {
+    if (typeof value !== 'string') return null;
+    const ident = value.replace(/\s+/g, '').toUpperCase();
+    return FLIGHT_NUMBER_RE.test(ident) ? ident : null;
+}
 
 async function flightAwareFetch(endpoint, apiKey) {
     const res = await fetch(`${AEROAPI_BASE}${endpoint}`, {
         headers: { 'x-apikey': apiKey },
+        signal: AbortSignal.timeout(AEROAPI_TIMEOUT_MS),
     });
     if (!res.ok) {
         const text = await res.text().catch(() => '');
@@ -243,9 +261,9 @@ async function searchFlights(departure, arrival, date, departureTime, flightNumb
         try {
             let flights = [];
 
-            if (flightNumber) {
-                const ident = flightNumber.replace(/\s+/g, '').toUpperCase();
-                const data = await flightAwareFetch(`/flights/${ident}?start=${date}T00:00:00Z&end=${date}T23:59:59Z`, config.apiKey);
+            const ident = normalizeFlightNumber(flightNumber);
+            if (ident) {
+                const data = await flightAwareFetch(`/flights/${encodeURIComponent(ident)}?start=${date}T00:00:00Z&end=${date}T23:59:59Z`, config.apiKey);
                 flights = (data.flights || [])
                     .filter(f => {
                         const depCode = f.origin?.code_iata || f.origin?.code || '';
@@ -320,9 +338,9 @@ async function getFlightTrack(flightId, departure, arrival, departureTime, arriv
         throw new Error(`Unknown airport code: ${!depAirport ? departure : arrival}`);
     }
 
-    if (config.apiKey && flightId && !flightId.startsWith('synth-')) {
+    if (config.apiKey && isFlightId(flightId) && !flightId.startsWith('synth-')) {
         try {
-            const data = await flightAwareFetch(`/flights/${flightId}/track`, config.apiKey);
+            const data = await flightAwareFetch(`/flights/${encodeURIComponent(flightId)}/track`, config.apiKey);
             const positions = data.positions || [];
 
             if (positions.length >= 2) {
@@ -420,4 +438,6 @@ module.exports = {
     getFlightTrack,
     getAirports,
     clearConfigCache,
+    isFlightId,
+    normalizeFlightNumber,
 };
