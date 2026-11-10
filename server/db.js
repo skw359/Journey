@@ -443,6 +443,19 @@ const TENANT_MIGRATIONS = [
       `);
     },
   },
+  {
+    // Every photo, video and thumbnail request looks its file up by name.
+    name: '2026-11-10-photo-filename-indexes',
+    async up(db, { schema }) {
+      const q = quoteIdent(schema);
+      await db.query(`
+        CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_photos_filename`)}
+          ON ${q}.photos(filename);
+        CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_photos_poster_filename`)}
+          ON ${q}.photos(poster_filename) WHERE poster_filename IS NOT NULL;
+      `);
+    },
+  },
 ];
 
 async function createTenantTables(schema) {

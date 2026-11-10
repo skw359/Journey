@@ -103,6 +103,18 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
 
         const weather = await second.get('/api/settings/weather');
         assert.deepEqual(Object.keys(weather.data).sort(), ['canManage', 'weather_enabled', 'weather_sounding_enabled']);
+
+        // Where attachments live is shown to everyone; the server's folders only to the admin.
+        const storage = await second.get('/api/settings/attachment-storage');
+        assert.equal(storage.status, 200);
+        assert.equal(storage.data.canManage, false);
+        assert.equal(storage.data.location.name, 'This PC');
+        assert.ok(!storage.text.includes(env.dataDir), 'no server path for other accounts');
+        assert.ok(!('path' in storage.data.location) && !('path' in storage.data.writingTo));
+        assert.deepEqual(storage.data.move.failed, []);
+        const adminStorage = await admin.get('/api/settings/attachment-storage');
+        assert.equal(adminStorage.data.canManage, true);
+        assert.ok(adminStorage.data.location.path.startsWith(env.dataDir));
         const marco = await second.get('/api/ask/config');
         assert.deepEqual(Object.keys(marco.data).sort(), ['canManage', 'enabled']);
     });

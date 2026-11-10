@@ -96,6 +96,8 @@ function clearConfigCache() {
 // ── Location: the start's city, never the exact point ─────────────────
 
 const GEOCODE_TIMEOUT_MS = 8000;
+// Weather providers get a deadline too: a sounding lookup holds a request open while it waits.
+const WEATHER_TIMEOUT_MS = 15000;
 const CITY_SEARCH_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 // A name-search result farther than this from the start is the wrong place.
 const MAX_CITY_DISTANCE_KM = 60;
@@ -224,7 +226,7 @@ async function fetchFromOpenMeteo(lat, lon, startTime) {
         + `&temperature_unit=fahrenheit&wind_speed_unit=mph`
         + `&timezone=GMT`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_TIMEOUT_MS) });
     if (!response.ok) {
         const err = new Error(`Open-Meteo historical forecast error: ${response.status}`);
         err.status = response.status;
@@ -288,7 +290,7 @@ async function fetchFromOpenWeather(lat, lon, apiKey) {
     if (!apiKey) throw new Error('OpenWeather API key not configured');
 
     const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=imperial&appid=${apiKey}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_TIMEOUT_MS) });
     if (!response.ok) throw new Error(`OpenWeather API error: ${response.status}`);
 
     const data = await response.json();
@@ -336,7 +338,7 @@ async function fetchFromCustom(urlTemplate, lat, lon, startTime, apiKey, city) {
         .replace(/\{timestamp\}/g, date.toISOString())
         .replace(/\{api_key\}/g, encodeURIComponent(apiKey || ''));
 
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_TIMEOUT_MS) });
     if (!response.ok) throw new Error(`Custom weather API error: ${response.status}`);
 
     const data = await response.json();
@@ -506,7 +508,7 @@ async function fetchSounding(lat, lon, startTime) {
         + `&temperature_unit=fahrenheit&wind_speed_unit=mph`
         + `&timezone=GMT`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(WEATHER_TIMEOUT_MS) });
     if (!response.ok) throw new Error(`Open-Meteo sounding error: ${response.status}`);
 
     const data = await response.json();

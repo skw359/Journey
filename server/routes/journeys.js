@@ -123,7 +123,7 @@ router.get('/', async (req, res) => {
         await withTenantClient(req.userId, async (db) => {
             const { rows } = await db.query(`
                 SELECT r.id, r.name, r.date, r.start_time, r.end_time, r.distance, r.duration,
-                       r.watch_recorded, r.travel_mode, r.avg_speed, r.cities_passed,
+                       r.watch_recorded, r.travel_mode, r.avg_speed, r.cities_passed, r.places_passed,
                        (SELECT COUNT(*) FROM waypoints w WHERE w.route_id = r.id) AS waypoint_count,
                        (SELECT COUNT(*) FROM photos p WHERE p.route_id = r.id) AS photo_count,
                        (SELECT COALESCE(p.poster_filename, p.filename) FROM photos p
