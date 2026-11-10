@@ -83,6 +83,20 @@ async function requireAuth(req, res, next) {
   await notAuthenticated(res);
 }
 
+// Counts a pairing token as used on a route that doesn't require one. The iOS app's first
+// request after scanning a code is /ping, which is open to anyone, so without this the code
+// stayed "waiting to be scanned" and expired unless the phone happened to call something
+// authenticated within the pending window.
+async function notePairingTokenUse(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return;
+  try {
+    await userForPairingToken(authHeader.slice(7).trim());
+  } catch (err) {
+    log.error('Could not record pairing token use:', err);
+  }
+}
+
 async function isAdmin(userId) {
   if (!userId) return false;
   const { rows } = await pool.query('SELECT is_admin FROM users WHERE id = $1', [userId]);
@@ -108,4 +122,5 @@ module.exports = {
   requireSession,
   requireAuth,
   requireAdmin,
+  notePairingTokenUse,
 };

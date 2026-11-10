@@ -14,6 +14,7 @@ struct SettingsScreen: View {
 
     @State private var showQRScanner = false
     @State private var showDisconnectAlert = false
+    @State private var showRejectedCodeAlert = false
     @State private var userProfile: APIService.Profile?
     @State private var scrollPosition = ScrollPosition()
 
@@ -162,10 +163,20 @@ struct SettingsScreen: View {
                 showQRScanner = false
                 if let parsed = pairingManager.parseQRCode(code) {
                     Task {
-                        await pairingManager.pair(serverURL: parsed.server, token: parsed.token)
+                        let didPair = await pairingManager.pair(serverURL: parsed.server, token: parsed.token)
+                        if didPair {
+                            await loadUserProfile()
+                        } else {
+                            await MainActor.run { showRejectedCodeAlert = true }
+                        }
                     }
                 }
             }
+        }
+        .alert("Couldn't pair", isPresented: $showRejectedCodeAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(PairingManager.rejectedCodeMessage)
         }
         .alert("Disconnect?", isPresented: $showDisconnectAlert) {
             Button("Cancel", role: .cancel) {}

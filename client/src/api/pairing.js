@@ -1,7 +1,10 @@
 import apiFetch from './apiFetch';
 
-export async function getPairingTokens() {
-  const res = await apiFetch('/api/pairing/tokens');
+// quiet: a background check that shouldn't light the page's loading bar.
+export async function getPairingTokens({ quiet = false } = {}) {
+  const res = quiet
+    ? await fetch('/api/pairing/tokens', { credentials: 'include' })
+    : await apiFetch('/api/pairing/tokens');
   if (!res.ok) throw new Error('Failed to get pairing tokens');
   return res.json();
 }
