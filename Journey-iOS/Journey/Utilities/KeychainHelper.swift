@@ -4,12 +4,18 @@ import Foundation
 import Security
 
 enum KeychainHelper {
+    // Readable once the phone has been unlocked after starting up, so a watch trip that
+    // arrives while the phone is locked can still be uploaded. The default class
+    // (WhenUnlocked) made those uploads fail with "Not paired with server".
+    private static let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
     static func save(key: String, data: Data) -> Bool {
         delete(key: key)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecValueData as String: data
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: accessibility
         ]
         let status = SecItemAdd(query as CFDictionary, nil)
         return status == errSecSuccess
@@ -36,6 +42,17 @@ enum KeychainHelper {
     static func loadString(key: String) -> String? {
         guard let data = load(key: key) else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+
+    /// Moves an item saved by an older version to the accessibility class above. Only works
+    /// while the phone is unlocked; harmless to call again.
+    static func upgradeAccessibility(key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]
+        let change: [String: Any] = [kSecAttrAccessible as String: accessibility]
+        SecItemUpdate(query as CFDictionary, change as CFDictionary)
     }
 
     @discardableResult

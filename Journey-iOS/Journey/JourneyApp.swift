@@ -11,6 +11,7 @@ struct JourneyApp: App {
     private let connectivityManager: PhoneConnectivityManager
 
     init() {
+        KeychainHelper.upgradeAccessibility(key: AppConstants.keychainTokenKey)
         let uploadManager = UploadManager()
         _uploadManager = State(initialValue: uploadManager)
         connectivityManager = PhoneConnectivityManager(uploadManager: uploadManager)
@@ -31,7 +32,13 @@ struct JourneyApp: App {
                 .environment(uploadManager)
                 .onAppear {
                     VideoUploadQueue.shared.removeOrphans()
-                    Task { await pairingManager.checkServerReachability() }
+                    // Nothing is recording yet at launch, so any CSV left is an interrupted trip.
+                    uploadManager.recoverLeftoverRecordings(active: locationService.activeRecordingFile)
+                    uploadManager.startRetryingWhenOnline()
+                    Task {
+                        await pairingManager.checkServerReachability()
+                        await uploadManager.retryPending()
+                    }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
@@ -41,6 +48,7 @@ struct JourneyApp: App {
                         locationService.appDidBecomeActive()
                         UploadBackgroundTime.shared.appDidBecomeActive()
                         VideoUploadQueue.shared.appDidBecomeActive()
+                        Task { await uploadManager.retryPending() }
                     default:
                         break
                     }

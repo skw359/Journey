@@ -16,6 +16,9 @@ struct UploadQueueItem: Codable, Identifiable, Equatable {
     let source: String
     let createdAt: Date
     var status: UploadStatus
+    /// False after a failure that trying again won't fix (the server refused the file). Such
+    /// items wait for a manual retry. Absent in queues saved by older versions.
+    var retriesAutomatically: Bool? = true
 
     var fileURL: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!

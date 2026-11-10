@@ -7,6 +7,7 @@ final class PhoneLink: NSObject {
     static let shared = PhoneLink()
 
     private static let freshness: TimeInterval = 90
+    private static let retryDelay: Duration = .seconds(60)
 
     private let session = WCSession.default
     private var lastSeen: Date?
@@ -35,7 +36,15 @@ final class PhoneLink: NSObject {
     }
 
     func transfer(_ file: URL) {
+        let inFlight = session.outstandingFileTransfers.contains { $0.file.fileURL.lastPathComponent == file.lastPathComponent }
+        guard !inFlight, FileManager.default.fileExists(atPath: file.path) else { return }
         session.transferFile(file, metadata: nil)
+    }
+
+    /// Sends trips that never reached the phone: leftovers from before this launch.
+    func sendLeftovers() {
+        guard session.activationState == .activated else { return }
+        for file in RouteLog.leftovers() { transfer(file) }
     }
 
     private func send(_ message: [String: Any]) {
@@ -52,7 +61,11 @@ final class PhoneLink: NSObject {
 
 extension PhoneLink: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: (any Error)?) {
-        Task { @MainActor [weak self] in self?.send(["ping": "1"]) }
+        Task { @MainActor [weak self] in
+            self?.send(["ping": "1"])
+            // At launch nothing is recording yet, so any CSV left is an interrupted trip.
+            self?.sendLeftovers()
+        }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
@@ -63,7 +76,15 @@ extension PhoneLink: WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: (any Error)?) {
-        guard error == nil else { return }
-        try? FileManager.default.removeItem(at: fileTransfer.file.fileURL)
+        let file = fileTransfer.file.fileURL
+        guard error != nil else {
+            try? FileManager.default.removeItem(at: file)
+            return
+        }
+        // The zip is still here; try again in a while (and at the next launch regardless).
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.retryDelay)
+            self?.transfer(file)
+        }
     }
 }
