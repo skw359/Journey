@@ -47,12 +47,12 @@ Request flow (`server/app.js`, built by `createApp({ sessionSecret })`):
 - `JOURNEY_DATA_DIR` (optional): parent folder of `photos/`, `uploads/` and `avatars/`; default the project folder
 - `DB_STATEMENT_TIMEOUT_MS` (optional): Postgres statement timeout, default `30000` (`0` disables)
 - `DB_POOL_MAX` (optional): pool size, default `10`
-- `MAX_JOURNEY_UPLOAD_MB` / `MAX_JOURNEY_CSV_MB` / `MAX_JOURNEY_ROWS` (optional): journey upload limits, defaults `100` / `1024` / `2000000`
+- `MAX_JOURNEY_UPLOAD_MB` / `MAX_JOURNEY_CSV_MB` / `MAX_JOURNEY_ROWS` (optional): journey upload limits, defaults `32` / `64` / `500000` (nearly six days at one point a second). A parsed journey is held in memory, so these bound the heap an upload can take; at most two uploads are parsed at once
 - `PAIRING_TOKEN_IDLE_DAYS` (optional): a paired device unused this long must pair again, default `180`
 - `PUBLIC_URL` (optional): externally reachable HTTPS URL used for pairing QR output
 - `GEOCODE_BASE_URL` (optional): base URL of the reverse geocoder used for cities/places passed and, via `/api/geocode/lookup` and `/api/geocode/building`, the web client's place labels; unset turns geocoding off
 - `PORT` (optional): backend port, default `3003`
-- `MIN_ROUTE_MILES` (optional): minimum distance threshold for accepted/surfaced journeys, default `0.25`
+- `MIN_ROUTE_MILES` (optional): minimum distance threshold for accepted/surfaced journeys, default `0.25` (a value that isn't a number falls back to the default with a warning)
 - `MAX_VIDEO_UPLOAD_MB` (optional): max size of one uploaded video; unset or `0` (the default) means no limit
 - `VIDEO_MAX_DIMENSION` (optional): longest side of converted videos in pixels, default `1920`
 - `VIDEO_PRESET` (optional): x264 preset used for conversion, default `veryfast` (slower = smaller files, more CPU)
@@ -64,6 +64,8 @@ Session auth:
 
 - cookie name: `journey.sid`, `HttpOnly`, `SameSite=Lax`, `Secure` whenever the request arrived over HTTPS (`secure: 'auto'`, so set `TRUST_PROXY` correctly behind a proxy)
 - a new session id is issued at every sign-in (prevents session fixation)
+- sessions last 30 days from the last request (`rolling`), so an account in use isn't signed out on a schedule; the stored expiry is written at most every five minutes
+- the web app treats any `401` as a possibly ended session: it asks `/api/auth/status` and returns to the sign-in page if the session is gone
 - server-side session store table: `session`
 - used by `requireSession`
 
@@ -72,7 +74,9 @@ Accounts:
 - the first account is created freely and becomes the **admin** (`users.is_admin`); every later account needs an invite
 - invites (`invites` table) are single-use links that expire after 1–30 days (default 7). Only a SHA-256 hash of the token is stored, so a link is shown once, when created. The invite is used up in the same transaction that creates the account, and first-run registration takes an advisory lock, so two simultaneous sign-ups can't both become the first account
 - passwords need at least 8 characters; bcrypt cost 12
-- sign-in is rate limited per address (30 attempts / 15 min) and per account (10 failures / 15 min); registration per address (10 / hour). Unknown usernames take as long as wrong passwords
+- sign-in is rate limited per address (30 attempts / 15 min) and per account and address together (10 failures / 15 min), so someone guessing can't lock the owner out from elsewhere; registration per address (10 / hour). Unknown usernames take as long as wrong passwords
+- without an invite, registration answers the same whether or not the username is taken; usernames are unique regardless of capitals (`idx_users_username_lower`)
+- an account changes its password with the current one (`POST /api/auth/password`), which signs out its other sessions; the admin can reset another account's password, and `npm run password:reset -- <username>` resets any account from the server (for a locked-out admin)
 - the admin can list, promote, demote and delete accounts; there is always at least one admin
 
 Server-wide settings (database info, weather provider, FlightAware key, Marco/Ollama, attachment storage, invites, accounts) require the admin. Per-account preferences (units, avatar, pairing) don't.
@@ -81,7 +85,8 @@ Session or bearer auth:
 
 - `requireAuth` accepts either a valid session cookie or `Authorization: Bearer <pairing_token>`
 - pairing tokens are stored as SHA-256 hashes and returned only when created (the pairing QR code). A new token must be used within 15 minutes; a token unused for `PAIRING_TOKEN_IDLE_DAYS` stops working
-- with a pairing token, `/api/routes/*` allows only listing, viewing, renaming, setting the travel mode and moving a journey to Recently Deleted; photo and chunked-upload routes and `/upload` are allowed. Trash management, combining, point edits, backfills, exports, settings and Marco need a web session
+- with a pairing token, `/api/routes/*` allows only listing, viewing, renaming, setting the travel mode and moving a journey to Recently Deleted; photo and chunked-upload routes and `/upload` are allowed. Trash management, combining, point edits, backfills, exports, settings and Marco need a web session. Every other route in `routes/journeys.js` takes `webOnly`, and a test fails if a new one is added without deciding
+- a pairing code counts as scanned on its first request with the token, including `GET /ping` (the iOS app's first request after scanning), so the pairing page can show it as paired
 
 ## Storage Layout
 
@@ -205,6 +210,7 @@ Mounted at `/api/auth`.
 | `POST` | `/register` | none | `{ username, password, firstName?, lastName?, invite? }`; the first account, or with a valid invite. Starts a session |
 | `POST` | `/login` | none | Validates credentials, starts a new session (rate limited) |
 | `POST` | `/logout` | session | Destroys session |
+| `POST` | `/password` | session | `{ currentPassword, newPassword }`; signs out the account's other sessions (paired devices keep working). Rate limited |
 | `DELETE` | `/account` | session | Deletes the account and everything it owns (the only admin can't while other accounts exist) |
 | `POST` | `/migrate` | admin | Migrates legacy data |
 | `POST` | `/avatar` | session | Upload a JPG/PNG/WebP avatar (max 8 MB); it is decoded and re-encoded as a JPEG |
@@ -221,6 +227,7 @@ Mounted at `/api/admin`; session and admin only.
 | `DELETE` | `/api/admin/invites/:id` | Revoke an unused invite |
 | `GET` | `/api/admin/users` | Accounts |
 | `PATCH` | `/api/admin/users/:id` | `{ isAdmin }` |
+| `POST` | `/api/admin/users/:id/reset-password` | Set a random password for another account, returned once as `temporaryPassword`, and sign it out everywhere |
 | `DELETE` | `/api/admin/users/:id` | Delete another account and everything it owns |
 
 ## Journeys
@@ -269,6 +276,7 @@ Input:
 - field `journey`: a zip containing exactly one CSV (`__MACOSX`/`._*` entries are ignored); at most `MAX_JOURNEY_UPLOAD_MB`, the CSV at most `MAX_JOURNEY_CSV_MB` and `MAX_JOURNEY_ROWS` rows, read within 60 s
 - optional field `source`: `iphone` or `watch`
 - optional field `recordingId`: the device's id for this recording (the iOS app sends its upload queue item's UUID)
+- optional field `timeZone`: an IANA zone; the journey's name and date are written for the local day there (the server's zone otherwise)
 
 Parsed CSV columns:
 
@@ -283,7 +291,7 @@ Parsed CSV columns:
 Behavior:
 
 - a malformed upload (not a zip, no CSV, several CSVs, corrupt data, over a limit) answers `400`/`408`/`413` and leaves nothing behind
-- rows without a usable time and position are skipped; rows out of time order are put back in order; exact repeated rows are dropped
+- rows without a usable time and position are skipped (a timestamp must be a number between 2000 and 2100; a blank one no longer reads as 1 Jan 1970); rows over 64 KB are refused; rows out of time order are put back in order; exact repeated rows are dropped
 - speed spikes are **not** filtered (that would drop flights); delete bad points instead
 - computes distance, duration, elevation gain/loss, profile arrays, waypoints; auto-detects travel mode from average speed
 - uploads are idempotent: the same `recordingId`, or the same recorded content from a client that sends none, returns the journey already stored with `200` and `duplicate: true` instead of saving it again (also for uploads that went to Recently Deleted)
@@ -349,7 +357,7 @@ Mounted at `/api` and guarded by `requireSession`.
 |---|---|---|---|
 | `GET` | `/api/alltime-map-data` | session | Route lines + summary stats, supports `maxPoints` and `bounds` |
 | `GET` | `/api/heatmap-grid` | session | Heatmap cells for a view: `zoom`, `bounds`, optional `start`/`end` (ISO or epoch ms) |
-| `GET` | `/api/fun-stats` | session | Fun Stats, cached until the account's journeys (or the date) change |
+| `GET` | `/api/fun-stats?tz=` | session | Fun Stats, cached until the account's journeys (or the date) change. Days, weekdays, hours, seasons and streaks are counted in the IANA zone `tz` (the web app sends the browser's), UTC without one. Elevation is in metres (`totalGainM`, `totalLossM`, `peakElevationM`) |
 
 All of these read `route_derived`/`heat_cells` rather than every recorded point:
 
@@ -395,7 +403,7 @@ The database connection can no longer be changed at runtime: it comes only from 
 Mounted at `/api/ask` and guarded by `requireSession`. Marco answers
 natural-language questions about the requesting user's journeys via an Ollama
 server (typically on another machine on the LAN). The model only ever selects
-one of six fixed tools with enum arguments; all SQL is hand-written and
+one of seven fixed tools with enum arguments; all SQL is hand-written and
 tenant-scoped in `server/ai/handlers.js`, and all numbers are computed by
 Postgres and formatted server-side. See `server/ai/README.md` for the design.
 
@@ -404,7 +412,7 @@ Postgres and formatted server-side. See `server/ai/README.md` for the design.
 | `GET` | `/api/ask/config` | session | Current settings (`enabled`, `url`, `model`) for the admin; `enabled` only for other accounts |
 | `PUT` | `/api/ask/config` | admin | Save settings; enabling requires a valid `http(s)` URL |
 | `POST` | `/api/ask/config/test` | admin | Probe Ollama: reachable? model pulled? tools capability? |
-| `POST` | `/api/ask` | session | Body `{ question, timeZone }` → `{ answer, meta }`; add `stream: true` for Server-Sent Events (`stage`/`token`/`replace`/`done`/`error`) so the client renders the answer as it generates |
+| `POST` | `/api/ask` | session | Body `{ question, timeZone }` → `{ answer, meta }`; add `stream: true` for Server-Sent Events (`stage`/`token`/`replace`/`done`/`error`) so the client renders the answer as it generates. When the client disconnects (the Stop button), the Ollama request is cancelled |
 
 Configuration lives in `app_config` (no environment variables):
 
@@ -434,12 +442,14 @@ Root `package.json` scripts:
 - `npm run migrate:import` -> import `database.json` into the legacy tables (assigned to the first account on its first sign-in)
 - `npm run migrate:export` -> export every account's journeys to `exports/<username>-<date>.ndjson` (`JOURNEY_EXPORT_DIR` overrides the folder)
 - `npm run archive:prune` -> list upload archives that belong to nothing (keeping any whose recording overlaps a journey); add `-- --apply` to delete them
+- `npm run password:reset -- <username>` -> set a new random password for an account, print it, and sign the account out everywhere
 
 Script files:
 
 - `server/scripts/migrate-import.js`
 - `server/scripts/migrate-export.js`
 - `server/scripts/prune-archives.js`
+- `server/scripts/reset-password.js`
 - `server/scripts/move-attachments.js` (moves photos and videos between this PC and external drives; see Attachment storage)
 
 ## Backup and restore
@@ -450,6 +460,8 @@ Journey's data is the PostgreSQL database plus files on disk. A complete backup 
 2. The media folder: `photos/` (or the `journey` folder on the external drive chosen in Attachment storage)
 3. `avatars/` and, if you want the original uploads, `uploads/archive/`
 4. The root `.env` (keep it private)
+
+The `app_config` table holds the weather and FlightAware API keys (and, outside production, the generated session secret) in plain text, so the database dump is as sensitive as `.env`.
 
 Restore onto a fresh server:
 
@@ -468,7 +480,10 @@ Copying the files while the server is stopped (or right after the dump) keeps th
   - `upload`: malformed zips, limits, duplicates and retries, ordering, archives
   - `journeys`: point deletion (the spike case), concurrency, very long journeys, combine/undo-combine, restore conflicts, the hard-delete lifecycle
   - `maps`: Atlas output, viewport requests, heatmap cells against a full scan (all zoom levels and date ranges), visibility, Fun Stats values against a full scan, caching
-  - `weather`: the exact start point never reaches a third party
+  - `weather`: the exact start point never reaches a third party; geocoder replies are served as JSON
+  - `flights`: flight ids and numbers can't steer the FlightAware request; every route validates its input; names follow the importer's time zone
+  - `funstats`: elevation in metres, days and hours in the viewer's time zone, flights as a travel mode
+  - `marco`: disconnecting cancels the Ollama request
   - `export`: NDJSON, GPX, GeoJSON, `/database`, `migrate:export`
   - `perf`: latency and event-loop blocking budgets with 300k points (`PERF_JOURNEYS`, `PERF_POINTS` to scale up)
 - CI runs both against a PostgreSQL service container, plus `npm audit --omit=dev --audit-level=high` for the server and client

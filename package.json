@@ -1,7 +1,7 @@
 {
-  "name": "routes-backend",
+  "name": "journey-server",
   "version": "1.0.0",
-  "description": "Backend for the Routes app",
+  "description": "Backend for Journey",
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
@@ -22,7 +22,6 @@
     "dotenv": "^17.3.1",
     "express": "^4.22.3",
     "express-session": "^1.19.0",
-    "ffmpeg": "^0.0.4",
     "heic-convert": "^2.1.0",
     "multer": "^2.5.0",
     "pg": "^8.13.0",
