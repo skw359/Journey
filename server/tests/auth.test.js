@@ -401,5 +401,27 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
         assert.equal((await fetch(`${origin}/api/all-points`, { headers: { cookie: admin.cookie } })).status, 404);
         const health = await fetch(`${origin}/health`);
         assert.equal(health.status, 200);
+
+        const policy = res.headers.get('content-security-policy');
+        assert.match(policy, /default-src 'self'/);
+        assert.match(policy, /script-src 'self'(;|$)/, 'no inline or remote scripts');
+        assert.match(policy, /object-src 'none'/);
+        // HSTS only when the request came over HTTPS, as the reverse proxy reports it.
+        assert.equal(res.headers.get('strict-transport-security'), null);
+        const overHttps = await fetch(`${origin}/api/auth/status`, { headers: { 'x-forwarded-proto': 'https' } });
+        assert.match(overHttps.headers.get('strict-transport-security'), /^max-age=\d+$/);
+    });
+
+    await t.test('a session in use is renewed instead of lapsing 30 days after sign-in', async () => {
+        const browser = h.agent(origin);
+        await browser.post('/api/auth/login', { json: { username: 'second', password: 'second-password-1' } });
+        const res = await fetch(`${origin}/api/routes`, { headers: { cookie: browser.cookie } });
+        assert.equal(res.status, 200);
+        const renewed = res.headers.get('set-cookie');
+        assert.match(renewed, /journey\.sid=/, 'the cookie is re-sent on a later request');
+        const expires = new Date(/Expires=([^;]+)/i.exec(renewed)[1]).getTime();
+        assert.ok(expires > Date.now() + 29 * 86400000, 'another 30 days from this request');
+        // Nothing to renew, and no cookie, for a request without a session.
+        assert.equal((await fetch(`${origin}/api/auth/status`)).headers.get('set-cookie'), null);
     });
 });
