@@ -8,7 +8,7 @@ const router = express.Router();
 const { pool, ensureTenantSchema, migrateLegacyDataForUser } = require('../db');
 const { requireSession, requireAuth, isAdmin, hashToken } = require('../middleware/auth');
 const { AVATARS_DIR } = require('../config');
-const { deleteAccount, removeAvatarFile } = require('../utils/accounts');
+const { BCRYPT_ROUNDS, deleteAccount, removeAvatarFile, setPassword } = require('../utils/accounts');
 const { createRateLimiter, tooManyAttempts } = require('../utils/rateLimit');
 const log = require('../utils/logger').scope('auth');
 
@@ -19,7 +19,6 @@ try {
   sharp = null;
 }
 
-const BCRYPT_ROUNDS = 12;
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 1024;
 const MIN_USERNAME_LENGTH = 3;
@@ -30,9 +29,12 @@ const AVATAR_NAME = /^user-[\w-]+-\d+\.jpe?g$/;
 // Serializes first-run registration (the first account becomes admin).
 const REGISTRATION_LOCK = 72_312;
 
+// Failures are counted per account and address together: counted per account alone, ten wrong
+// guesses from anywhere kept the real owner out for as long as someone repeated them.
 const limits = {
   loginByAddress: createRateLimiter({ windowMs: 15 * 60 * 1000, max: 30 }),
-  loginFailuresByAccount: createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10 }),
+  loginFailuresByAccountAndAddress: createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10 }),
+  passwordChecksByAccount: createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10 }),
   registerByAddress: createRateLimiter({ windowMs: 60 * 60 * 1000, max: 10 }),
   inviteCheckByAddress: createRateLimiter({ windowMs: 15 * 60 * 1000, max: 30 }),
 };
@@ -231,6 +233,37 @@ router.post('/register', async (req, res) => {
       const { rows: existing } = await client.query('SELECT EXISTS (SELECT 1 FROM users) AS any');
       isFirstUser = existing[0].any !== true;
 
+      // The invite is checked before the username, so without one the answer is the same
+      // whether or not the name is taken.
+      let inviteId = null;
+      if (!isFirstUser) {
+        const token = typeof invite === 'string' ? invite : '';
+        const { rows: usable } = token && token.length <= 256
+          ? await client.query(
+            `SELECT id FROM invites
+             WHERE token_hash = $1 AND used_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()
+             FOR UPDATE`,
+            [hashToken(token)]
+          )
+          : { rows: [] };
+        if (usable.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({
+            error: 'Journey accounts are invite-only. Ask the server admin for an invite link.',
+            code: 'invite_required',
+          });
+        }
+        inviteId = usable[0].id;
+      }
+
+      // "Owner" next to "owner" would be a look-alike account. Registrations are serialized
+      // by the lock above, so this check can't race another sign-up.
+      const { rows: taken } = await client.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [name]);
+      if (taken.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Username already taken' });
+      }
+
       const { rows } = await client.query(
         `INSERT INTO users
           (id, username, password_hash, display_name, first_name, last_name, unit_preference, is_admin)
@@ -239,24 +272,8 @@ router.post('/register', async (req, res) => {
         [id, name, passwordHash, displayName, first, last, isFirstUser]
       );
       created = rows[0];
-
-      if (!isFirstUser) {
-        const token = typeof invite === 'string' ? invite : '';
-        const { rows: redeemed } = token && token.length <= 256
-          ? await client.query(
-            `UPDATE invites SET used_at = NOW(), used_by = $2
-             WHERE token_hash = $1 AND used_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()
-             RETURNING id`,
-            [hashToken(token), id]
-          )
-          : { rows: [] };
-        if (redeemed.length === 0) {
-          await client.query('ROLLBACK');
-          return res.status(403).json({
-            error: 'Journey accounts are invite-only. Ask the server admin for an invite link.',
-            code: 'invite_required',
-          });
-        }
+      if (inviteId) {
+        await client.query('UPDATE invites SET used_at = NOW(), used_by = $2 WHERE id = $1', [inviteId, id]);
       }
       await client.query('COMMIT');
     } catch (err) {
@@ -294,8 +311,8 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Username and password are required' });
   }
   const address = clientAddress(req);
-  const account = username.trim().toLowerCase();
-  const blocked = Math.max(limits.loginFailuresByAccount.blockedFor(account), limits.loginByAddress.hit(address));
+  const attempts = `${username.trim().toLowerCase()}\n${address}`;
+  const blocked = Math.max(limits.loginFailuresByAccountAndAddress.blockedFor(attempts), limits.loginByAddress.hit(address));
   if (blocked) return tooManyAttempts(res, blocked, 'Too many sign-in attempts. Try again later.');
 
   try {
@@ -309,11 +326,11 @@ router.post('/login', async (req, res) => {
       ? await bcrypt.compare(password, user.password_hash || '')
       : (await burnPasswordCheck(password), false);
     if (!valid) {
-      limits.loginFailuresByAccount.hit(account);
+      limits.loginFailuresByAccountAndAddress.hit(attempts);
       return res.status(401).json({ error: 'No account found with provided credentials.' });
     }
 
-    limits.loginFailuresByAccount.reset(account);
+    limits.loginFailuresByAccountAndAddress.reset(attempts);
     await establishSession(req, user.id);
     await ensureTenantSchema(user.id);
 
@@ -332,6 +349,37 @@ router.post('/logout', requireSession, (req, res) => {
     res.clearCookie('journey.sid');
     res.json({ success: true });
   });
+});
+
+// POST /api/auth/password { currentPassword, newPassword } — signs the account out everywhere
+// else. Paired devices keep working; they are revoked one by one in Settings.
+router.post('/password', requireSession, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (typeof currentPassword !== 'string' || !currentPassword) {
+    return res.status(400).json({ error: 'Your current password is required' });
+  }
+  const problem = validatePassword(newPassword);
+  if (problem) return res.status(400).json({ error: problem });
+
+  // A borrowed session must not be a way to guess the password without limit.
+  const wait = limits.passwordChecksByAccount.blockedFor(req.userId);
+  if (wait) return tooManyAttempts(res, wait);
+
+  try {
+    const { rows } = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.userId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Account not found' });
+    if (!(await bcrypt.compare(currentPassword, rows[0].password_hash || ''))) {
+      limits.passwordChecksByAccount.hit(req.userId);
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    limits.passwordChecksByAccount.reset(req.userId);
+    const { sessionsEnded } = await setPassword(req.userId, newPassword, { keepSessionId: req.sessionID });
+    log.info(`password changed for ${req.userId}; ${sessionsEnded} other session(s) ended`);
+    res.json({ success: true, sessionsEnded });
+  } catch (err) {
+    log.error('Change password error:', err);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
 });
 
 router.delete('/account', requireSession, async (req, res) => {

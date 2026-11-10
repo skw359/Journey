@@ -808,6 +808,15 @@ async function initSchema() {
   await pool.query(TRIGGER_FUNCTIONS);
   await runMigrations('global', GLOBAL_MIGRATIONS, {});
 
+  // One account per name, whatever its capitals. A server that already holds such a pair
+  // can't have the index until one is renamed; registration refuses new ones either way.
+  try {
+    await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username))');
+  } catch (err) {
+    if (err.code !== '23505') throw err;
+    require('./utils/logger').scope('database').warn('two accounts differ only by capitals in their username; rename one to finish securing sign-up');
+  }
+
   const { rows: users } = await pool.query('SELECT id FROM users');
   for (const user of users) {
     await ensureTenantSchema(user.id);
