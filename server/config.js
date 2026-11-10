@@ -36,9 +36,11 @@ const TRUST_PROXY = parseTrustProxy(process.env.TRUST_PROXY);
 const DB_STATEMENT_TIMEOUT_MS = Math.max(parseInt(process.env.DB_STATEMENT_TIMEOUT_MS ?? '30000', 10) || 0, 0);
 const DB_POOL_MAX = Math.max(parseInt(process.env.DB_POOL_MAX, 10) || 10, 2);
 
-const MAX_JOURNEY_UPLOAD_MB = Math.max(parseInt(process.env.MAX_JOURNEY_UPLOAD_MB, 10) || 100, 1);
-const MAX_JOURNEY_CSV_MB = Math.max(parseInt(process.env.MAX_JOURNEY_CSV_MB, 10) || 1024, 1);
-const MAX_JOURNEY_ROWS = Math.max(parseInt(process.env.MAX_JOURNEY_ROWS, 10) || 2_000_000, 1);
+// A parsed journey is held in memory, so these bound the heap an upload can take. 500,000 rows
+// is nearly six days recorded at one point a second, about 40 MB of CSV.
+const MAX_JOURNEY_UPLOAD_MB = Math.max(parseInt(process.env.MAX_JOURNEY_UPLOAD_MB, 10) || 32, 1);
+const MAX_JOURNEY_CSV_MB = Math.max(parseInt(process.env.MAX_JOURNEY_CSV_MB, 10) || 64, 1);
+const MAX_JOURNEY_ROWS = Math.max(parseInt(process.env.MAX_JOURNEY_ROWS, 10) || 500_000, 1);
 
 // Video uploads (converted to H.264 MP4 with ffmpeg for browser playback).
 // Optional per-video cap in MB; unset or 0 means any size.

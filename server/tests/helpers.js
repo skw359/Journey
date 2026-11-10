@@ -207,10 +207,11 @@ function journeyZip(rows, name = 'route.csv') {
     return zip({ [name]: csvFromRows(rows) });
 }
 
-async function uploadJourney(client, zipBuffer, { recordingId, source = 'iphone', filename = 'route_1.zip' } = {}) {
+async function uploadJourney(client, zipBuffer, { recordingId, timeZone, source = 'iphone', filename = 'route_1.zip' } = {}) {
     const form = new FormData();
     form.append('source', source);
     if (recordingId) form.append('recordingId', recordingId);
+    if (timeZone) form.append('timeZone', timeZone);
     form.append('journey', new Blob([zipBuffer], { type: 'application/zip' }), filename);
     return client.post('/upload', { body: form });
 }

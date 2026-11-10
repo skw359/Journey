@@ -49,6 +49,7 @@ function statsFromSamples(samples) {
     let topElevation = -Infinity;
     let lowestElevation = Infinity;
     let sumElevation = 0;
+    let elevationSamples = 0;
     let elevGainM = 0;
     let elevLossM = 0;
     let lastEle = null;
@@ -63,6 +64,7 @@ function statsFromSamples(samples) {
             const dt = (ts - prev.ts) / 1000;
             if (dt > 0) {
                 totalMiles += miles;
+                // The apps write an unknown speed as 0, so 0 is derived from movement as well.
                 if (!Number.isFinite(sp) || sp <= 0) sp = (miles * METERS_PER_MILE) / dt;
             }
         }
@@ -70,6 +72,7 @@ function statsFromSamples(samples) {
             if (ele > topElevation) topElevation = ele;
             if (ele < lowestElevation) lowestElevation = ele;
             sumElevation += ele;
+            elevationSamples += 1;
             if (Number.isFinite(lastEle)) {
                 const dEle = ele - lastEle;
                 if (dEle > ELEVATION_STEP_M) elevGainM += dEle;
@@ -95,7 +98,7 @@ function statsFromSamples(samples) {
         times, coords, elevations, speedsMph, distances, totalMiles,
         topSpeedMph: topSpeedMps * MPS_TO_MPH,
         avgSpeedMph,
-        topElevation, lowestElevation, sumElevation, elevGainM, elevLossM, count,
+        topElevation, lowestElevation, sumElevation, elevationSamples, elevGainM, elevLossM, count,
     });
 }
 
@@ -111,6 +114,7 @@ function statsFromTrack(track, { removed = new Set() } = {}) {
     let topElevation = -Infinity;
     let lowestElevation = Infinity;
     let sumElevation = 0;
+    let elevationSamples = 0;
     let elevGainM = 0;
     let elevLossM = 0;
     let lastEle = null;
@@ -138,6 +142,7 @@ function statsFromTrack(track, { removed = new Set() } = {}) {
             if (ele > topElevation) topElevation = ele;
             if (ele < lowestElevation) lowestElevation = ele;
             sumElevation += ele;
+            elevationSamples += 1;
             if (Number.isFinite(lastEle)) {
                 const dEle = ele - lastEle;
                 if (dEle > ELEVATION_STEP_M) elevGainM += dEle;
@@ -161,7 +166,7 @@ function statsFromTrack(track, { removed = new Set() } = {}) {
         totalMiles,
         topSpeedMph: maxOf(out.speedsMph, 0),
         avgSpeedMph: out.speedsMph.length ? sumMph / out.speedsMph.length : 0,
-        topElevation, lowestElevation, sumElevation, elevGainM, elevLossM,
+        topElevation, lowestElevation, sumElevation, elevationSamples, elevGainM, elevLossM,
         count: out.coords.length,
     });
 }
@@ -184,7 +189,8 @@ function finish(s) {
         avg_speed: round2(s.avgSpeedMph),
         top_elevation: round2(s.topElevation === -Infinity ? 0 : s.topElevation),
         lowest_elevation: round2(s.lowestElevation === Infinity ? 0 : s.lowestElevation),
-        avg_elevation: round2(count ? s.sumElevation / count : 0),
+        // Over the points that have an elevation, not every point.
+        avg_elevation: round2(s.elevationSamples ? s.sumElevation / s.elevationSamples : 0),
         elevation_gain: round2(s.elevGainM),
         elevation_loss: round2(s.elevLossM),
         start_time: firstTs != null ? new Date(firstTs).toISOString() : null,

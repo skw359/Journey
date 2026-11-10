@@ -2,6 +2,9 @@ import apiFetch from './apiFetch';
 
 const API_BASE = '/api';
 
+// Sent where the server writes a date into a journey's name, so it uses the viewer's day.
+const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
 export async function fetchRoutes() {
   const res = await apiFetch(`${API_BASE}/routes`);
   if (!res.ok) throw new Error('Failed to fetch journeys');
@@ -271,7 +274,7 @@ export async function combineJourneys(journeyIds, name) {
   const res = await apiFetch(`${API_BASE}/routes/combine`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ journeyIds, name }),
+    body: JSON.stringify({ journeyIds, name, timeZone: browserTimeZone() }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -332,7 +335,7 @@ export async function importFlight(params) {
   const res = await apiFetch(`${API_BASE}/flights/import`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
+    body: JSON.stringify({ ...params, timeZone: browserTimeZone() }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

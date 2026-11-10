@@ -10,6 +10,11 @@ import './FunStats.css';
 
 ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler, Legend, BarElement, zoomPlugin);
 
+// The server counts days, weekdays and hours in this zone.
+const FUN_STATS_URL = `/api/fun-stats?tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')}`;
+const TRAVEL_MODES = ['drive', 'scooter', 'foot', 'train', 'metro', 'flight'];
+const EVEREST_M = 8849;
+
 function formatHour(h) {
   if (h === 0) return '12 AM';
   if (h < 12) return `${h} AM`;
@@ -251,7 +256,7 @@ export default function FunStats() {
   const [error, setError] = useState(null);
   const [isTempChartExpanded, setIsTempChartExpanded] = useState(false);
   const [tempChartClosing, setTempChartClosing] = useState(false);
-  const { convertDistance, convertSpeed, convertTemperature, distanceUnit, speedUnit, temperatureUnit } = useUnits();
+  const { convertDistance, convertSpeed, convertTemperature, convertElevation, distanceUnit, speedUnit, temperatureUnit, elevationUnit } = useUnits();
 
   const openTempChart = () => { setTempChartClosing(false); setIsTempChartExpanded(true); };
   const closeTempChart = useCallback(() => {
@@ -270,7 +275,7 @@ export default function FunStats() {
   const expandedTempChartRef = useRef(null);
 
   useEffect(() => {
-    fetch('/api/fun-stats', { credentials: 'include' })
+    fetch(FUN_STATS_URL, { credentials: 'include' })
       .then(r => { if (!r.ok) throw new Error('Failed to load stats'); return r.json(); })
       .then(setData)
       .catch(e => setError(e.message))
@@ -278,7 +283,7 @@ export default function FunStats() {
   }, []);
 
   const reloadStats = useCallback(() => {
-    fetch('/api/fun-stats', { credentials: 'include' })
+    fetch(FUN_STATS_URL, { credentials: 'include' })
       .then(r => (r.ok ? r.json() : null))
       .then(stats => { if (stats) setData(stats); })
       .catch(() => {});
@@ -435,7 +440,9 @@ export default function FunStats() {
   const cd = (miles) => convertDistance(miles);
   const cs = (mph) => convertSpeed(mph);
   const seasonLabel = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-  const modeLabel = (m) => m === 'drive' ? 'Driving' : m === 'scooter' ? 'Scooter' : m === 'train' ? 'Train' : m === 'metro' ? 'Metro' : 'Walking';
+  // Elevation arrives in metres.
+  const elev = (meters) => Math.round(convertElevation(meters) ?? 0).toLocaleString();
+  const modeLabel = (m) => m === 'drive' ? 'Driving' : m === 'scooter' ? 'Scooter' : m === 'train' ? 'Train' : m === 'metro' ? 'Metro' : m === 'flight' ? 'Flying' : 'Walking';
   const habitInsights = data.habitInsights || {};
   const routineExplorerIndex = habitInsights.routineExplorer?.index;
   const routineExplorerLabel = !Number.isFinite(routineExplorerIndex)
@@ -1078,11 +1085,11 @@ export default function FunStats() {
           </section>
 
           {/* Travel Modes */}
-          {data.modeCounts && (data.modeCounts.drive + data.modeCounts.scooter + data.modeCounts.foot + (data.modeCounts.train || 0) + (data.modeCounts.metro || 0) > 0) && (
+          {data.modeCounts && TRAVEL_MODES.some(m => data.modeCounts[m] > 0) && (
             <section className="funstats-panel">
               <h2 className="funstats-panel-title">Travel Modes</h2>
               <div className="funstats-stat-grid">
-                {['drive', 'scooter', 'foot', 'train', 'metro'].filter(m => data.modeCounts[m] > 0).map(m => (
+                {TRAVEL_MODES.filter(m => data.modeCounts[m] > 0).map(m => (
                   <div key={m} className="funstats-stat-card">
                     <h4>{modeLabel(m)}</h4>
                     <div className="value">{data.modeCounts[m]}</div>
@@ -1100,23 +1107,23 @@ export default function FunStats() {
               <div className="funstats-stat-grid">
                 <div className="funstats-stat-card">
                   <h4>Total Gain</h4>
-                  <div className="value">{data.elevation.totalGainFt.toLocaleString()}<span className="unit">ft</span></div>
+                  <div className="value">{elev(data.elevation.totalGainM)}<span className="unit">{elevationUnit}</span></div>
                 </div>
                 <div className="funstats-stat-card">
                   <h4>Total Loss</h4>
-                  <div className="value">{data.elevation.totalLossFt.toLocaleString()}<span className="unit">ft</span></div>
+                  <div className="value">{elev(data.elevation.totalLossM)}<span className="unit">{elevationUnit}</span></div>
                 </div>
-                {data.elevation.peakElevationFt != null && (
+                {data.elevation.peakElevationM != null && (
                   <div className="funstats-stat-card">
                     <h4>Peak Elevation</h4>
-                    <div className="value">{data.elevation.peakElevationFt.toLocaleString()}<span className="unit">ft</span></div>
+                    <div className="value">{elev(data.elevation.peakElevationM)}<span className="unit">{elevationUnit}</span></div>
                   </div>
                 )}
-                {data.elevation.totalGainFt > 0 && (
+                {data.elevation.totalGainM > 0 && (
                   <div className="funstats-stat-card">
                     <h4>Everests Climbed</h4>
-                    <div className="value">{(data.elevation.totalGainFt / 29032).toFixed(1)}x</div>
-                    <div className="sub">29,032 ft each</div>
+                    <div className="value">{(data.elevation.totalGainM / EVEREST_M).toFixed(1)}x</div>
+                    <div className="sub">{elev(EVEREST_M)} {elevationUnit} each</div>
                   </div>
                 )}
               </div>
