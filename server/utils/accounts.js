@@ -1,5 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 const { pool, quoteIdent, tenantSchemaForUser, forgetTenantSchema } = require('../db');
 const { AVATARS_DIR } = require('../config');
 const mediaStorage = require('./mediaStorage');
@@ -7,6 +9,43 @@ const { cancelMediaJobsForUser } = require('./mediaQueue');
 const { stopGeoBackfillsForUser } = require('./geoBackfill');
 const { removeUserArchives } = require('./uploadArchive');
 const log = require('./logger').scope('accounts');
+
+const BCRYPT_ROUNDS = 12;
+
+/**
+ * Stores a new password and ends the account's sessions, except `keepSessionId`.
+ * @returns {Promise<{found: boolean, sessionsEnded: number}>}
+ */
+async function setPassword(userId, password, { keepSessionId = null } = {}) {
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { rowCount } = await client.query('UPDATE users SET password_hash = $2 WHERE id = $1', [userId, passwordHash]);
+        if (rowCount === 0) {
+            await client.query('ROLLBACK');
+            return { found: false, sessionsEnded: 0 };
+        }
+        const ended = await client.query(
+            "DELETE FROM session WHERE sess->>'userId' = $1 AND sid IS DISTINCT FROM $2",
+            [userId, keepSessionId]
+        );
+        await client.query('COMMIT');
+        return { found: true, sessionsEnded: ended.rowCount };
+    } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+/** Sets a random password, for an admin or the reset script to hand over. */
+async function resetPassword(userId) {
+    const temporaryPassword = crypto.randomBytes(12).toString('base64url');
+    const result = await setPassword(userId, temporaryPassword);
+    return { ...result, temporaryPassword };
+}
 
 function resolvePathWithin(baseDir, relativePath) {
     const root = path.resolve(baseDir);
@@ -113,4 +152,4 @@ async function deleteAccount(userId, { verify } = {}) {
     return { status: 'deleted', isSetup };
 }
 
-module.exports = { deleteAccount, removeAvatarFile, resolvePathWithin };
+module.exports = { BCRYPT_ROUNDS, setPassword, resetPassword, deleteAccount, removeAvatarFile, resolvePathWithin };

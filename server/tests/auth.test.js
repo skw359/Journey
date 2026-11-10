@@ -162,17 +162,89 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
         assert.match(cookie, /Secure/i);
     });
 
-    await t.test('repeated failed sign-ins are rate limited', async () => {
+    await t.test('repeated failed sign-ins are rate limited without locking the owner out', async () => {
+        // Behind the reverse proxy each client has its own address.
+        const from = (address) => ({ headers: { 'x-forwarded-for': address } });
         const attacker = h.agent(origin);
         let last;
         for (let i = 0; i < 11; i++) {
-            last = await attacker.post('/api/auth/login', { json: { username: 'second', password: `wrong-${i}` } });
+            last = await attacker.post('/api/auth/login', { json: { username: 'second', password: `wrong-${i}` }, ...from('203.0.113.9') });
         }
         assert.equal(last.status, 429);
         assert.ok(Number(last.headers.get('retry-after')) > 0);
-        const right = await attacker.post('/api/auth/login', { json: { username: 'second', password: 'second-password-1' } });
-        assert.equal(right.status, 429, 'locked out even with the right password until the window passes');
+        const guessed = await attacker.post('/api/auth/login', { json: { username: 'second', password: 'second-password-1' }, ...from('203.0.113.9') });
+        assert.equal(guessed.status, 429, 'the guessing address stays blocked, even with the right password');
+        const capitals = await attacker.post('/api/auth/login', { json: { username: 'SECOND', password: 'x' }, ...from('203.0.113.9') });
+        assert.equal(capitals.status, 429, 'capitals do not get a fresh allowance');
+
+        const owner = await h.agent(origin).post('/api/auth/login', { json: { username: 'second', password: 'second-password-1' }, ...from('198.51.100.7') });
+        assert.equal(owner.status, 200, 'the owner signs in from their own address meanwhile');
         h.resetRateLimits();
+    });
+
+    await t.test('registration answers the same for taken and free usernames without an invite', async () => {
+        const taken = await h.agent(origin).post('/api/auth/register', { json: { username: 'second', password: 'whatever-123' } });
+        const free = await h.agent(origin).post('/api/auth/register', { json: { username: 'nobody-here', password: 'whatever-123' } });
+        assert.equal(taken.status, 403);
+        assert.deepEqual(taken.data, free.data);
+
+        // With an invite, a name that differs only by capitals is taken, and the invite survives.
+        const invite = await admin.post('/api/admin/invites', { json: {} });
+        const lookalike = await h.agent(origin).post('/api/auth/register', { json: { username: 'Second', password: 'whatever-123', invite: invite.data.token } });
+        assert.equal(lookalike.status, 409);
+        const fresh = await h.agent(origin).post('/api/auth/register', { json: { username: 'fourth', password: 'whatever-123', invite: invite.data.token } });
+        assert.equal(fresh.status, 201, 'the invite was not spent on the refused name');
+        const { rows } = await pool.query("SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_users_username_lower'");
+        assert.match(rows[0].indexdef, /UNIQUE/);
+    });
+
+    await t.test('changing a password needs the current one and signs out other sessions', async () => {
+        const user = await h.registerInvited(origin, admin, 'changer', 'old-password-1');
+        const elsewhere = h.agent(origin);
+        assert.equal((await elsewhere.post('/api/auth/login', { json: { username: 'changer', password: 'old-password-1' } })).status, 200);
+        const paired = await user.post('/api/pairing/tokens', { json: { label: 'phone' } });
+
+        assert.equal((await h.agent(origin).post('/api/auth/password', { json: { currentPassword: 'old-password-1', newPassword: 'new-password-2' } })).status, 401);
+        assert.equal((await user.post('/api/auth/password', { json: { currentPassword: 'wrong', newPassword: 'new-password-2' } })).status, 401);
+        assert.equal((await user.post('/api/auth/password', { json: { currentPassword: 'old-password-1', newPassword: 'short' } })).status, 400);
+        assert.equal((await user.post('/api/auth/password', { json: { newPassword: 'new-password-2' } })).status, 400);
+        assert.equal((await elsewhere.get('/api/routes')).status, 200, 'nothing changed yet');
+
+        const changed = await user.post('/api/auth/password', { json: { currentPassword: 'old-password-1', newPassword: 'new-password-2' } });
+        assert.equal(changed.status, 200, changed.text);
+        assert.equal(changed.data.sessionsEnded, 1);
+        assert.equal((await user.get('/api/routes')).status, 200, 'this session stays signed in');
+        assert.equal((await elsewhere.get('/api/routes')).status, 401, 'other sessions are signed out');
+        assert.equal((await h.agent(origin, { bearer: paired.data.token }).get('/api/routes')).status, 200, 'paired devices keep working');
+        assert.equal((await h.agent(origin).post('/api/auth/login', { json: { username: 'changer', password: 'old-password-1' } })).status, 401);
+        assert.equal((await h.agent(origin).post('/api/auth/login', { json: { username: 'changer', password: 'new-password-2' } })).status, 200);
+
+        // A session can't be used to guess the current password without limit.
+        let guess;
+        for (let i = 0; i < 11; i++) {
+            guess = await user.post('/api/auth/password', { json: { currentPassword: `guess-${i}`, newPassword: 'another-password-3' } });
+        }
+        assert.equal(guess.status, 429);
+        h.resetRateLimits();
+    });
+
+    await t.test('an admin can reset another account\'s password', async () => {
+        const forgetful = await h.registerInvited(origin, admin, 'forgetful', 'forgotten-password');
+        assert.equal((await second.post(`/api/admin/users/${forgetful.user.id}/reset-password`)).status, 403);
+        assert.equal((await admin.post('/api/admin/users/user-nope/reset-password')).status, 404);
+        const adminId = results.find((r) => r.status === 201).data.user.id;
+        assert.equal((await admin.post(`/api/admin/users/${adminId}/reset-password`)).status, 400);
+
+        const reset = await admin.post(`/api/admin/users/${forgetful.user.id}/reset-password`);
+        assert.equal(reset.status, 200, reset.text);
+        assert.ok(reset.data.temporaryPassword.length >= 16);
+        assert.equal((await forgetful.get('/api/routes')).status, 401, 'signed out everywhere');
+        assert.equal((await h.agent(origin).post('/api/auth/login', { json: { username: 'forgetful', password: 'forgotten-password' } })).status, 401);
+        const back = h.agent(origin);
+        assert.equal((await back.post('/api/auth/login', { json: { username: 'forgetful', password: reset.data.temporaryPassword } })).status, 200);
+        assert.equal((await back.post('/api/auth/password', { json: { currentPassword: reset.data.temporaryPassword, newPassword: 'my-own-password-9' } })).status, 200);
+        const { rows } = await pool.query('SELECT password_hash FROM users WHERE id = $1', [forgetful.user.id]);
+        assert.match(rows[0].password_hash, /^\$2[aby]\$12\$/, 'stored as a bcrypt hash');
     });
 
     await t.test('pairing tokens are hashed, shown once, scoped and expire', async () => {

@@ -12,7 +12,8 @@
     "test:ai": "node server/ai/tests/run-all.js",
     "test": "npm run test:ai && npm run test:server",
     "test:server": "node --test --test-concurrency=1 server/tests/*.test.js",
-    "archive:prune": "node server/scripts/prune-archives.js"
+    "archive:prune": "node server/scripts/prune-archives.js",
+    "password:reset": "node server/scripts/reset-password.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
