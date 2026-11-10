@@ -110,6 +110,39 @@ test('journey editing and lifecycle', { skip: h.skipReason() }, async (t) => {
         assert.ok(Math.abs(Number(route.distance) - pathMiles(route.coordinates, route.profileTimeMs)) < 0.006);
     });
 
+    await t.test('a photo upload that fails partway leaves no rows and no files', async () => {
+        const journey = await upload();
+        const mediaDir = path.join(dataDir, 'photos', owner.user.id);
+        const stored = () => (fs.existsSync(mediaDir) ? fs.readdirSync(mediaDir) : []);
+        const before = stored().length;
+        // Make the database refuse one particular file.
+        await pool.query(`
+            CREATE FUNCTION ${schema}.refuse_boom() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                IF NEW.original_name = 'boom.jpg' THEN RAISE EXCEPTION 'refused for the test'; END IF;
+                RETURN NEW;
+            END $fn$;
+            CREATE TRIGGER refuse_boom BEFORE INSERT ON ${schema}.photos
+                FOR EACH ROW EXECUTE FUNCTION ${schema}.refuse_boom();
+        `);
+        const form = new FormData();
+        for (const name of ['first.jpg', 'boom.jpg', 'third.jpg']) {
+            form.append('photos', new Blob([await jpeg()], { type: 'image/jpeg' }), name);
+        }
+        const failed = await owner.post(`/api/routes/${journey.id}/photos`, { body: form });
+        await pool.query(`DROP TRIGGER refuse_boom ON ${schema}.photos; DROP FUNCTION ${schema}.refuse_boom()`);
+        assert.equal(failed.status, 500);
+        assert.deepEqual((await owner.get(`/api/routes/${journey.id}/photos`)).data.photos, [], 'no gallery entry points at a deleted file');
+        assert.equal(stored().length, before, 'the uploaded files were removed');
+
+        const photo = await uploadPhoto(owner, journey.id, 'fine.jpg');
+        assert.equal((await owner.get(`/photos/${photo.filename}`, { raw: true })).status, 200);
+        const missing = new FormData();
+        missing.append('photos', new Blob([await jpeg()], { type: 'image/jpeg' }), 'orphan.jpg');
+        assert.equal((await owner.post('/api/routes/journey-nope/photos', { body: missing })).status, 404);
+        assert.equal(stored().length, before + 1);
+    });
+
     await t.test('undo-combine keeps later photo and waypoint changes', async () => {
         const rowsB = h.lineRows({ count: 200, lat: 50, start: Date.UTC(2025, 6, 2) });
         rowsB[20] = { ...rowsB[20], waypoint: true, note: 'cafe' };

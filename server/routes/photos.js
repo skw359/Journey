@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
-const { withTenantClient, queryTenant, toApiPhoto } = require('../db');
+const { withTenantClient, withTenantTransaction, queryTenant, toApiPhoto } = require('../db');
 const { photoUpload, UPLOAD_IDLE_MS } = require('../middleware/storage');
 const { MAX_VIDEO_UPLOAD_MB } = require('../config');
 const { requireAuth } = require('../middleware/auth');
@@ -110,56 +110,60 @@ router.get('/api/routes/:id/photos', requireAuth, async (req, res) => {
 // converted in the background (utils/mediaQueue.js).
 router.post('/api/routes/:id/photos', requireAuth, acceptMedia, async (req, res) => {
     const files = req.files || [];
+    const removeUploads = () => Promise.all(files.map((file) => fs.promises.rm(file.path, { force: true }).catch(() => {})));
+
+    let added;
     try {
-        await withTenantClient(req.userId, async (db) => {
+        // All rows or none. If a later file fails, every stored file is deleted below, so a
+        // row from an earlier file must not survive to point at one of them.
+        added = await withTenantTransaction(req.userId, async (db) => {
             const { rows: routeCheck } = await db.query('SELECT 1 FROM routes WHERE id = $1', [req.params.id]);
-            if (routeCheck.length === 0) {
-                files.forEach((file) => fs.unlinkSync(file.path));
-                return res.status(404).json({ error: 'Journey not found' });
-            }
+            if (routeCheck.length === 0) return null;
 
             const { rows: countResult } = await db.query(
                 'SELECT COUNT(*) AS cnt FROM photos WHERE route_id = $1', [req.params.id]
             );
-            const currentCount = parseInt(countResult[0].cnt, 10);
-
             const { available: canProcessVideo } = await getCapabilities();
-            const newPhotos = [];
-            const skipped = [];
-            const jobs = [];
-
+            const result = { photos: [], skipped: [], jobs: [], existing: parseInt(countResult[0].cnt, 10) };
             for (const file of files) {
-                const added = await addMedia(db, req.params.id, file, { canProcessVideo });
-                if (added.skipped) {
-                    skipped.push(added.skipped);
+                const media = await addMedia(db, req.params.id, file, { canProcessVideo });
+                if (media.skipped) {
+                    result.skipped.push(media.skipped);
                     continue;
                 }
-                newPhotos.push(added.photo);
-                if (added.job) jobs.push(added.job);
+                result.photos.push(media.photo);
+                if (media.job) result.jobs.push(media.job);
             }
-
-            res.json({
-                message: 'Photos uploaded successfully',
-                photos: newPhotos,
-                totalPhotos: currentCount + newPhotos.length,
-                // HEIC photos queued for conversion to JPEG
-                converted: jobs.filter((job) => job.kind === 'photo').length,
-                processing: jobs.length,
-                skipped,
-            });
-
-            for (const job of jobs) {
-                enqueueMediaJob(job.kind, req.userId, job.mediaId, job.sourcePath);
-            }
+            return result;
         });
     } catch (error) {
         log.error('Photo upload error:', error);
-        files.forEach((file) => {
-            if (fs.existsSync(file.path)) {
-                fs.unlinkSync(file.path);
-            }
-        });
-        res.status(500).json({ error: 'Failed to upload photos' });
+        await removeUploads();
+        return res.status(500).json({ error: 'Failed to upload photos' });
+    }
+    if (!added) {
+        await removeUploads();
+        return res.status(404).json({ error: 'Journey not found' });
+    }
+
+    res.json({
+        message: 'Photos uploaded successfully',
+        photos: added.photos,
+        totalPhotos: added.existing + added.photos.length,
+        // HEIC photos queued for conversion to JPEG
+        converted: added.jobs.filter((job) => job.kind === 'photo').length,
+        processing: added.jobs.length,
+        skipped: added.skipped,
+    });
+
+    // The response has gone and the rows are committed, so a failure here is only logged;
+    // anything left in 'processing' is picked up again when the server restarts.
+    for (const job of added.jobs) {
+        try {
+            enqueueMediaJob(job.kind, req.userId, job.mediaId, job.sourcePath);
+        } catch (error) {
+            log.error(`could not queue ${job.kind} ${job.mediaId} for conversion`, error);
+        }
     }
 });
 
