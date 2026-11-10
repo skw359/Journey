@@ -52,11 +52,13 @@ export default function useGeoLabel(currentRoute) {
   const [loading, setLoading] = useState(false);
   const seqRef = useRef(0);
 
-  useEffect(() => {
-    const startCoord = currentRoute?.startCoord;
-    const endCoord = currentRoute?.endCoord;
+  // By value: a journey's coordinate arrays are new objects each time it is fetched, and only
+  // different endpoints need looking up again.
+  const [startLat, startLon] = currentRoute?.startCoord || [];
+  const [endLat, endLon] = currentRoute?.endCoord || [];
 
-    if (!startCoord || !endCoord) {
+  useEffect(() => {
+    if (startLat == null || startLon == null || endLat == null || endLon == null) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when the route has no endpoints
       setLabel(null);
       setLoading(false);
@@ -67,8 +69,8 @@ export default function useGeoLabel(currentRoute) {
     setLoading(true);
 
     Promise.all([
-      fetchCached(startCoord[0], startCoord[1]),
-      fetchCached(endCoord[0], endCoord[1]),
+      fetchCached(startLat, startLon),
+      fetchCached(endLat, endLon),
     ])
       .then(([startGeo, endGeo]) => {
         if (seq !== seqRef.current) return;
@@ -82,7 +84,7 @@ export default function useGeoLabel(currentRoute) {
         if (seq !== seqRef.current) return;
         setLoading(false);
       });
-  }, [currentRoute?.id]);
+  }, [startLat, startLon, endLat, endLon]);
 
   return { label, loading };
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useEffectEvent, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Pencil, AlertCircle, X, Merge, Plane } from 'lucide-react';
 import TopLoader from '../components/TopLoader';
@@ -182,34 +182,33 @@ export default function Dashboard({ sidebarCollapsed = false, searchValue = '' }
     if (measureActive && currentRouteId) loadFullDetail(currentRouteId);
   }, [measureActive, currentRouteId, loadFullDetail]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const routes = await fetchRoutes();
-        setAllRoutes(routes);
+  // The first load, once. It may open the journey named in the URL, then clears that parameter.
+  const loadInitialRoutes = useEffectEvent(async () => {
+    try {
+      const routes = await fetchRoutes();
+      setAllRoutes(routes);
 
-        const urlRouteId = searchParams.get('routeId');
-        if (urlRouteId) {
-          const exists = routes.some(r => r.id === urlRouteId);
-          if (exists) {
-            await loadRouteWithAnimation(urlRouteId);
-            setSearchParams({}, { replace: true });
-            return;
-          }
+      const urlRouteId = searchParams.get('routeId');
+      if (urlRouteId) {
+        const exists = routes.some(r => r.id === urlRouteId);
+        if (exists) {
+          await loadRouteWithAnimation(urlRouteId);
+          setSearchParams({}, { replace: true });
+          return;
         }
-
-        const sorted = [...routes].sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
-        if (sorted.length > 0) {
-          await loadRouteWithAnimation(sorted[0].id);
-        }
-      } catch (err) {
-        console.error('Failed to load routes:', err);
-      } finally {
-        setInitialLoading(false);
       }
-    };
-    load();
-  }, []);
+
+      const sorted = [...routes].sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+      if (sorted.length > 0) {
+        await loadRouteWithAnimation(sorted[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load routes:', err);
+    } finally {
+      setInitialLoading(false);
+    }
+  });
+  useEffect(() => { loadInitialRoutes(); }, []);
 
   const dateWindow = useMemo(() => parseDateQuery(searchValue), [searchValue]);
 
