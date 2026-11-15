@@ -19,137 +19,71 @@ struct SettingsScreen: View {
 
     private static let uploadsSectionID = "uploads"
 
+    private static let isPad = UIDevice.current.userInterfaceIdiom == .pad
+    private static let minimumPadWidth: CGFloat = 700
+    private static let columnsMinimumWidth: CGFloat = 900
+    private static let columnedContentWidth: CGFloat = 1100
+    private static let singleColumnContentWidth: CGFloat = 640
+    private static let columnSpacing: CGFloat = 24
+
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let usesPadLayout = Self.isPad && width >= Self.minimumPadWidth
+            let usesColumns = Self.isPad && width >= Self.columnsMinimumWidth
 
-            ScrollView {
-                VStack(spacing: 24) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Settings")
-                            .font(.montserrat(size: 28, weight: .heavy))
-                            .foregroundColor(.white)
-                            .accessibilityAddTraits(.isHeader)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            ZStack {
+                Color.black.ignoresSafeArea()
 
-                    if let profile = userProfile {
-                        ProfileHeaderView(profile: profile)
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        SettingsSectionHeader(title: "Recording")
-
-                        SettingsSection {
-                            SettingsToggle(
-                                icon: "exclamationmark.circle.fill",
-                                iconColor: AppConstants.journeyGreen,
-                                label: "Confirm before stopping",
-                                isOn: $confirmBeforeStopping
-                            )
-                            SettingsDivider()
-                            SettingsToggle(
-                                icon: "tuningfork",
-                                iconColor: AppConstants.journeyGreen,
-                                label: "Auto-segment journeys",
-                                isOn: $autoSegmentJourneys
-                            )
+                ScrollView {
+                    VStack(spacing: 24) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Settings")
+                                .font(.montserrat(size: 28, weight: .heavy))
+                                .foregroundColor(.white)
+                                .accessibilityAddTraits(.isHeader)
                         }
-                    }
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        SettingsSectionHeader(title: "Units")
+                        if usesColumns {
+                            profileSection
 
-                        SettingsSection {
-                            SettingsToggle(
-                                icon: "ruler.fill",
-                                iconColor: AppConstants.journeyGreen,
-                                label: "Metric units",
-                                detail: useMetricUnits ? "Showing km, km/h, m, and m/s²." : "Showing mi, mph, ft, and ft/s².",
-                                isOn: $useMetricUnits
-                            )
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        SettingsSectionHeader(title: "Server Pairing")
-
-                        SettingsSection {
-                            VStack(alignment: .leading, spacing: 16) {
-                                ViewThatFits(in: .horizontal) {
-                                    HStack(spacing: 8) { pairingStatus }
-                                    VStack(alignment: .leading, spacing: 8) { pairingStatus }
+                            HStack(alignment: .top, spacing: Self.columnSpacing) {
+                                VStack(spacing: 24) {
+                                    pairingSection
+                                    uploadsSection
                                 }
+                                .scrollTargetLayout()
+                                .frame(maxWidth: .infinity)
 
-                                ViewThatFits(in: .horizontal) {
-                                    HStack(spacing: 10) { pairingButtons }
-                                    VStack(spacing: 10) { pairingButtons }
+                                VStack(spacing: 24) {
+                                    recordingSection
+                                    unitsSection
                                 }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            SettingsSectionHeader(title: "Uploads")
-                            Spacer()
-                            Menu {
-                                Button("Upload All") {
-                                    Task { await uploadManager.uploadAll() }
-                                }
-                                Button("Retry Failed") {
-                                    Task { await uploadManager.retryFailed() }
-                                }
-                                Button("Clear Completed") {
-                                    uploadManager.clearCompleted()
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(Color.white.opacity(0.08)))
-                            }
-                            .accessibilityLabel("Upload Actions")
-                        }
-
-                        if uploadManager.queue.isEmpty {
-                            SettingsSection {
-                                Text("All caught up")
-                                    .font(.montserrat(size: 14))
-                                    .foregroundColor(.gray)
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                    .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity)
                             }
                         } else {
-                            SettingsSection {
-                                VStack(spacing: 0) {
-                                    ForEach(Array(uploadManager.queue.enumerated()), id: \.element.id) { index, item in
-                                        UploadQueueRow(item: item) {
-                                            Task { _ = await uploadManager.upload(item: item) }
-                                        }
-                                        if index < uploadManager.queue.count - 1 {
-                                            SettingsDivider()
-                                        }
-                                    }
-                                }
-                            }
+                            profileSection
+                            recordingSection
+                            unitsSection
+                            pairingSection
+                            uploadsSection
                         }
                     }
-                    .id(Self.uploadsSectionID)
+                    .scrollTargetLayout()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                    .padding(.bottom, 40)
+                    .frame(maxWidth: usesPadLayout ? (usesColumns ? Self.columnedContentWidth : Self.singleColumnContentWidth) : .infinity)
+                    .frame(maxWidth: .infinity)
                 }
-                .scrollTargetLayout()
-                .padding(.horizontal, 16)
-                .padding(.top, 4)
-                .padding(.bottom, 40)
-            }
-            .scrollPosition($scrollPosition)
-            .onChange(of: showUploads, initial: true) { _, show in
-                guard show else { return }
-                showUploads = false
-                withAnimation {
-                    scrollPosition.scrollTo(id: Self.uploadsSectionID, anchor: .top)
+                .scrollPosition($scrollPosition)
+                .onChange(of: showUploads, initial: true) { _, show in
+                    guard show else { return }
+                    showUploads = false
+                    withAnimation {
+                        scrollPosition.scrollTo(id: Self.uploadsSectionID, anchor: .top)
+                    }
                 }
             }
         }
@@ -178,8 +112,133 @@ struct SettingsScreen: View {
     }
 
     @ViewBuilder
+    private var profileSection: some View {
+        if let profile = userProfile {
+            ProfileHeaderView(profile: profile)
+        }
+    }
+
+    private var recordingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsSectionHeader(title: "Recording")
+
+            SettingsSection {
+                SettingsToggle(
+                    icon: "exclamationmark.circle.fill",
+                    iconColor: AppConstants.journeyGreen,
+                    label: "Confirm before stopping",
+                    isOn: $confirmBeforeStopping
+                )
+                SettingsDivider()
+                SettingsToggle(
+                    icon: "tuningfork",
+                    iconColor: AppConstants.journeyGreen,
+                    label: "Auto-segment journeys",
+                    isOn: $autoSegmentJourneys
+                )
+            }
+        }
+    }
+
+    private var unitsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsSectionHeader(title: "Units")
+
+            SettingsSection {
+                SettingsToggle(
+                    icon: "ruler.fill",
+                    iconColor: AppConstants.journeyGreen,
+                    label: "Metric units",
+                    detail: useMetricUnits ? "Showing km, km/h, m, and m/s\u{00B2}." : "Showing mi, mph, ft, and ft/s\u{00B2}.",
+                    isOn: $useMetricUnits
+                )
+            }
+        }
+    }
+
+    private var pairingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsSectionHeader(title: "Server Pairing")
+
+            SettingsSection {
+                VStack(alignment: .leading, spacing: 16) {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) { pairingStatus }
+                        VStack(alignment: .leading, spacing: 8) { pairingStatus }
+                    }
+
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { pairingButtons }
+                        VStack(spacing: 10) { pairingButtons }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var uploadsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                SettingsSectionHeader(title: "Uploads")
+                Spacer()
+                Menu {
+                    Button("Upload All") {
+                        Task { await uploadManager.uploadAll() }
+                    }
+                    Button("Retry Failed") {
+                        Task { await uploadManager.retryFailed() }
+                    }
+                    Button("Clear Completed") {
+                        uploadManager.clearCompleted()
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                        .frame(width: Self.isPad ? 44 : 36, height: Self.isPad ? 44 : 36)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+                .accessibilityLabel("Upload Actions")
+            }
+
+            if uploadManager.queue.isEmpty {
+                SettingsSection {
+                    Text("All caught up")
+                        .font(.montserrat(size: 14))
+                        .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
+                }
+            } else {
+                SettingsSection {
+                    VStack(spacing: 0) {
+                        ForEach(Array(uploadManager.queue.enumerated()), id: \.element.id) { index, item in
+                            UploadQueueRow(item: item) {
+                                Task { _ = await uploadManager.upload(item: item) }
+                            }
+                            if index < uploadManager.queue.count - 1 {
+                                SettingsDivider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .id(Self.uploadsSectionID)
+    }
+
+    @ViewBuilder
     private var pairingStatus: some View {
-        StatusPill(status: pairingManager.isServerReachable ? .connected : .notConnected)
+        if Self.isPad && pairingManager.isServerReachable {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(AppConstants.journeyGreen)
+                .accessibilityLabel("Connected")
+                .help("Connected")
+        } else {
+            StatusPill(status: pairingManager.isServerReachable ? .connected : .notConnected)
+        }
         if pairingManager.isServerReachable, let url = pairingManager.serverURL {
             Text(url)
                 .font(.montserrat(size: 11, weight: .medium))
