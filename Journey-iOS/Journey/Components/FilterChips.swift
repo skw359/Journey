@@ -10,6 +10,7 @@ enum JourneyFilter: String, CaseIterable {
 
 struct FilterChips: View {
     @Binding var selected: JourneyFilter
+    var horizontalPadding: CGFloat = 16
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -30,7 +31,7 @@ struct FilterChips: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, horizontalPadding)
         }
     }
 }

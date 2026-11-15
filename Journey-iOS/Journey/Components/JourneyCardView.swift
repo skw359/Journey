@@ -8,6 +8,7 @@ struct JourneyCardView: View {
 
     let journey: JourneySummary
     let store: JourneyDetailStore
+    var height: CGFloat = JourneyCardView.height
 
     @State private var photoFailed = false
 
@@ -35,7 +36,7 @@ struct JourneyCardView: View {
             caption
                 .padding(18)
         }
-        .frame(height: Self.height)
+        .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
@@ -63,7 +64,7 @@ struct JourneyCardView: View {
                 JourneyRouteSnapshotView(
                     journeyID: journey.id,
                     coordinates: detail.routeCoordinates,
-                    insets: UIEdgeInsets(top: 22, left: 28, bottom: Self.height * 0.54, right: 28)
+                    insets: UIEdgeInsets(top: 22, left: 28, bottom: height * 0.54, right: 28)
                 )
             }
         }

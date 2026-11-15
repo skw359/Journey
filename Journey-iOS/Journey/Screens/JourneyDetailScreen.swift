@@ -612,6 +612,29 @@ private struct JourneyStoryChrome: View {
     }
 }
 
+private enum PadDetailLayout {
+    static let minimumWidth: CGFloat = 700
+    static let columnsMinimumWidth: CGFloat = 900
+    static let columnedContentWidth: CGFloat = 1148
+    static let singleColumnContentWidth: CGFloat = 760
+    static let columnSpacing: CGFloat = 48
+    static let leadingColumnWidth: CGFloat = 440
+
+    static func maxContentWidth(pageWidth: CGFloat) -> CGFloat? {
+        guard UIDevice.current.userInterfaceIdiom == .pad, pageWidth >= minimumWidth else { return nil }
+        return usesColumns(pageWidth: pageWidth) ? columnedContentWidth : singleColumnContentWidth
+    }
+
+    static func usesColumns(pageWidth: CGFloat) -> Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && pageWidth >= columnsMinimumWidth
+    }
+
+    static func sideInset(pageWidth: CGFloat) -> CGFloat {
+        guard let maxWidth = maxContentWidth(pageWidth: pageWidth) else { return 0 }
+        return max((pageWidth - maxWidth) / 2, 0)
+    }
+}
+
 private struct JourneyStoryPage: View, Equatable {
     let summary: JourneySummary
     let store: JourneyDetailStore
@@ -680,6 +703,7 @@ private struct JourneyStoryPage: View, Equatable {
                             pendingUploads: store.pendingUploads(summary.id),
                             loadFailed: store.loadFailed(summary.id),
                             showsRoutePreview: showsPhotos,
+                            pageWidth: geometry.size.width,
                             onRetry: { Task { await store.load(summary.id, force: true) } },
                             onOpenMap: onOpenMap,
                             onOpenRouteCard: onOpenRouteCard,
@@ -764,7 +788,7 @@ private struct JourneyStoryPage: View, Equatable {
                 .frame(maxHeight: .infinity, alignment: .bottom)
 
                 heroCaption
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 24 + PadDetailLayout.sideInset(pageWidth: size.width))
                     .padding(.bottom, max(safeArea.bottom, 16) + 44)
                     .modifier(FadeBelowChrome(chromeHeight: safeArea.top + 56))
             }
@@ -1003,6 +1027,7 @@ private struct JourneyStoryDetails: View {
     let pendingUploads: [JourneyDetailStore.PendingUpload]
     let loadFailed: Bool
     let showsRoutePreview: Bool
+    let pageWidth: CGFloat
     let onRetry: () -> Void
     let onOpenMap: () -> Void
     let onOpenRouteCard: () -> Void
@@ -1029,18 +1054,24 @@ private struct JourneyStoryDetails: View {
         return formatter
     }()
 
+    private var usesColumns: Bool { PadDetailLayout.usesColumns(pageWidth: pageWidth) }
+
     var body: some View {
         Group {
             if let detail {
-                summary(detail)
+                if usesColumns {
+                    columnedContent(detail)
+                } else {
+                    summary(detail)
 
-                if showsRoutePreview, detail.routeCoordinates.count >= 2 {
-                    routePreview(detail)
+                    if showsRoutePreview, detail.routeCoordinates.count >= 2 {
+                        routePreview(detail)
+                    }
+
+                    charts(for: detail)
+
+                    photosSection
                 }
-
-                charts(for: detail)
-
-                photosSection
             } else if loadFailed {
                 failureView
             } else {
@@ -1051,18 +1082,46 @@ private struct JourneyStoryDetails: View {
             }
         }
         .padding(.horizontal, 24)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: PadDetailLayout.maxContentWidth(pageWidth: pageWidth) ?? .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
         .background(Color.black)
     }
 
-    private func summary(_ detail: JourneyDetail) -> some View {
+    private func columnedContent(_ detail: JourneyDetail) -> some View {
+        let hasCharts = !profileCharts(for: detail).isEmpty
+
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: PadDetailLayout.columnSpacing) {
+                VStack(alignment: .leading, spacing: 0) {
+                    summary(detail, statColumns: 2)
+
+                    if showsRoutePreview, detail.routeCoordinates.count >= 2 {
+                        routePreview(detail, height: 340)
+                    }
+                }
+                .frame(width: hasCharts ? PadDetailLayout.leadingColumnWidth : nil)
+                .frame(maxWidth: hasCharts ? nil : PadDetailLayout.leadingColumnWidth, alignment: .leading)
+
+                if hasCharts {
+                    VStack(alignment: .leading, spacing: 0) {
+                        charts(for: detail, topPadding: 12)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            photosSection
+        }
+    }
+
+    private func summary(_ detail: JourneyDetail, statColumns: Int = 3) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             distanceLede(detail)
 
             hairline
 
             LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .topLeading), count: 3),
+                columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .topLeading), count: statColumns),
                 alignment: .leading,
                 spacing: 22
             ) {
@@ -1078,10 +1137,10 @@ private struct JourneyStoryDetails: View {
         .padding(.top, 12)
     }
 
-    private func routePreview(_ detail: JourneyDetail) -> some View {
+    private func routePreview(_ detail: JourneyDetail, height: CGFloat = 220) -> some View {
         section("ROUTE") {
             JourneyRouteSnapshotView(journeyID: journeyID, coordinates: detail.routeCoordinates, lineWidth: 4)
-                .frame(height: 220)
+                .frame(height: height)
                 .background(AppConstants.darkCardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(alignment: .topTrailing) {
@@ -1129,11 +1188,11 @@ private struct JourneyStoryDetails: View {
     }
 
     @ViewBuilder
-    private func charts(for detail: JourneyDetail) -> some View {
+    private func charts(for detail: JourneyDetail, topPadding: CGFloat = 36) -> some View {
         let charts = profileCharts(for: detail)
         if !charts.isEmpty {
             sectionLabel("PROFILES")
-                .padding(.top, 36)
+                .padding(.top, topPadding)
 
             ForEach(Array(charts.enumerated()), id: \.element) { index, chart in
                 profileChart(chart, detail: detail)
@@ -1437,6 +1496,12 @@ private struct StoryStatCell: View {
     }
 }
 
+private enum MediaTileSize {
+    private static let isPad = UIDevice.current.userInterfaceIdiom == .pad
+    static let width: CGFloat = isPad ? 176 : 128
+    static let height: CGFloat = isPad ? 232 : 168
+}
+
 private struct MediaTile: View {
     let item: JourneyPhoto
 
@@ -1457,7 +1522,7 @@ private struct MediaTile: View {
                         .padding(8)
                 }
             }
-            .frame(width: 128, height: 168)
+            .frame(width: MediaTileSize.width, height: MediaTileSize.height)
             .background(AppConstants.darkCardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .accessibilityElement(children: .ignore)
@@ -1514,7 +1579,7 @@ private struct MediaStatusTile: View {
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 10)
             }
-            .frame(width: 128, height: 168)
+            .frame(width: MediaTileSize.width, height: MediaTileSize.height)
             .background(AppConstants.darkCardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .accessibilityElement(children: .ignore)
@@ -1559,7 +1624,7 @@ private struct PendingUploadTile: View {
                         .tint(.white)
                 }
             }
-            .frame(width: 128, height: 168)
+            .frame(width: MediaTileSize.width, height: MediaTileSize.height)
             .background(AppConstants.darkCardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .animation(.easeOut(duration: 0.3), value: upload.preview != nil)
