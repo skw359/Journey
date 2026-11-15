@@ -37,6 +37,17 @@ struct JourneysScreen: View {
     @State private var titleState = JourneysTitleState()
     @Namespace private var journeyTransition
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private static let gridInset: CGFloat = 24
+    private static let gridSpacing: CGFloat = 16
+    private static let gridCardHeight: CGFloat = 260
+    private static let gridColumns = [GridItem(.adaptive(minimum: 310), spacing: gridSpacing)]
+
+    private var usesGrid: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
+
     private var isSearchTab: Bool { searchText != nil }
 
     private var query: String { searchText?.wrappedValue ?? "" }
@@ -134,38 +145,11 @@ struct JourneysScreen: View {
 
             ScrollViewReader { scrollProxy in
                 ScrollView {
-                    LazyVStack(spacing: 14, pinnedViews: .sectionHeaders) {
-                        FilterChips(selected: $library.selectedFilter)
-
-                        if sections.isEmpty {
-                            emptyState
-                        }
-
-                        ForEach(sections, id: \.0) { section, items in
-                            Section {
-                                ForEach(items) { journey in
-                                    Button {
-                                        presentedJourney = journey
-                                    } label: {
-                                        JourneyCardView(journey: journey, store: detailStore)
-                                    }
-                                    .buttonStyle(JourneyCardButtonStyle())
-                                    .matchedTransitionSource(id: journey.id, in: journeyTransition) { source in
-                                        source.clipShape(RoundedRectangle(cornerRadius: JourneyCardView.cornerRadius, style: .continuous))
-                                    }
-                                    .padding(.horizontal, 16)
-                                }
-                            } header: {
-                                Text(section)
-                                    .font(.montserrat(size: 11, weight: .semibold))
-                                    .tracking(1.2)
-                                    .foregroundColor(.white.opacity(0.5))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 18)
-                                    .padding(.top, 10)
-                                    .padding(.bottom, 4)
-                                    .background(Color.black)
-                            }
+                    Group {
+                        if usesGrid {
+                            gridContent(sections: sections, filter: $library.selectedFilter)
+                        } else {
+                            listContent(sections: sections, filter: $library.selectedFilter)
                         }
                     }
                     .padding(.top, 4)
@@ -188,6 +172,76 @@ struct JourneysScreen: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func listContent(sections: [(String, [JourneySummary])], filter: Binding<JourneyFilter>) -> some View {
+        LazyVStack(spacing: 14, pinnedViews: .sectionHeaders) {
+            FilterChips(selected: filter)
+
+            if sections.isEmpty {
+                emptyState
+            }
+
+            ForEach(sections, id: \.0) { section, items in
+                Section {
+                    ForEach(items) { journey in
+                        journeyButton(journey)
+                            .padding(.horizontal, 16)
+                    }
+                } header: {
+                    sectionHeader(section, horizontalPadding: 18)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func gridContent(sections: [(String, [JourneySummary])], filter: Binding<JourneyFilter>) -> some View {
+        VStack(spacing: 14) {
+            FilterChips(selected: filter, horizontalPadding: Self.gridInset)
+
+            if sections.isEmpty {
+                emptyState
+            }
+
+            LazyVGrid(columns: Self.gridColumns, spacing: Self.gridSpacing, pinnedViews: .sectionHeaders) {
+                ForEach(sections, id: \.0) { section, items in
+                    Section {
+                        ForEach(items) { journey in
+                            journeyButton(journey, height: Self.gridCardHeight)
+                        }
+                    } header: {
+                        sectionHeader(section, horizontalPadding: 2)
+                    }
+                }
+            }
+            .padding(.horizontal, Self.gridInset)
+        }
+    }
+
+    private func journeyButton(_ journey: JourneySummary, height: CGFloat = JourneyCardView.height) -> some View {
+        Button {
+            presentedJourney = journey
+        } label: {
+            JourneyCardView(journey: journey, store: detailStore, height: height)
+        }
+        .buttonStyle(JourneyCardButtonStyle())
+        .matchedTransitionSource(id: journey.id, in: journeyTransition) { source in
+            source.clipShape(RoundedRectangle(cornerRadius: JourneyCardView.cornerRadius, style: .continuous))
+        }
+    }
+
+    private func sectionHeader(_ title: String, horizontalPadding: CGFloat) -> some View {
+        Text(title)
+            .font(.montserrat(size: 11, weight: .semibold))
+            .tracking(1.2)
+            .foregroundColor(.white.opacity(0.5))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+            .background(Color.black)
     }
 
     @ViewBuilder
