@@ -7,12 +7,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 // The statistics the upload route computed before the shared module existed, kept as an
-// oracle: new uploads must produce exactly the same numbers.
+// oracle: new uploads must produce exactly the same numbers. One deliberate difference: the
+// average elevation is taken over the points that have one (it used to divide by every point).
 function legacyUploadStats(rows) {
     const { haversine } = require('../utils/geo');
     const s = {
         count: 0, topSpeedMps: 0, sumSpeedMps: 0, speedSamples: 0, topElevation: -Infinity,
-        lowestElevation: Infinity, sumElevation: 0, last: null, lastTs: null, totalMiles: 0, firstTs: null,
+        lowestElevation: Infinity, sumElevation: 0, elevationSamples: 0, last: null, lastTs: null, totalMiles: 0, firstTs: null,
         coords: [], elevGainM: 0, elevLossM: 0, lastEle: null, profileDistMi: [], profileSpeedMph: [],
     };
     for (const row of rows) {
@@ -36,6 +37,7 @@ function legacyUploadStats(rows) {
             s.topElevation = Math.max(s.topElevation, ele);
             s.lowestElevation = Math.min(s.lowestElevation, ele);
             s.sumElevation += ele;
+            s.elevationSamples += 1;
             if (Number.isFinite(s.lastEle)) {
                 const dEle = ele - s.lastEle;
                 if (dEle > 0.5) s.elevGainM += dEle;
@@ -61,7 +63,7 @@ function legacyUploadStats(rows) {
         avg_speed: parseFloat(avgSpeedMph.toFixed(2)),
         top_elevation: parseFloat((s.topElevation === -Infinity ? 0 : s.topElevation).toFixed(2)),
         lowest_elevation: parseFloat((s.lowestElevation === Infinity ? 0 : s.lowestElevation).toFixed(2)),
-        avg_elevation: parseFloat((s.count ? s.sumElevation / s.count : 0).toFixed(2)),
+        avg_elevation: parseFloat((s.elevationSamples ? s.sumElevation / s.elevationSamples : 0).toFixed(2)),
         elevation_gain: Number(s.elevGainM.toFixed(2)),
         elevation_loss: Number(s.elevLossM.toFixed(2)),
         profile_dist_mi: s.profileDistMi,
@@ -160,3 +162,169 @@ test('box distance bound is never below a point inside the box', () => {
     }
 });
 
+
+test('average elevation ignores points that have no elevation', () => {
+    const { statsFromSamples, statsFromTrack } = require('../utils/journeyStats');
+    const samples = Array.from({ length: 300 }, (_, i) => ({
+        ts: Date.UTC(2025, 5, 1) + i * 1000, lat: 40 + i * 0.0001, lon: -74, ele: i < 150 ? 100 : NaN, speedMps: 5,
+    }));
+    const stats = statsFromSamples(samples);
+    assert.equal(stats.avg_elevation, 100);
+    const track = { times: stats.profile_time_ms, coords: stats.coordinates, elevations: stats.profile_elev_m, speedsMph: stats.profile_speed_mph };
+    assert.equal(statsFromTrack(track).avg_elevation, 100);
+    assert.equal(statsFromTrack(track, { removed: new Set([0, 1, 2]) }).avg_elevation, 100);
+    assert.equal(statsFromSamples(samples.map((s) => ({ ...s, ele: NaN }))).avg_elevation, 0);
+});
+
+test('rows without a real timestamp are skipped', () => {
+    const { sampleFromRow } = require('../utils/journeyIngest');
+    const row = (ts_ms) => ({ ts_ms, lat: '40.5', lon: '-74.25', ele_m: '12', speed_ms: '3', waypoint: '0', note: '' });
+    const good = sampleFromRow(row(String(Date.UTC(2025, 9, 29, 9, 0, 0))));
+    assert.deepEqual({ ts: good.ts, lat: good.lat, lon: good.lon }, { ts: Date.UTC(2025, 9, 29, 9, 0, 0), lat: 40.5, lon: -74.25 });
+    // Number('') is 0: a blank cell must not become 1 Jan 1970.
+    for (const bad of ['', '   ', '0', '-5', 'abc', '1e300', '86400000', undefined]) {
+        assert.equal(sampleFromRow(row(bad)), null, `ts_ms ${JSON.stringify(bad)}`);
+    }
+    assert.equal(sampleFromRow({ ...row('1761728800000'), lat: '91' }), null);
+});
+
+test('journey names and dates follow the given time zone', () => {
+    const { journeyName, journeyDate } = require('../utils/journeyIngest');
+    const { parseTimeZone, zoneParts, shiftDateKey, shiftMonthKey } = require('../utils/timeZone');
+    // Friday 6 pm in Los Angeles is already Saturday in UTC.
+    const start = new Date('2025-10-25T01:00:00Z');
+    assert.equal(journeyDate(start, 'America/Los_Angeles'), 'Oct 24, 2025');
+    assert.equal(journeyName(start, 'America/Los_Angeles'), 'Journey - Oct 24, 2025 - 18:00');
+    assert.equal(journeyName(start, 'UTC'), 'Journey - Oct 25, 2025 - 01:00');
+    assert.equal(parseTimeZone('America/Los_Angeles'), 'America/Los_Angeles');
+    for (const bad of ['Mars/Olympus', '', '  ', 42, null, 'x'.repeat(200)]) assert.equal(parseTimeZone(bad), null);
+
+    const la = zoneParts(start, 'America/Los_Angeles');
+    assert.deepEqual(la, { dateKey: '2025-10-24', monthKey: '2025-10', year: 2025, month: 9, dow: 5, hour: 18, minute: 0, second: 0 });
+    assert.equal(zoneParts(start, 'UTC').dow, 6);
+    assert.equal(zoneParts(new Date('2025-01-01T00:30:00Z'), 'America/Los_Angeles').dateKey, '2024-12-31');
+    assert.equal(zoneParts(new Date('2025-06-01T07:00:00Z'), 'America/Los_Angeles').hour, 0, 'midnight is hour 0, not 24');
+    assert.equal(shiftDateKey('2025-03-01', -1), '2025-02-28');
+    assert.equal(shiftDateKey('2025-12-31', 1), '2026-01-01');
+    assert.equal(shiftMonthKey('2025-01', -1), '2024-12');
+    assert.equal(shiftMonthKey('2025-12', 1), '2026-01');
+});
+
+test('MIN_ROUTE_MILES falls back to the default unless it is a distance', () => {
+    const { parseMinRouteMiles } = require('../config');
+    assert.equal(parseMinRouteMiles(undefined), 0.25);
+    assert.equal(parseMinRouteMiles(''), 0.25);
+    assert.equal(parseMinRouteMiles('0.5'), 0.5);
+    assert.equal(parseMinRouteMiles('0'), 0);
+    const warn = console.warn;
+    const warnings = [];
+    console.warn = (message) => warnings.push(message);
+    try {
+        // NaN in SQL compares greater than every distance, which hid every journey.
+        for (const bad of ['a quarter', 'O.5', '-1', 'NaN', 'Infinity']) assert.equal(parseMinRouteMiles(bad), 0.25, bad);
+    } finally {
+        console.warn = warn;
+    }
+    assert.equal(warnings.length, 5);
+});
+
+test('session touches are written at most once per interval', () => {
+    const { throttleTouch } = require('../utils/sessionStore');
+    let clock = 1_000_000;
+    const written = [];
+    const store = throttleTouch({ touch: (sid, sess, done) => { written.push(sid); done(); } }, { intervalMs: 60_000, now: () => clock });
+    let answered = 0;
+    const touch = (sid) => store.touch(sid, {}, () => { answered += 1; });
+
+    touch('a');
+    touch('a');
+    touch('b');
+    clock += 59_000;
+    touch('a');
+    assert.deepEqual(written, ['a', 'b'], 'the first touch of each session is written');
+    clock += 2_000;
+    touch('a');
+    touch('a');
+    assert.deepEqual(written, ['a', 'b', 'a'], 'and again once the interval has passed');
+    assert.equal(answered, 6, 'every touch calls back, written or not');
+});
+
+test('an export is cut off when the client stops reading, and only a few run at once', async () => {
+    const { EventEmitter } = require('node:events');
+    const { writer, beginExport } = require('../utils/exporter');
+
+    const stuck = Object.assign(new EventEmitter(), { destroyed: false, write: () => false });
+    await assert.rejects(writer(stuck, { stallMs: 30 })('chunk'), /abandoned/);
+    assert.equal(stuck.listenerCount('drain') + stuck.listenerCount('close'), 0, 'no listeners left behind');
+
+    const slow = Object.assign(new EventEmitter(), { destroyed: false, write: () => false });
+    const pending = writer(slow, { stallMs: 1000 })('chunk');
+    setTimeout(() => slow.emit('drain'), 20);
+    await pending;
+
+    const first = beginExport();
+    const second = beginExport();
+    assert.equal(beginExport(), null, 'a third export has to wait');
+    first();
+    first();
+    const third = beginExport();
+    assert.ok(third, 'a finished export frees its slot, once');
+    assert.equal(beginExport(), null);
+    second();
+    third();
+});
+
+test('the attachment mover leaves a verified copy, or nothing', async (t) => {
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const path = require('node:path');
+    const crypto = require('node:crypto');
+    const { copyVerified } = require('../utils/mediaMove');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'journey-move-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const leftovers = (folder) => fs.readdirSync(folder).filter((name) => name.endsWith('.tmp'));
+
+    const src = path.join(dir, 'from', 'photo.jpg');
+    fs.mkdirSync(path.dirname(src));
+    const bytes = crypto.randomBytes(3 * 1024 * 1024 + 17);
+    fs.writeFileSync(src, bytes);
+    const taken = new Date('2024-06-01T12:00:00Z');
+    fs.utimesSync(src, taken, taken);
+
+    // A plain copy, into a folder that doesn't exist yet.
+    const dest = path.join(dir, 'to', 'user-1', 'photo.jpg');
+    const steps = [];
+    let copied = 0;
+    await copyVerified(src, dest, { onStep: (step) => steps.push(step), onBytes: (n) => { copied += n; } });
+    assert.ok(fs.readFileSync(dest).equals(bytes));
+    assert.deepEqual(steps, ['copying', 'verifying']);
+    assert.equal(copied, bytes.length);
+    assert.equal(fs.statSync(dest).mtime.getTime(), taken.getTime(), 'the file keeps its date');
+    assert.ok(fs.existsSync(src), 'deleting the original is the caller\'s step, after this succeeds');
+    assert.deepEqual(leftovers(path.dirname(dest)), []);
+
+    // An earlier run copied it but stopped before deleting the original: verified, not copied again.
+    steps.length = 0;
+    await copyVerified(src, dest, { onStep: (step) => steps.push(step) });
+    assert.deepEqual(steps, ['verifying']);
+
+    // A different file already has that name: neither is touched.
+    const clash = path.join(dir, 'to', 'clash.jpg');
+    fs.writeFileSync(clash, 'someone else\'s photo');
+    await assert.rejects(copyVerified(src, clash), /different file/);
+    assert.equal(fs.readFileSync(clash, 'utf8'), 'someone else\'s photo');
+    assert.ok(fs.readFileSync(src).equals(bytes));
+
+    // Stopped partway (the drive was unplugged, the move was paused): no partial file under the real name.
+    const stopped = path.join(dir, 'to', 'stopped.jpg');
+    const controller = new AbortController();
+    await assert.rejects(copyVerified(src, stopped, { signal: controller.signal, onBytes: () => controller.abort() }));
+    assert.equal(fs.existsSync(stopped), false);
+    assert.deepEqual(leftovers(path.dirname(stopped)), []);
+
+    // The original vanished (the photo was deleted meanwhile).
+    const gone = path.join(dir, 'to', 'gone.jpg');
+    await assert.rejects(copyVerified(path.join(dir, 'from', 'missing.jpg'), gone));
+    assert.equal(fs.existsSync(gone), false);
+    assert.deepEqual(leftovers(path.dirname(gone)), []);
+});

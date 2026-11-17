@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useEffectEvent, useRef } from 'react';
 import 'ol/ol.css';
 import OlMap from 'ol/Map';
 import View from 'ol/View';
@@ -185,10 +185,17 @@ export default function Atlas({ sidebarCollapsed = false }) {
   useEffect(() => { convertDistanceRef.current = convertDistance; }, [convertDistance]);
   useEffect(() => { distanceUnitRef.current = distanceUnit; }, [distanceUnit]);
 
+  // The map is built once, by the effect below. Its listeners reach the component's current
+  // state through these, so the effect doesn't have to be rebuilt when that state changes.
+  const initialTileUrl = useEffectEvent(() => tileUrl);
+  const openJourney = useEffectEvent((routeId) => navigate(`/journeys?routeId=${routeId}`));
+  const refreshHeatmap = useEffectEvent(() => loadHeatmapGrid(startDateRef.current, endDateRef.current));
+  const loadInitialData = useEffectEvent(() => loadData());
+
   useEffect(() => {
     if (mapInstanceRef.current) return;
 
-    const tileLayer = new TileLayer({ source: buildXYZ(tileUrl) });
+    const tileLayer = new TileLayer({ source: buildXYZ(initialTileUrl()) });
     tileLayerRef.current = tileLayer;
 
     const routeSource = new VectorSource();
@@ -544,7 +551,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
       }
       if (routeId) {
         buildingProbe.clear();
-        navigate(`/journeys?routeId=${routeId}`);
+        openJourney(routeId);
       }
     };
     map.on('click', onMapClick);
@@ -565,7 +572,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
       clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         if (mapModeRef.current === 'heatmap') {
-          loadHeatmapGrid(startDateRef.current, endDateRef.current);
+          refreshHeatmap();
         } else if (!preloadedRef.current) {
           loadDetailRoutes();
         }
@@ -573,7 +580,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
     };
     map.on('moveend', onMoveEnd);
 
-    loadData();
+    loadInitialData();
 
     const t1 = setTimeout(() => setLoadingText('Dusting off adventure tracks...'), 15000);
     const t2 = setTimeout(() => setLoadingText('Getting everything together...'), 25000);
@@ -926,15 +933,18 @@ export default function Atlas({ sidebarCollapsed = false }) {
   // Recoloring rewrites one property on existing features rather than rebuilding.
   // showRoutes/showMarkers/clusterMarkers are handled by layer visibility above,
   // and distanceUnit only affects tooltips, which are now built on hover.
-  useEffect(() => {
+  const recolorRoutes = useEffectEvent(() => {
     if (loading || mapMode !== 'lines') return;
     applyRouteColors();
-  }, [colorByDate]);
+  });
+  useEffect(() => { recolorRoutes(); }, [colorByDate]);
 
-  useEffect(() => {
+  // A mode switch redraws; the first draw happens when the data finishes loading.
+  const redrawForMode = useEffectEvent(() => {
     if (loading) return;
     drawCurrentMode();
-  }, [mapMode]);
+  });
+  useEffect(() => { redrawForMode(); }, [mapMode]);
 
   const formatTotalTime = (t) => {
     if (!t) return '--';

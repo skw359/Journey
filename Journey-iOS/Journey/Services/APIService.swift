@@ -89,14 +89,9 @@ final class APIService: Sendable {
 
     func fetchMe() async throws -> Profile {
         let request = try authenticatedRequest(path: "/api/auth/me")
-        let tokenPrefix = String((ServerPairing.stored?.bearerToken ?? "").prefix(8))
-        print("[APIService] fetchMe → \(request.url?.absoluteString ?? "nil") token=\(tokenPrefix)…")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-            print("[APIService] fetchMe ← \(status) body=\(body)")
-            throw APIError.httpError(status)
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
         }
         do {
             return try JSONDecoder().decode(Profile.self, from: data)
@@ -314,6 +309,11 @@ final class APIService: Sendable {
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"recordingId\"\r\n\r\n".data(using: .utf8)!)
         body.append("\(recordingId)\r\n".data(using: .utf8)!)
+
+        // The server names the journey for the day it happened in this zone.
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"timeZone\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(TimeZone.current.identifier)\r\n".data(using: .utf8)!)
 
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"journey\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)

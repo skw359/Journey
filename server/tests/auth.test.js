@@ -103,6 +103,18 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
 
         const weather = await second.get('/api/settings/weather');
         assert.deepEqual(Object.keys(weather.data).sort(), ['canManage', 'weather_enabled', 'weather_sounding_enabled']);
+
+        // Where attachments live is shown to everyone; the server's folders only to the admin.
+        const storage = await second.get('/api/settings/attachment-storage');
+        assert.equal(storage.status, 200);
+        assert.equal(storage.data.canManage, false);
+        assert.equal(storage.data.location.name, 'This PC');
+        assert.ok(!storage.text.includes(env.dataDir), 'no server path for other accounts');
+        assert.ok(!('path' in storage.data.location) && !('path' in storage.data.writingTo));
+        assert.deepEqual(storage.data.move.failed, []);
+        const adminStorage = await admin.get('/api/settings/attachment-storage');
+        assert.equal(adminStorage.data.canManage, true);
+        assert.ok(adminStorage.data.location.path.startsWith(env.dataDir));
         const marco = await second.get('/api/ask/config');
         assert.deepEqual(Object.keys(marco.data).sort(), ['canManage', 'enabled']);
     });
@@ -162,17 +174,89 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
         assert.match(cookie, /Secure/i);
     });
 
-    await t.test('repeated failed sign-ins are rate limited', async () => {
+    await t.test('repeated failed sign-ins are rate limited without locking the owner out', async () => {
+        // Behind the reverse proxy each client has its own address.
+        const from = (address) => ({ headers: { 'x-forwarded-for': address } });
         const attacker = h.agent(origin);
         let last;
         for (let i = 0; i < 11; i++) {
-            last = await attacker.post('/api/auth/login', { json: { username: 'second', password: `wrong-${i}` } });
+            last = await attacker.post('/api/auth/login', { json: { username: 'second', password: `wrong-${i}` }, ...from('203.0.113.9') });
         }
         assert.equal(last.status, 429);
         assert.ok(Number(last.headers.get('retry-after')) > 0);
-        const right = await attacker.post('/api/auth/login', { json: { username: 'second', password: 'second-password-1' } });
-        assert.equal(right.status, 429, 'locked out even with the right password until the window passes');
+        const guessed = await attacker.post('/api/auth/login', { json: { username: 'second', password: 'second-password-1' }, ...from('203.0.113.9') });
+        assert.equal(guessed.status, 429, 'the guessing address stays blocked, even with the right password');
+        const capitals = await attacker.post('/api/auth/login', { json: { username: 'SECOND', password: 'x' }, ...from('203.0.113.9') });
+        assert.equal(capitals.status, 429, 'capitals do not get a fresh allowance');
+
+        const owner = await h.agent(origin).post('/api/auth/login', { json: { username: 'second', password: 'second-password-1' }, ...from('198.51.100.7') });
+        assert.equal(owner.status, 200, 'the owner signs in from their own address meanwhile');
         h.resetRateLimits();
+    });
+
+    await t.test('registration answers the same for taken and free usernames without an invite', async () => {
+        const taken = await h.agent(origin).post('/api/auth/register', { json: { username: 'second', password: 'whatever-123' } });
+        const free = await h.agent(origin).post('/api/auth/register', { json: { username: 'nobody-here', password: 'whatever-123' } });
+        assert.equal(taken.status, 403);
+        assert.deepEqual(taken.data, free.data);
+
+        // With an invite, a name that differs only by capitals is taken, and the invite survives.
+        const invite = await admin.post('/api/admin/invites', { json: {} });
+        const lookalike = await h.agent(origin).post('/api/auth/register', { json: { username: 'Second', password: 'whatever-123', invite: invite.data.token } });
+        assert.equal(lookalike.status, 409);
+        const fresh = await h.agent(origin).post('/api/auth/register', { json: { username: 'fourth', password: 'whatever-123', invite: invite.data.token } });
+        assert.equal(fresh.status, 201, 'the invite was not spent on the refused name');
+        const { rows } = await pool.query("SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_users_username_lower'");
+        assert.match(rows[0].indexdef, /UNIQUE/);
+    });
+
+    await t.test('changing a password needs the current one and signs out other sessions', async () => {
+        const user = await h.registerInvited(origin, admin, 'changer', 'old-password-1');
+        const elsewhere = h.agent(origin);
+        assert.equal((await elsewhere.post('/api/auth/login', { json: { username: 'changer', password: 'old-password-1' } })).status, 200);
+        const paired = await user.post('/api/pairing/tokens', { json: { label: 'phone' } });
+
+        assert.equal((await h.agent(origin).post('/api/auth/password', { json: { currentPassword: 'old-password-1', newPassword: 'new-password-2' } })).status, 401);
+        assert.equal((await user.post('/api/auth/password', { json: { currentPassword: 'wrong', newPassword: 'new-password-2' } })).status, 401);
+        assert.equal((await user.post('/api/auth/password', { json: { currentPassword: 'old-password-1', newPassword: 'short' } })).status, 400);
+        assert.equal((await user.post('/api/auth/password', { json: { newPassword: 'new-password-2' } })).status, 400);
+        assert.equal((await elsewhere.get('/api/routes')).status, 200, 'nothing changed yet');
+
+        const changed = await user.post('/api/auth/password', { json: { currentPassword: 'old-password-1', newPassword: 'new-password-2' } });
+        assert.equal(changed.status, 200, changed.text);
+        assert.equal(changed.data.sessionsEnded, 1);
+        assert.equal((await user.get('/api/routes')).status, 200, 'this session stays signed in');
+        assert.equal((await elsewhere.get('/api/routes')).status, 401, 'other sessions are signed out');
+        assert.equal((await h.agent(origin, { bearer: paired.data.token }).get('/api/routes')).status, 200, 'paired devices keep working');
+        assert.equal((await h.agent(origin).post('/api/auth/login', { json: { username: 'changer', password: 'old-password-1' } })).status, 401);
+        assert.equal((await h.agent(origin).post('/api/auth/login', { json: { username: 'changer', password: 'new-password-2' } })).status, 200);
+
+        // A session can't be used to guess the current password without limit.
+        let guess;
+        for (let i = 0; i < 11; i++) {
+            guess = await user.post('/api/auth/password', { json: { currentPassword: `guess-${i}`, newPassword: 'another-password-3' } });
+        }
+        assert.equal(guess.status, 429);
+        h.resetRateLimits();
+    });
+
+    await t.test('an admin can reset another account\'s password', async () => {
+        const forgetful = await h.registerInvited(origin, admin, 'forgetful', 'forgotten-password');
+        assert.equal((await second.post(`/api/admin/users/${forgetful.user.id}/reset-password`)).status, 403);
+        assert.equal((await admin.post('/api/admin/users/user-nope/reset-password')).status, 404);
+        const adminId = results.find((r) => r.status === 201).data.user.id;
+        assert.equal((await admin.post(`/api/admin/users/${adminId}/reset-password`)).status, 400);
+
+        const reset = await admin.post(`/api/admin/users/${forgetful.user.id}/reset-password`);
+        assert.equal(reset.status, 200, reset.text);
+        assert.ok(reset.data.temporaryPassword.length >= 16);
+        assert.equal((await forgetful.get('/api/routes')).status, 401, 'signed out everywhere');
+        assert.equal((await h.agent(origin).post('/api/auth/login', { json: { username: 'forgetful', password: 'forgotten-password' } })).status, 401);
+        const back = h.agent(origin);
+        assert.equal((await back.post('/api/auth/login', { json: { username: 'forgetful', password: reset.data.temporaryPassword } })).status, 200);
+        assert.equal((await back.post('/api/auth/password', { json: { currentPassword: reset.data.temporaryPassword, newPassword: 'my-own-password-9' } })).status, 200);
+        const { rows } = await pool.query('SELECT password_hash FROM users WHERE id = $1', [forgetful.user.id]);
+        assert.match(rows[0].password_hash, /^\$2[aby]\$12\$/, 'stored as a bcrypt hash');
     });
 
     await t.test('pairing tokens are hashed, shown once, scoped and expire', async () => {
@@ -196,6 +280,22 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
         assert.equal((await phone.get('/api/fun-stats')).status, 401);
         assert.equal((await phone.post('/api/pairing/tokens', { json: {} })).status, 401);
 
+        // Express matches paths case-insensitively and ignores a trailing slash, so the
+        // restriction has to hold for every spelling of a web-only path.
+        const doomed = await h.uploadJourney(admin, h.journeyZip(h.lineRows({ count: 150, lat: 52 })));
+        assert.equal(doomed.status, 201);
+        assert.equal((await phone.delete(`/api/routes/${doomed.data.id}`)).status, 200, 'a device may move a journey to Trash');
+        for (const spelling of ['TRASH', 'Trash', 'trash/', 'TRASH/']) {
+            assert.equal((await phone.get(`/api/routes/${spelling}`)).status, 403, `GET ${spelling}`);
+            assert.equal((await phone.delete(`/api/routes/${spelling}`)).status, 403, `DELETE ${spelling}`);
+        }
+        assert.equal((await phone.get('/api/routes/Cities-Status')).status, 403);
+        assert.equal((await phone.post('/api/routes/COMBINE', { json: { journeyIds: ['a', 'b'] } })).status, 403);
+        const trash = await admin.get('/api/routes/trash');
+        assert.equal(trash.data.length, 1, 'Recently Deleted was not emptied');
+        assert.equal((await phone.delete(`/api/routes/trash/${trash.data[0].id}`)).status, 403);
+        assert.equal((await admin.get('/api/routes/trash')).data.length, 1);
+
         // A QR code nobody scanned stops working.
         const unscanned = await admin.post('/api/pairing/tokens', { json: {} });
         await pool.query("UPDATE pairing_tokens SET pending_until = NOW() - INTERVAL '1 second' WHERE id = $1", [unscanned.data.id]);
@@ -203,6 +303,48 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
         // A device unused for too long has to pair again.
         await pool.query("UPDATE pairing_tokens SET last_used_at = NOW() - INTERVAL '400 days' WHERE id = $1", [created.data.id]);
         assert.equal((await phone.get('/api/routes')).status, 401);
+    });
+
+    await t.test('scanning a pairing code marks it as paired', async () => {
+        const created = await admin.post('/api/pairing/tokens', { json: { label: 'iPhone' } });
+        const statusOf = async () => (await admin.get('/api/pairing/tokens')).data.find((token) => token.id === created.data.id);
+        assert.equal((await statusOf()).status, 'pending');
+
+        // A ping without a token, or with one that isn't ours, changes nothing.
+        assert.equal((await fetch(`${origin}/ping`)).status, 200);
+        const stranger = await fetch(`${origin}/ping`, { headers: { authorization: `Bearer ${'f'.repeat(64)}` } });
+        assert.equal(await stranger.text(), 'pong');
+        assert.equal((await statusOf()).status, 'pending');
+
+        // The first thing the iOS app does after scanning is ping with its new token.
+        const ping = await fetch(`${origin}/ping`, { headers: { authorization: `Bearer ${created.data.token}` } });
+        assert.equal(ping.status, 200);
+        assert.equal(await ping.text(), 'pong');
+        const paired = await statusOf();
+        assert.equal(paired.status, 'active');
+        assert.equal(paired.pending_until, null);
+        assert.ok(paired.last_used_at);
+
+        // So it no longer lapses when the pending window passes without another request.
+        await pool.query("UPDATE pairing_tokens SET created_at = NOW() - INTERVAL '1 hour' WHERE id = $1", [created.data.id]);
+        assert.equal((await h.agent(origin, { bearer: created.data.token }).get('/api/routes')).status, 200);
+    });
+
+    await t.test('every journeys route is web-only unless listed here', () => {
+        // A new route under /api/routes has to be added to this list or take webOnly.
+        const deviceRoutes = new Set(['GET /', 'GET /:id', 'PATCH /:id/name', 'PATCH /:id/travel-mode', 'DELETE /:id']);
+        const journeys = require('../routes/journeys');
+        const seen = new Set();
+        for (const layer of journeys.stack) {
+            assert.ok(layer.route, 'the journeys router only holds routes, so nothing runs ahead of webOnly');
+            for (const method of Object.keys(layer.route.methods)) {
+                const name = `${method.toUpperCase()} ${layer.route.path}`;
+                seen.add(name);
+                const guarded = layer.route.stack[0].handle === journeys.webOnly;
+                assert.equal(guarded, !deviceRoutes.has(name), `${name} ${guarded ? 'should be open to devices' : 'is missing webOnly'}`);
+            }
+        }
+        for (const name of deviceRoutes) assert.ok(seen.has(name), `${name} no longer exists`);
     });
 
     await t.test('plaintext pairing tokens from older versions are migrated to hashes', async () => {
@@ -271,5 +413,27 @@ test('accounts, admin settings and tokens', { skip: h.skipReason() }, async (t) 
         assert.equal((await fetch(`${origin}/api/all-points`, { headers: { cookie: admin.cookie } })).status, 404);
         const health = await fetch(`${origin}/health`);
         assert.equal(health.status, 200);
+
+        const policy = res.headers.get('content-security-policy');
+        assert.match(policy, /default-src 'self'/);
+        assert.match(policy, /script-src 'self'(;|$)/, 'no inline or remote scripts');
+        assert.match(policy, /object-src 'none'/);
+        // HSTS only when the request came over HTTPS, as the reverse proxy reports it.
+        assert.equal(res.headers.get('strict-transport-security'), null);
+        const overHttps = await fetch(`${origin}/api/auth/status`, { headers: { 'x-forwarded-proto': 'https' } });
+        assert.match(overHttps.headers.get('strict-transport-security'), /^max-age=\d+$/);
+    });
+
+    await t.test('a session in use is renewed instead of lapsing 30 days after sign-in', async () => {
+        const browser = h.agent(origin);
+        await browser.post('/api/auth/login', { json: { username: 'second', password: 'second-password-1' } });
+        const res = await fetch(`${origin}/api/routes`, { headers: { cookie: browser.cookie } });
+        assert.equal(res.status, 200);
+        const renewed = res.headers.get('set-cookie');
+        assert.match(renewed, /journey\.sid=/, 'the cookie is re-sent on a later request');
+        const expires = new Date(/Expires=([^;]+)/i.exec(renewed)[1]).getTime();
+        assert.ok(expires > Date.now() + 29 * 86400000, 'another 30 days from this request');
+        // Nothing to renew, and no cookie, for a request without a session.
+        assert.equal((await fetch(`${origin}/api/auth/status`)).headers.get('set-cookie'), null);
     });
 });

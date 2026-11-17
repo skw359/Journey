@@ -32,7 +32,8 @@ function MoveStatus({ status, onPause, onResume }) {
     const pct = move.bytesTotal > 0 ? Math.min(100, (done / move.bytesTotal) * 100) : 0;
     let detail = 'Waiting for uploads and conversions to finish...';
     if (move.current) {
-      detail = `${move.current.step === 'verifying' ? 'Checking' : 'Copying'} ${move.current.name}`;
+      // Only the admin is told which file.
+      detail = `${move.current.step === 'verifying' ? 'Checking' : 'Copying'} ${move.current.name || 'files'}`;
     }
     return (
       <div className="settings-attach-move">
@@ -269,8 +270,10 @@ export default function AttachmentStoragePanel({ onChanged }) {
             <div className="settings-item-copy">
               <span className="settings-item-title">{location.name}</span>
               <span className="settings-item-detail">
-                {location.path}
-                {location.freeBytes != null && ` · ${formatBytes(location.freeBytes)} free of ${formatBytes(location.totalBytes)}`}
+                {[
+                  location.path, // admins only
+                  location.freeBytes != null && `${formatBytes(location.freeBytes)} free of ${formatBytes(location.totalBytes)}`,
+                ].filter(Boolean).join(' · ')}
               </span>
             </div>
             <span className={`settings-attach-state${location.online ? '' : ' offline'}`}>

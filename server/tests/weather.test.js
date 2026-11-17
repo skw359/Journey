@@ -127,4 +127,83 @@ test('weather never sends the exact start point to a third party', { skip: h.ski
         await new Promise((resolve) => setTimeout(resolve, 300));
         assert.equal(thirdParty().length, 0);
     });
+
+    await t.test('cities and places passed are collected from the geocoder', async () => {
+        const { computeCitiesPassed, computePlacesPassed } = require('../utils/passedThrough');
+        const usual = h.outbound.handler;
+        t.after(() => { h.outbound.handler = usual; });
+        // A geocoder that answers by latitude: the name in `answers`, or a status code.
+        let answers = {};
+        const asked = [];
+        h.outbound.handler = (url) => {
+            const { pathname, searchParams } = new URL(url);
+            if (!url.startsWith(GEOCODER) || (pathname !== '/city' && pathname !== '/place')) return usual(url);
+            asked.push(`${pathname} ${searchParams.get('lat')}`);
+            const answer = answers[searchParams.get('lat')];
+            if (typeof answer === 'number') return json({ error: 'no' }, answer);
+            if (answer instanceof Error) throw answer;
+            return json(pathname === '/city' ? { city: answer } : { place: answer });
+        };
+        const along = (...lats) => lats.map((lat) => [lat, -74]);
+
+        // Cities keep their order and repeat when a journey comes back; places are a set.
+        answers = { 1: 'Seattle', 2: 'Seattle', 3: 'Shoreline', 4: 'unknown', 5: 404, 6: 'Seattle', 7: undefined };
+        assert.deepEqual(await computeCitiesPassed(along(1, 2, 3, 4, 5, 6, 7)), ['Seattle', 'Shoreline', 'Seattle']);
+        assert.deepEqual(await computePlacesPassed(along(1, 2, 3, 4, 5, 6, 7)), ['Seattle', 'Shoreline']);
+        // Other spellings of a place's name, and points without coordinates.
+        const namedBy = h.outbound.handler;
+        h.outbound.handler = (url) => (url.includes('/place?lat=8') ? json({ place_name: 'Green Lake Park' })
+            : url.includes('/place?lat=9') ? json({ name: 'Starbucks' }) : namedBy(url));
+        assert.deepEqual(await computePlacesPassed([[8, -74], [null, null], [9, -74]]), ['Green Lake Park', 'Starbucks']);
+        h.outbound.handler = namedBy;
+
+        // One lookup per grid cell: 0.001 degrees for cities, 0.0001 for places.
+        asked.length = 0;
+        answers = {};
+        await computeCitiesPassed([[10.00011, -74], [10.00012, -74], [10.00041, -74], [10.002, -74]]);
+        await computePlacesPassed([[10.00011, -74], [10.00012, -74], [10.00041, -74], [10.002, -74]]);
+        assert.deepEqual(asked, ['/city 10.00011', '/city 10.002', '/place 10.00011', '/place 10.00041', '/place 10.002']);
+        // A shared cache carries answers from one journey to the next.
+        const cache = new Map();
+        answers = { 11: 'Tacoma', 12: 'Olympia' };
+        assert.deepEqual(await computeCitiesPassed(along(11, 12), { cache }), ['Tacoma', 'Olympia']);
+        asked.length = 0;
+        assert.deepEqual(await computeCitiesPassed(along(12, 11), { cache }), ['Olympia', 'Tacoma']);
+        assert.deepEqual(asked, []);
+
+        // A geocoder that is down gives null (try again later), never a partial list.
+        for (const compute of [computeCitiesPassed, computePlacesPassed]) {
+            answers = { 20: 503, 21: new Error('refused') };
+            assert.equal(await compute(along(20, 21)), null, 'every request failed');
+            answers = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [31 + i, 500]));
+            answers[30] = 'Yakima';
+            asked.length = 0;
+            assert.equal(await compute(along(30, ...Array.from({ length: 12 }, (_, i) => 31 + i))), null, 'it went down partway');
+            assert.equal(asked.length, 11, 'and stops asking after ten failures in a row');
+            // A few failures among answers are tolerated.
+            answers = { 50: 'Spokane', 51: 500, 52: 'Pullman' };
+            assert.deepEqual(await compute(along(50, 51, 52)), ['Spokane', 'Pullman']);
+
+            const stopped = new AbortController();
+            stopped.abort();
+            assert.equal(await compute(along(60, 61), { signal: stopped.signal }), null);
+            assert.deepEqual(await compute([[1, 2]]), [], 'a single point is no journey');
+            const progress = [];
+            answers = {};
+            await compute(along(70, 71, 72), { onProgress: (done, total) => progress.push(`${done}/${total}`) });
+            assert.deepEqual(progress, ['1/3', '2/3', '3/3']);
+        }
+    });
+
+    await t.test('a geocoder reply is served as JSON whatever the geocoder calls it', async () => {
+        const usual = h.outbound.handler;
+        h.outbound.handler = (url) => (url.startsWith(`${GEOCODER}/building`)
+            ? new Response('<script>alert(1)</script>', { status: 200, headers: { 'content-type': 'text/html' } })
+            : usual(url));
+        const res = await owner.get('/api/geocode/building?lat=40.7&lon=-74', { raw: true });
+        h.outbound.handler = usual;
+        assert.equal(res.status, 200);
+        assert.equal(res.headers.get('content-type').split(';')[0], 'application/json');
+        assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    });
 });

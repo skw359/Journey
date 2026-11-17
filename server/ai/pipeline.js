@@ -148,8 +148,9 @@ async function ask(input, deps) {
     const t0 = Date.now();
     let selection;
     try {
-        selection = await ollama.chatToolSelect({ url, model, system, question, tools: TOOLS, history, ...timeouts });
+        selection = await ollama.chatToolSelect({ url, model, system, question, tools: TOOLS, history, signal, ...timeouts });
     } catch (err) {
+        if (err.code === 'aborted') throw new MarcoError('aborted', 'Question cancelled by the user');
         throw new MarcoError(
             err.code === 'timeout' ? 'ollama_timeout' : 'ollama_unreachable',
             err.message,
@@ -239,7 +240,7 @@ async function ask(input, deps) {
                 ...streamTimeouts,
                 onToken: (text) => emit({ type: 'token', text }),
             })
-            : await ollama.chatAnswer({ url, model, system: answerSystem, user: answerUser, history, ...timeouts });
+            : await ollama.chatAnswer({ url, model, system: answerSystem, user: answerUser, history, signal, ...timeouts });
         answer = phrased.content;
     } catch (err) {
         // The user cancelling is not a failure — surface it so the route can

@@ -52,6 +52,18 @@ export async function deleteAccount(password) {
   return data;
 }
 
+// Signs the account out of its other sessions; this one stays signed in.
+export async function changePassword(currentPassword, newPassword) {
+  const res = await apiFetch('/api/auth/password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to change password');
+  return data;
+}
+
 export async function migrateData() {
   const res = await apiFetch('/api/auth/migrate', { method: 'POST' });
   const data = await res.json();

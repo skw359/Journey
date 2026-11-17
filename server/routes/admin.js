@@ -4,7 +4,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { PUBLIC_URL } = require('../config');
 const { hashToken } = require('../middleware/auth');
-const { deleteAccount } = require('../utils/accounts');
+const { deleteAccount, resetPassword } = require('../utils/accounts');
 const log = require('../utils/logger').scope('admin');
 
 // Mounted at /api/admin behind requireSession + requireAdmin.
@@ -146,6 +146,23 @@ router.patch('/users/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to update account' });
   } finally {
     client.release();
+  }
+});
+
+// POST /api/admin/users/:id/reset-password — for someone who forgot theirs. Sets a random
+// password, shown once for the admin to pass on, and signs that account out everywhere.
+router.post('/users/:id/reset-password', async (req, res) => {
+  if (req.params.id === req.userId) {
+    return res.status(400).json({ error: 'Change your own password from the Account section instead' });
+  }
+  try {
+    const result = await resetPassword(req.params.id);
+    if (!result.found) return res.status(404).json({ error: 'Account not found' });
+    log.info(`password for account ${req.params.id} reset by an admin`);
+    res.json({ temporaryPassword: result.temporaryPassword, sessionsEnded: result.sessionsEnded });
+  } catch (err) {
+    log.error('Reset password error:', err);
+    res.status(500).json({ error: 'Failed to reset the password' });
   }
 });
 

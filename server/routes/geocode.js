@@ -19,8 +19,10 @@ router.get('/:endpoint', async (req, res) => {
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
     // Pass the status through: the client falls back to /lookup on a 404 from /building.
+    // Always as JSON: whatever the geocoder calls its reply, it is served from Journey's own
+    // origin and must never be read as a page.
     res.status(upstream.status);
-    res.type(upstream.headers.get('content-type') || 'application/json');
+    res.type('application/json');
     res.send(Buffer.from(await upstream.arrayBuffer()));
   } catch (err) {
     log.warn(`Geocoder ${req.params.endpoint} failed: ${err.message}`);

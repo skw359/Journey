@@ -324,3 +324,43 @@ body {
     opacity: 0;
   }
 }
+
+/* Shown by ErrorBoundary when a page fails to render */
+.page-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  padding: 32px 24px;
+  box-sizing: border-box;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.page-error h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+}
+
+.page-error p {
+  margin: 0;
+  max-width: 420px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.page-error-btn {
+  margin-top: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent-primary);
+  color: #fff;
+  font-family: var(--font-family-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}

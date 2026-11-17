@@ -14,6 +14,7 @@ struct WelcomeScreen: View {
     @State private var typingAnimationCompleted = false
     @State private var showQRScanner = false
     @State private var isPairingAfterScan = false
+    @State private var showRejectedCodeAlert = false
 
     private enum AnimationPhase {
         case typingJourney
@@ -190,10 +191,16 @@ struct WelcomeScreen: View {
                     if !didPair {
                         await MainActor.run {
                             isPairingAfterScan = false
+                            showRejectedCodeAlert = true
                         }
                     }
                 }
             }
+        }
+        .alert("Couldn't pair", isPresented: $showRejectedCodeAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(PairingManager.rejectedCodeMessage)
         }
     }
 
