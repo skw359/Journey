@@ -1,8 +1,7 @@
 const { pool, withTenantClient } = require('../db');
 const { MIN_ROUTE_MILES } = require('../config');
 const { visibleSql } = require('./visibility');
-const { computeCitiesPassed } = require('./cities');
-const { computePlacesPassed } = require('./places');
+const { computeCitiesPassed, computePlacesPassed } = require('./passedThrough');
 const log = require('./logger');
 
 // Fun Stats "Compute Cities/Places" runs here, independent of any browser tab. A row in

@@ -96,8 +96,7 @@ function statsColumns(stats) {
 function recomputePassedLists(userId, routeId, coordinates) {
     if (!GEOCODE_BASE_URL || !coordinates || coordinates.length < 2) return;
     const signature = trackSignature(coordinates);
-    const { computeCitiesPassed } = require('../utils/cities');
-    const { computePlacesPassed } = require('../utils/places');
+    const { computeCitiesPassed, computePlacesPassed } = require('../utils/passedThrough');
     for (const [column, compute, scope] of [
         ['cities_passed', computeCitiesPassed, 'cities'],
         ['places_passed', computePlacesPassed, 'places'],

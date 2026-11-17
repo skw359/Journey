@@ -779,7 +779,7 @@ function escapeLike(value) {
 }
 
 // The geocoder stores bare city names ("Salisbury", never "Salisbury, MD" —
-// see utils/cities.js), but people naturally write "Salisbury MD" or
+// see utils/passedThrough.js), but people naturally write "Salisbury MD" or
 // "Salisbury, Maryland". Matching the user's text verbatim therefore
 // guaranteed zero rows for the most common phrasing there is. These helpers
 // derive the candidate forms to try: the literal text first, then a
