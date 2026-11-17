@@ -273,3 +273,58 @@ test('an export is cut off when the client stops reading, and only a few run at 
     second();
     third();
 });
+
+test('the attachment mover leaves a verified copy, or nothing', async (t) => {
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const path = require('node:path');
+    const crypto = require('node:crypto');
+    const { copyVerified } = require('../utils/mediaMove');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'journey-move-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const leftovers = (folder) => fs.readdirSync(folder).filter((name) => name.endsWith('.tmp'));
+
+    const src = path.join(dir, 'from', 'photo.jpg');
+    fs.mkdirSync(path.dirname(src));
+    const bytes = crypto.randomBytes(3 * 1024 * 1024 + 17);
+    fs.writeFileSync(src, bytes);
+    const taken = new Date('2024-06-01T12:00:00Z');
+    fs.utimesSync(src, taken, taken);
+
+    // A plain copy, into a folder that doesn't exist yet.
+    const dest = path.join(dir, 'to', 'user-1', 'photo.jpg');
+    const steps = [];
+    let copied = 0;
+    await copyVerified(src, dest, { onStep: (step) => steps.push(step), onBytes: (n) => { copied += n; } });
+    assert.ok(fs.readFileSync(dest).equals(bytes));
+    assert.deepEqual(steps, ['copying', 'verifying']);
+    assert.equal(copied, bytes.length);
+    assert.equal(fs.statSync(dest).mtime.getTime(), taken.getTime(), 'the file keeps its date');
+    assert.ok(fs.existsSync(src), 'deleting the original is the caller\'s step, after this succeeds');
+    assert.deepEqual(leftovers(path.dirname(dest)), []);
+
+    // An earlier run copied it but stopped before deleting the original: verified, not copied again.
+    steps.length = 0;
+    await copyVerified(src, dest, { onStep: (step) => steps.push(step) });
+    assert.deepEqual(steps, ['verifying']);
+
+    // A different file already has that name: neither is touched.
+    const clash = path.join(dir, 'to', 'clash.jpg');
+    fs.writeFileSync(clash, 'someone else\'s photo');
+    await assert.rejects(copyVerified(src, clash), /different file/);
+    assert.equal(fs.readFileSync(clash, 'utf8'), 'someone else\'s photo');
+    assert.ok(fs.readFileSync(src).equals(bytes));
+
+    // Stopped partway (the drive was unplugged, the move was paused): no partial file under the real name.
+    const stopped = path.join(dir, 'to', 'stopped.jpg');
+    const controller = new AbortController();
+    await assert.rejects(copyVerified(src, stopped, { signal: controller.signal, onBytes: () => controller.abort() }));
+    assert.equal(fs.existsSync(stopped), false);
+    assert.deepEqual(leftovers(path.dirname(stopped)), []);
+
+    // The original vanished (the photo was deleted meanwhile).
+    const gone = path.join(dir, 'to', 'gone.jpg');
+    await assert.rejects(copyVerified(path.join(dir, 'from', 'missing.jpg'), gone));
+    assert.equal(fs.existsSync(gone), false);
+    assert.deepEqual(leftovers(path.dirname(gone)), []);
+});
