@@ -14,8 +14,7 @@ const {
     GEOCODE_BASE_URL,
 } = require('../config');
 const { fetchAndStoreWeather } = require('../utils/weather');
-const { computeCitiesPassed } = require('../utils/cities');
-const { computePlacesPassed } = require('../utils/places');
+const { computeCitiesPassed, computePlacesPassed } = require('../utils/passedThrough');
 const { insertTrashSnapshot, TRASH_ORIGIN } = require('../utils/trash');
 const { archiveUpload, deleteArchiveFiles } = require('../utils/uploadArchive');
 const { IngestError, parseJourneyUpload, journeyName, journeyDate } = require('../utils/journeyIngest');
