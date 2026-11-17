@@ -51,6 +51,8 @@ jobs:
         cache: 'npm'
         cache-dependency-path: package-lock.json
     - run: npm ci
+    - name: Install ffmpeg (video conversion tests)
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
     - name: Syntax check server and Windows app
       run: git ls-files 'server/*.js' 'windows-app/src/*.js' 'windows-app/scripts/*.mjs' 'windows-app/tests/*.js' | xargs -n1 node --check
     - name: Marco test suite (offline)

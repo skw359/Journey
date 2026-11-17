@@ -361,7 +361,7 @@ Mounted at `/api` and guarded by `requireSession`.
 
 All of these read `route_derived`/`heat_cells` rather than every recorded point:
 
-- `alltime-map-data` without `bounds` and `maxPoints=100` (the Atlas's first load) returns each journey's stored overview, identical to sampling the full track. With `bounds`, only journeys whose bounding box meets the view are read; those within `maxPoints` are sent exactly as recorded, longer ones as their simplified line (thinned to `maxPoints` if needed). `maxPoints=0` sends every point
+- `alltime-map-data` without `bounds` and `maxPoints=100` (the Atlas's first load) returns each journey's stored overview, identical to sampling the full track. With `bounds`, only journeys whose bounding box meets the view are read; those within `maxPoints` are sent exactly as recorded, longer ones as their simplified line (thinned to `maxPoints` if needed). `maxPoints=0` sends every point, streamed a few journeys at a time so the whole account is never held in memory
 - `heatmap-grid` cells are `[lat, lon, journeys, samples]`: how many journeys passed through the cell and how many GPS points they recorded there; `totalPoints` is the sum of samples in view. Without dates it reads `heat_cells`; with dates, journeys wholly inside the range use their stored cells and journeys crossing a boundary are counted point by point using recorded timestamps
 - Fun Stats clusters journey starts with DBSCAN over a spatial grid (same clusters as a full scan) and finds the furthest point from home exactly, reading only journeys whose bounding box could hold a farther point
 
@@ -475,7 +475,7 @@ Copying the files while the server is stopped (or right after the dump) keeps th
 
 - `npm run test:ai`: Marco, offline (no database, no Ollama)
 - `npm run test:server`: integration tests in `server/tests/` (`node:test`). Set `TEST_DATABASE_URL` to a PostgreSQL server where the tests may create databases, e.g. `postgres://postgres:postgres@localhost:5432/postgres`; each test file creates its own `journey_test_*` database and a temp data folder, and never reads `.env`. Without `TEST_DATABASE_URL` they are skipped
-  - `unit`: statistics against the original upload algorithm, grid DBSCAN against a full scan, the furthest-point bound
+  - `unit`: statistics against the original upload algorithm, grid DBSCAN against a full scan, the furthest-point bound, the attachment mover's verified copy, export limits
   - `auth`: invite-only registration, the first-run race, the admin-only settings matrix, cross-account isolation, sessions, rate limits, pairing tokens, avatars, account deletion
   - `upload`: malformed zips, limits, duplicates and retries, ordering, archives
   - `journeys`: point deletion (the spike case), concurrency, very long journeys, combine/undo-combine, restore conflicts, the hard-delete lifecycle
@@ -484,6 +484,7 @@ Copying the files while the server is stopped (or right after the dump) keeps th
   - `flights`: flight ids and numbers can't steer the FlightAware request; every route validates its input; names follow the importer's time zone
   - `funstats`: elevation in metres, days and hours in the viewer's time zone, flights as a travel mode
   - `marco`: disconnecting cancels the Ollama request
+  - `media`: uploads in pieces (resume, repeats, cleanup, paired devices), HEIC and video conversion, failed conversions, picking conversions back up after a restart. The video part needs `ffmpeg` and checks the refusal instead when it isn't installed
   - `export`: NDJSON, GPX, GeoJSON, `/database`, `migrate:export`
   - `perf`: latency and event-loop blocking budgets with 300k points (`PERF_JOURNEYS`, `PERF_POINTS` to scale up)
 - CI runs both against a PostgreSQL service container, plus `npm audit --omit=dev --audit-level=high` for the server and client
