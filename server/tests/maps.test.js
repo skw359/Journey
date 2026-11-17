@@ -118,6 +118,32 @@ test('maps, heatmap and Fun Stats from derived data', { skip: h.skipReason() }, 
         assert.equal(atlas.data.stats.totalRoutes, all.length);
     });
 
+    await t.test('every point of every journey is streamed, byte for byte what it was built as', async () => {
+        // What the response was when it was assembled in memory: the overview's journeys in
+        // the same order, each with every recorded point.
+        const overview = (await owner.get('/api/alltime-map-data')).data;
+        assert.ok(overview.routes.length > 8, 'more journeys than one batch');
+        const full = new Map((await journeys()).map((journey) => [journey.id, journey.coordinates]));
+        const expected = JSON.stringify({
+            routes: overview.routes.map((route) => ({ ...route, coordinates: full.get(route.id) })),
+            stats: overview.stats,
+            bounds: overview.bounds,
+        });
+
+        const gzipped = await owner.get('/api/alltime-map-data?maxPoints=0', { raw: true });
+        assert.equal(gzipped.headers.get('content-encoding'), 'gzip');
+        assert.equal(gzipped.headers.get('content-type').split(';')[0], 'application/json');
+        assert.ok(await gzipped.text() === expected, 'gzipped');
+        const plain = await owner.get('/api/alltime-map-data?maxPoints=0', { raw: true, headers: { 'accept-encoding': 'identity' } });
+        assert.equal(plain.headers.get('content-encoding'), null);
+        assert.ok(await plain.text() === expected, 'uncompressed');
+
+        // An account with nothing to send still answers as before.
+        const nobody = await h.registerInvited(origin, owner, 'no-journeys');
+        const empty = await nobody.get('/api/alltime-map-data?maxPoints=0');
+        assert.deepEqual(empty.data, { routes: [], stats: { totalRoutes: 0, totalDistance: 0, totalTime: 0, earliestDate: null, latestDate: null }, bounds: null });
+    });
+
     await t.test('viewport requests return the journeys in view', async () => {
         const all = await journeys();
         const bounds = { south: 40.69, west: -74.01, north: 40.72, east: -73.995 };

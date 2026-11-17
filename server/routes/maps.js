@@ -4,7 +4,10 @@ const { withTenantClient } = require('../db');
 const { detectTravelMode } = require('../utils/geo');
 const { MIN_ROUTE_MILES } = require('../config');
 const { visibleSql } = require('../utils/visibility');
+const zlib = require('zlib');
+const { pipeline } = require('stream');
 const { sendCompressedJson } = require('../utils/compressedJson');
+const { writer } = require('../utils/exporter');
 const {
     ensureDerived,
     heatLevelForZoom,
@@ -132,6 +135,59 @@ async function coordinatesById(db, ids, column = 'coordinates', table = 'routes'
     return map;
 }
 
+function mapRoute(row, coordinates) {
+    return {
+        id: row.id,
+        name: row.name,
+        date: row.date,
+        distance: row.distance != null ? Number(row.distance).toFixed(2) : null,
+        duration: row.duration,
+        topSpeed: row.top_speed != null ? Number(row.top_speed).toFixed(2) : null,
+        avgSpeed: row.avg_speed != null ? Number(row.avg_speed).toFixed(2) : null,
+        startTime: row.start_time ? row.start_time.toISOString() : null,
+        endTime: row.end_time ? row.end_time.toISOString() : null,
+        coordinates,
+        startCoord: (row.start_lat != null && row.start_lon != null) ? [row.start_lat, row.start_lon] : null,
+        endCoord: (row.end_lat != null && row.end_lon != null) ? [row.end_lat, row.end_lon] : null,
+        travelMode: row.travel_mode || detectTravelMode(row.avg_speed || 0),
+    };
+}
+
+// Every point of every journey (maxPoints=0, "Preload journey data") can be hundreds of
+// megabytes of JSON. Built in one piece, it held all of it in memory at once and blocked the
+// server while it was serialized. It is written a few journeys at a time instead: the same
+// bytes, with only one batch in memory, no database connection held between batches, and a
+// client that stops reading cut off.
+const FULL_MAP_BATCH = 8;
+
+async function streamFullMap(req, res, userId, routes, totals) {
+    res.type('json');
+    res.vary('Accept-Encoding');
+    let body = res;
+    if (req.acceptsEncodings('gzip')) {
+        res.set('Content-Encoding', 'gzip');
+        body = zlib.createGzip();
+        pipeline(body, res, () => {});
+    }
+    try {
+        const write = writer(body);
+        await write('{"routes":[');
+        for (let i = 0; i < routes.length; i += FULL_MAP_BATCH) {
+            const batch = routes.slice(i, i + FULL_MAP_BATCH);
+            const coords = await withTenantClient(userId, (db) => coordinatesById(db, batch.map((row) => row.id)));
+            const text = batch.map((row) => JSON.stringify(mapRoute(row, coords.get(row.id) || []))).join(',');
+            await write(i > 0 ? `,${text}` : text);
+        }
+        await write(`],"stats":${JSON.stringify(totals.stats)},"bounds":${JSON.stringify(totals.bounds)}}`);
+        body.end();
+    } catch (err) {
+        // Already streaming: cut the connection so the response is visibly incomplete.
+        log.error('GET /api/alltime-map-data (full) failed partway', err);
+        body.destroy(err);
+        res.destroy(err);
+    }
+}
+
 // GET /api/alltime-map-data?maxPoints=&bounds=south,west,north,east
 router.get('/alltime-map-data', async (req, res) => {
     try {
@@ -192,6 +248,29 @@ router.get('/alltime-map-data', async (req, res) => {
                 }
             }
 
+            const totals = {
+                stats: {
+                    totalRoutes: routes.length,
+                    totalDistance: Number(totalDistance.toFixed(1)),
+                    totalTime: formatTotalTime(totalTimeMs),
+                    totalPoints,
+                    earliestDate: earliestDate ? new Date(earliestDate).toISOString() : null,
+                    latestDate: latestDate ? new Date(latestDate).toISOString() : null,
+                    dateRangeMs: earliestDate && latestDate ? { earliest: earliestDate, latest: latestDate } : null,
+                    modeDistances: {
+                        drive: Number(modeDistances.drive.toFixed(1)),
+                        scooter: Number(modeDistances.scooter.toFixed(1)),
+                        foot: Number(modeDistances.foot.toFixed(1)),
+                        train: Number(modeDistances.train.toFixed(1)),
+                        metro: Number(modeDistances.metro.toFixed(1)),
+                        flight: Number(modeDistances.flight.toFixed(1)),
+                    },
+                },
+                bounds: minLat !== Infinity ? { southwest: [minLat, minLon], northeast: [maxLat, maxLon] } : null,
+            };
+            // Everything at full resolution is streamed once this connection is released.
+            if (!bounds && maxPoints === 0) return { streamed: { routes, totals } };
+
             // Coordinates for each journey sent, chosen so only journeys near the view (or a
             // small precomputed overview) are read.
             const coordsFor = new Map();
@@ -212,8 +291,7 @@ router.get('/alltime-map-data', async (req, res) => {
                     for (const row of rows) coordsFor.set(row.id, (row.coords || []).map(roundCoord));
                 } else {
                     for (const [id, coords] of await coordinatesById(db, ids)) {
-                        // maxPoints=0 ("Preload journey data") sends points exactly as recorded.
-                        coordsFor.set(id, maxPoints === 0 ? coords : downsample(coords, maxPoints).map(roundCoord));
+                        coordsFor.set(id, downsample(coords, maxPoints).map(roundCoord));
                     }
                 }
             } else {
@@ -239,42 +317,15 @@ router.get('/alltime-map-data', async (req, res) => {
             }
 
             return {
-                routes: selected.map((row) => ({
-                    id: row.id,
-                    name: row.name,
-                    date: row.date,
-                    distance: row.distance != null ? Number(row.distance).toFixed(2) : null,
-                    duration: row.duration,
-                    topSpeed: row.top_speed != null ? Number(row.top_speed).toFixed(2) : null,
-                    avgSpeed: row.avg_speed != null ? Number(row.avg_speed).toFixed(2) : null,
-                    startTime: row.start_time ? row.start_time.toISOString() : null,
-                    endTime: row.end_time ? row.end_time.toISOString() : null,
-                    coordinates: coordsFor.get(row.id) || [],
-                    startCoord: (row.start_lat != null && row.start_lon != null) ? [row.start_lat, row.start_lon] : null,
-                    endCoord: (row.end_lat != null && row.end_lon != null) ? [row.end_lat, row.end_lon] : null,
-                    travelMode: row.travel_mode || detectTravelMode(row.avg_speed || 0),
-                })),
-                stats: {
-                    totalRoutes: routes.length,
-                    totalDistance: Number(totalDistance.toFixed(1)),
-                    totalTime: formatTotalTime(totalTimeMs),
-                    totalPoints,
-                    earliestDate: earliestDate ? new Date(earliestDate).toISOString() : null,
-                    latestDate: latestDate ? new Date(latestDate).toISOString() : null,
-                    dateRangeMs: earliestDate && latestDate ? { earliest: earliestDate, latest: latestDate } : null,
-                    modeDistances: {
-                        drive: Number(modeDistances.drive.toFixed(1)),
-                        scooter: Number(modeDistances.scooter.toFixed(1)),
-                        foot: Number(modeDistances.foot.toFixed(1)),
-                        train: Number(modeDistances.train.toFixed(1)),
-                        metro: Number(modeDistances.metro.toFixed(1)),
-                        flight: Number(modeDistances.flight.toFixed(1)),
-                    },
-                },
-                bounds: minLat !== Infinity ? { southwest: [minLat, minLon], northeast: [maxLat, maxLon] } : null,
+                routes: selected.map((row) => mapRoute(row, coordsFor.get(row.id) || [])),
+                ...totals,
             };
         });
 
+        if (payload.streamed) {
+            await streamFullMap(req, res, req.userId, payload.streamed.routes, payload.streamed.totals);
+            return;
+        }
         sendCompressedJson(req, res, payload);
     } catch (err) {
         log.error('GET /api/alltime-map-data error:', err);
