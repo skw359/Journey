@@ -127,4 +127,33 @@ test('upload pipeline', { skip: h.skipReason() }, async (t) => {
         assert.equal(res.data.waypoints[0].note, '<img src=x onerror=alert(1)>');
         assert.match(res.data.waypoints[0].id, /^wp-[0-9a-f]{16}$/);
     });
+
+    await t.test('rows with a blank or absurd timestamp are skipped', async () => {
+        const rows = h.lineRows({ count: 300, lat: 45 });
+        const first = rows[0].ts;
+        rows[120] = { ...rows[120], ts: '' };      // Number('') is 0, which used to mean 1 Jan 1970
+        rows[121] = { ...rows[121], ts: '0' };
+        rows[122] = { ...rows[122], ts: '9e18' };  // past what a Date can hold; used to answer 500
+        const res = await h.uploadJourney(owner, h.journeyZip(rows));
+        assert.equal(res.status, 201, res.text);
+        assert.equal(res.data.coordinates.length, 297);
+        assert.equal(res.data.startTime, new Date(first).toISOString());
+        assert.equal(res.data.duration, '0h 4m');
+        assert.doesNotMatch(res.data.name, /1970/);
+    });
+
+    await t.test('a single over-long row is refused, not buffered', async () => {
+        const rows = h.lineRows({ count: 150, lat: 46 });
+        rows[20] = { ...rows[20], note: 'x'.repeat(70 * 1024) };
+        const res = await h.uploadJourney(owner, h.journeyZip(rows));
+        assert.equal(res.status, 400);
+        assert.equal(res.data.code, 'csv_error');
+        assert.deepEqual(leftovers(), []);
+    });
+
+    await t.test('many uploads at once are all parsed', async () => {
+        const batch = await Promise.all(Array.from({ length: 8 }, (_, i) =>
+            h.uploadJourney(owner, h.journeyZip(h.lineRows({ count: 150, lat: 50 + i })))));
+        assert.deepEqual(batch.map((r) => r.status), new Array(8).fill(201));
+    });
 });

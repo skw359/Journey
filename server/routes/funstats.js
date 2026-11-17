@@ -6,9 +6,11 @@ const { MIN_ROUTE_MILES } = require('../config');
 const { visibleSql } = require('../utils/visibility');
 const { ensureDerived, FINE_LEVEL, COARSE_LEVEL } = require('../utils/journeyDerived');
 const funStatsCache = require('../utils/funStatsCache');
+const { parseTimeZone, zoneParts, shiftDateKey, shiftMonthKey } = require('../utils/timeZone');
 const log = require('../utils/logger').scope('funstats');
 
 const EARTH_RADIUS_MILES = 3958.8;
+const FEET_PER_METER = 3.28084;
 
 // DBSCAN clustering on [lat, lon] pairs using haversine distance. Neighbor searches only
 // scan the 27 surrounding cells of a grid over unit-sphere positions; the haversine test
@@ -181,7 +183,7 @@ const BINGO_CHALLENGES = [
 
 function classifySpiritAnimal(stats) {
     const { avgSpeedMph, routeDiversityPct, avgDistMi, nightPct, weekendPct,
-            roundTripPct, elevGain, totalRoutes, streakDays, explorationPct } = stats;
+            roundTripPct, elevGainFt, totalRoutes, streakDays, explorationPct } = stats;
 
     const scores = {};
 
@@ -210,7 +212,7 @@ function classifySpiritAnimal(stats) {
     scores.owl = (nightPct > 30 ? 4 : nightPct > 15 ? 3 : nightPct > 5 ? 2 : 1);
 
     // Eagle: high elevation, long distance
-    scores.eagle = (elevGain > 10000 ? 3 : elevGain > 5000 ? 2 : 1)
+    scores.eagle = (elevGainFt > 10000 ? 3 : elevGainFt > 5000 ? 2 : 1)
         + (avgDistMi > 15 ? 2 : 1);
 
     // Hummingbird: frequent short trips, high diversity
@@ -269,24 +271,19 @@ function getRouteTimelineDate(route) {
     return null;
 }
 
-function buildMonthRange(startDate, endDate) {
-    if (!startDate || !endDate) return [];
-
+/** Every 'YYYY-MM' from first to last, inclusive. */
+function buildMonthRange(firstMonth, lastMonth) {
+    if (!firstMonth || !lastMonth) return [];
     const months = [];
-    const cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
-    const lastMonth = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), 1));
-
-    while (cursor <= lastMonth) {
-        months.push(cursor.toISOString().slice(0, 7));
-        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-    }
-
+    for (let month = firstMonth; month <= lastMonth; month = shiftMonthKey(month, 1)) months.push(month);
     return months;
 }
 
-// GET /api/fun-stats — cached until the account's journeys change (or the date does).
+// GET /api/fun-stats?tz=<IANA zone> — cached until the account's journeys change (or the
+// date does). Days, weekdays and hours are counted in the viewer's zone; UTC without one.
 router.get('/fun-stats', async (req, res) => {
     try {
+        const timeZone = parseTimeZone(req.query.tz) || 'UTC';
         await ensureDerived(req.userId);
         const stats = await withTenantClient(req.userId, async (db) => {
             // One snapshot, so the cached result matches the version it's stored under.
@@ -294,10 +291,10 @@ router.get('/fun-stats', async (req, res) => {
             try {
                 const now = new Date();
                 const { rows: [state] } = await db.query('SELECT data_version FROM tenant_state');
-                const key = `${state?.data_version}|${now.toISOString().slice(0, 10)}|${now.toDateString()}`;
+                const key = `${state?.data_version}|${timeZone}|${zoneParts(now, timeZone).dateKey}`;
                 const cached = funStatsCache.get(req.userId, key);
                 if (cached) return cached;
-                const computed = await computeFunStats(db, now);
+                const computed = await computeFunStats(db, now, timeZone);
                 funStatsCache.set(req.userId, key, computed);
                 return computed;
             } finally {
@@ -311,7 +308,7 @@ router.get('/fun-stats', async (req, res) => {
     }
 });
 
-async function computeFunStats(db, now) {
+async function computeFunStats(db, now, timeZone) {
     const { rows: rawRoutes } = await db.query(`
         SELECT r.id, r.name, r.date, r.distance, r.duration, r.top_speed, r.avg_speed,
                r.start_time, r.end_time, r.start_lat, r.start_lon,
@@ -368,15 +365,16 @@ async function computeFunStats(db, now) {
     let roundTripCount = 0;
     let weekdayRoundTripCount = 0, weekendRoundTripCount = 0;
     let commuteWindowCount = 0;
-    const modeCounts = { drive: 0, scooter: 0, foot: 0, train: 0, metro: 0 };
-    const modeDistances = { drive: 0, scooter: 0, foot: 0, train: 0, metro: 0 };
+    const modeCounts = { drive: 0, scooter: 0, foot: 0, train: 0, metro: 0, flight: 0 };
+    const modeDistances = { drive: 0, scooter: 0, foot: 0, train: 0, metro: 0, flight: 0 };
     let modeSwitchCount = 0, modeSwitchTransitions = 0;
     let previousMode = null;
     const directionCounts = new Array(8).fill(0);
     const seasonCounts = { spring: 0, summer: 0, fall: 0, winter: 0 };
     const seasonDistances = { spring: 0, summer: 0, fall: 0, winter: 0 };
     let firstJourney = null, lastJourney = null;
-    let firstJourneyDate = null;
+    let firstJourneyMonth = null;
+    let startedBefore6 = false, startedAtNoon = false, startedOnFriday = false;
     let totalPoints = 0;
     const avgSpeeds = [];
     const seenRouteCoarseCells = new Set();
@@ -390,9 +388,9 @@ async function computeFunStats(db, now) {
     let maxLat = -Infinity, minLat = Infinity, maxLon = -Infinity, minLon = Infinity;
 
     // For new-territory-this-month
-    const thisMonthStr = now.toISOString().slice(0, 7);
-    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthStr = lastMonthDate.toISOString().slice(0, 7);
+    const today = zoneParts(now, timeZone);
+    const thisMonthStr = today.monthKey;
+    const lastMonthStr = shiftMonthKey(thisMonthStr, -1);
     const cellsThisMonth = new Set();
     const cellsLastMonth = new Set();
     const cellsBeforeThisMonth = new Set();
@@ -420,8 +418,12 @@ async function computeFunStats(db, now) {
     for (const route of routes) {
         const dist = Number(route.distance) || 0;
         const routeDate = getRouteTimelineDate(route);
-        const routeDateStr = routeDate ? routeDate.toISOString().slice(0, 10) : null;
-        const routeMonthStr = routeDate ? routeDateStr.slice(0, 7) : null;
+        // Calendar fields in the viewer's zone. A journey with only a date text has no time
+        // of day to shift, so its date is taken as written.
+        const started = routeDate && routeDate === route.start_time ? zoneParts(routeDate, timeZone) : null;
+        const routeDay = started || (routeDate ? zoneParts(routeDate, 'UTC') : null);
+        const routeDateStr = routeDay ? routeDay.dateKey : null;
+        const routeMonthStr = routeDay ? routeDay.monthKey : null;
         totalDistance += dist;
 
         if (route.top_speed != null && Number(route.top_speed) > maxSpeed) {
@@ -451,7 +453,7 @@ async function computeFunStats(db, now) {
         const wCondition = route.weather_condition || null;
 
         if (wTemp != null && Number.isFinite(wTemp)) {
-            const dateStr = route.start_time ? route.start_time.toISOString().slice(0, 10) : route.date;
+            const dateStr = routeDateStr || route.date;
             weatherTemps.push({ date: dateStr, temp: wTemp, feelsLike: wFeelsLike, name: route.name || dateStr });
             totalTemp += wTemp;
             tempCount++;
@@ -472,8 +474,8 @@ async function computeFunStats(db, now) {
             const bucketKey = `${bucketBase}`;
             tempBuckets[bucketKey] = (tempBuckets[bucketKey] || 0) + 1;
 
-            if (route.start_time) {
-                const month = route.start_time.getUTCMonth();
+            if (started) {
+                const month = started.month;
                 if (month >= 2 && month <= 4) seasonTemps.spring.push(wTemp);
                 else if (month >= 5 && month <= 7) seasonTemps.summer.push(wTemp);
                 else if (month >= 8 && month <= 10) seasonTemps.fall.push(wTemp);
@@ -486,7 +488,7 @@ async function computeFunStats(db, now) {
             humidityCount++;
             if (wHumidity > humidestVal) {
                 humidestVal = wHumidity;
-                humidestJourney = { name: route.name, date: route.start_time ? route.start_time.toISOString().slice(0, 10) : route.date, humidity: wHumidity };
+                humidestJourney = { name: route.name, date: routeDateStr || route.date, humidity: wHumidity };
             }
         }
 
@@ -495,7 +497,7 @@ async function computeFunStats(db, now) {
             windCount++;
             if (wWind > windiestSpeed) {
                 windiestSpeed = wWind;
-                windiestJourney = { name: route.name, date: route.start_time ? route.start_time.toISOString().slice(0, 10) : route.date, windSpeed: wWind };
+                windiestJourney = { name: route.name, date: routeDateStr || route.date, windSpeed: wWind };
             }
         }
 
@@ -520,8 +522,8 @@ async function computeFunStats(db, now) {
             const roundDist = haversine(route.start_lat, route.start_lon, route.end_lat, route.end_lon);
             if (roundDist <= 0.3) {
                 roundTripCount++;
-                if (route.start_time) {
-                    const rtDow = route.start_time.getUTCDay();
+                if (started) {
+                    const rtDow = started.dow;
                     if (rtDow === 0 || rtDow === 6) weekendRoundTripCount++;
                     else weekdayRoundTripCount++;
                 }
@@ -571,19 +573,20 @@ async function computeFunStats(db, now) {
         if (routeDate) {
             if (!firstJourney) {
                 firstJourney = route;
-                firstJourneyDate = routeDate;
+                firstJourneyMonth = routeMonthStr;
             }
             lastJourney = route;
         }
 
-        if (route.start_time) {
-            const dow = route.start_time.getUTCDay();
+        if (started) {
+            const dow = started.dow;
             dayOfWeekCounts[dow]++;
-            const hour = route.start_time.getUTCHours();
+            const hour = started.hour;
             hourCounts[hour]++;
-            const startHour = hour
-                + (route.start_time.getUTCMinutes() / 60)
-                + (route.start_time.getUTCSeconds() / 3600);
+            if (hour < 6) startedBefore6 = true;
+            if (hour === 12) startedAtNoon = true;
+            if (dow === 5) startedOnFriday = true;
+            const startHour = hour + (started.minute / 60) + (started.second / 3600);
             startHourSamples.push(startHour);
             if (dow >= 1 && dow <= 5) weekdayStartHourSamples[dow].push(startHour);
 
@@ -604,7 +607,7 @@ async function computeFunStats(db, now) {
             else if (hour >= 17 && hour < 21) eveningCount++;
             else nightCount++;
 
-            const month = route.start_time.getUTCMonth();
+            const month = started.month;
             if (month >= 2 && month <= 4) { seasonCounts.spring++; seasonDistances.spring += dist; }
             else if (month >= 5 && month <= 7) { seasonCounts.summer++; seasonDistances.summer += dist; }
             else if (month >= 8 && month <= 10) { seasonCounts.fall++; seasonDistances.fall += dist; }
@@ -726,8 +729,7 @@ async function computeFunStats(db, now) {
             }
             if (weekDist > maxWeekDist) {
                 maxWeekDist = weekDist;
-                const endDate = new Date(startDate); endDate.setDate(endDate.getDate() + 6);
-                mostProductiveWeek = { startDate: sortedDays[i], endDate: endDate.toISOString().slice(0, 10), distanceMiles: weekDist };
+                mostProductiveWeek = { startDate: sortedDays[i], endDate: shiftDateKey(sortedDays[i], 6), distanceMiles: weekDist };
             }
         }
     }
@@ -772,9 +774,8 @@ async function computeFunStats(db, now) {
             longestStreakStart = curStreakStart;
             longestStreakEnd = sortedJourneyDays[sortedJourneyDays.length - 1];
         }
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const yestDate = new Date(); yestDate.setDate(yestDate.getDate() - 1);
-        const yesterdayStr = yestDate.toISOString().slice(0, 10);
+        const todayStr = today.dateKey;
+        const yesterdayStr = shiftDateKey(todayStr, -1);
         const lastDay = sortedJourneyDays[sortedJourneyDays.length - 1];
         if (lastDay === todayStr || lastDay === yesterdayStr) {
             currentStreak = 1;
@@ -800,7 +801,7 @@ async function computeFunStats(db, now) {
     const top10JourneyCount = sortedDayCounts.slice(0, 10).reduce((sum, count) => sum + count, 0);
     const burstinessPercent = routes.length > 0 ? (top10JourneyCount / routes.length) * 100 : 0;
 
-    const todayUtcMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const todayUtcMs = Date.parse(`${today.dateKey}T00:00:00Z`);
     const current30StartMs = todayUtcMs - (29 * MS_PER_DAY);
     const previous30StartMs = todayUtcMs - (59 * MS_PER_DAY);
     const previous30EndMs = todayUtcMs - (30 * MS_PER_DAY);
@@ -1022,8 +1023,8 @@ async function computeFunStats(db, now) {
     }
 
     // ── Monthly distance chart data ──
-    const sortedMonths = firstJourneyDate
-        ? buildMonthRange(firstJourneyDate, now)
+    const sortedMonths = firstJourneyMonth
+        ? buildMonthRange(firstJourneyMonth, thisMonthStr)
         : Object.keys(monthDistances).sort();
     const monthlyChart = sortedMonths.map(m => ({
         month: m,
@@ -1033,7 +1034,7 @@ async function computeFunStats(db, now) {
     // ── Year-over-year comparison ──
     let yoyComparison = null;
     if (sortedMonths.length > 0) {
-        const currentYear = now.getFullYear();
+        const currentYear = today.year;
         const lastYear = currentYear - 1;
         let thisYearDist = 0, lastYearDist = 0;
         for (const [m, dist] of Object.entries(monthDistances)) {
@@ -1087,7 +1088,7 @@ async function computeFunStats(db, now) {
         nightPct: totalTimed > 0 ? (nightCount / totalTimed) * 100 : 0,
         weekendPct: routes.length > 0 ? (weekendCount / routes.length) * 100 : 0,
         roundTripPct: routes.length > 0 ? (roundTripCount / routes.length) * 100 : 0,
-        elevGain: totalElevGain,
+        elevGainFt: totalElevGain * FEET_PER_METER,
         totalRoutes: routes.length,
         streakDays: longestStreak,
         explorationPct: explorationScore,
@@ -1141,14 +1142,9 @@ async function computeFunStats(db, now) {
 
     const bingoCompleted = new Set();
     if (nightCount > 0) bingoCompleted.add('night_journey');
-    for (const route of routes) {
-        if (route.start_time) {
-            const h = route.start_time.getUTCHours();
-            if (h < 6) bingoCompleted.add('early_bird');
-            if (h === 12) bingoCompleted.add('noon_start');
-            if (route.start_time.getUTCDay() === 5) bingoCompleted.add('friday_journey');
-        }
-    }
+    if (startedBefore6) bingoCompleted.add('early_bird');
+    if (startedAtNoon) bingoCompleted.add('noon_start');
+    if (startedOnFriday) bingoCompleted.add('friday_journey');
     if (longestDistVal >= 50) bingoCompleted.add('long_50');
     if (longestDistVal >= 100) bingoCompleted.add('long_100');
     if (maxSpeed >= 70) bingoCompleted.add('speed_70');
@@ -1221,7 +1217,7 @@ async function computeFunStats(db, now) {
     if (roundTripCount >= 10) achievements.push({ key: 'boomerang', title: 'Boomerang', desc: '10+ round trips' });
     if (nightCount >= 20) achievements.push({ key: 'nightowl', title: 'Night Owl', desc: '20+ night journeys' });
     if (weekendCount >= 50) achievements.push({ key: 'weekender', title: 'Weekend Warrior', desc: '50+ weekend journeys' });
-    if (totalElevGain >= 50000) achievements.push({ key: 'mountaineer', title: 'Mountaineer', desc: '50,000+ ft elevation gain' });
+    if (totalElevGain * FEET_PER_METER >= 50000) achievements.push({ key: 'mountaineer', title: 'Mountaineer', desc: '50,000+ ft elevation gain' });
     if (modeCounts.foot >= 50) achievements.push({ key: 'walker', title: 'Walker', desc: '50+ journeys on foot' });
 
     const formatRoute = (r) => r ? {
@@ -1265,12 +1261,14 @@ async function computeFunStats(db, now) {
         seasonCounts,
         seasonDistances: { spring: Number(seasonDistances.spring.toFixed(1)), summer: Number(seasonDistances.summer.toFixed(1)), fall: Number(seasonDistances.fall.toFixed(1)), winter: Number(seasonDistances.winter.toFixed(1)) },
         modeCounts,
-        modeDistances: { drive: Number(modeDistances.drive.toFixed(1)), scooter: Number(modeDistances.scooter.toFixed(1)), foot: Number(modeDistances.foot.toFixed(1)), train: Number(modeDistances.train.toFixed(1)), metro: Number(modeDistances.metro.toFixed(1)) },
+        modeDistances: Object.fromEntries(Object.entries(modeDistances).map(([mode, miles]) => [mode, Number(miles.toFixed(1))])),
+        // Metres, as stored; the client converts for display.
         elevation: hasElevation ? {
-            totalGainFt: Number(totalElevGain.toFixed(0)),
-            totalLossFt: Number(totalElevLoss.toFixed(0)),
-            peakElevationFt: maxElevation > -Infinity ? Number(maxElevation.toFixed(0)) : null,
+            totalGainM: Number(totalElevGain.toFixed(0)),
+            totalLossM: Number(totalElevLoss.toFixed(0)),
+            peakElevationM: maxElevation > -Infinity ? Number(maxElevation.toFixed(0)) : null,
         } : null,
+        timeZone,
         funComparisons: { earthLaps: Number(earthLaps.toFixed(2)), moonPercent: Number(moonPercent.toFixed(2)) },
         firstJourney: firstJourney ? { date: firstJourney.date, name: firstJourney.name, startTime: firstJourney.start_time?.toISOString() || null } : null,
         lastJourney: lastJourney ? { date: lastJourney.date, name: lastJourney.name, startTime: lastJourney.start_time?.toISOString() || null } : null,

@@ -240,6 +240,9 @@ final class LocationService: NSObject {
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
     }
 
+    /// The CSV being written, while a trip records.
+    var activeRecordingFile: URL? { isRecording ? csvURL : nil }
+
     func stopRecording() -> URL? {
         guard isRecording else { return nil }
 
@@ -255,9 +258,10 @@ final class LocationService: NSObject {
         try? fileHandle?.close()
         fileHandle = nil
 
+        // The CSV is the only copy of the trip, so it is deleted only once the zip exists. If
+        // zipping fails (a full disk, say) it stays, and the next launch recovers it.
         var resultURL: URL?
-        if let csvURL, let zipURL {
-            createZip(from: csvURL, to: zipURL)
+        if let csvURL, let zipURL, RecordingFiles.zip(csvURL, to: zipURL) {
             try? FileManager.default.removeItem(at: csvURL)
             resultURL = zipURL
         }
@@ -389,15 +393,6 @@ final class LocationService: NSObject {
             if writeCounter % 50 == 0 {
                 try? h.synchronize()
             }
-        }
-    }
-
-    private func createZip(from source: URL, to destination: URL) {
-        do {
-            try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.zipItem(at: source, to: destination)
-        } catch {
-            print("ZIP creation failed: \(error)")
         }
     }
 

@@ -8,7 +8,10 @@ const M_TO_FT = 3.28084;
 const FTPS2_TO_MPS2 = 0.3048;
 
 function toFiniteNumber(value) {
-  const parsed = typeof value === 'number' ? value : Number(value);
+  // Number(null) and Number('') are 0, which would show a missing reading as zero (and a
+  // missing temperature as -18 °C) instead of leaving callers to show their placeholder.
+  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim() === '')) return null;
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 

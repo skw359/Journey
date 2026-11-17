@@ -443,6 +443,19 @@ const TENANT_MIGRATIONS = [
       `);
     },
   },
+  {
+    // Every photo, video and thumbnail request looks its file up by name.
+    name: '2026-11-10-photo-filename-indexes',
+    async up(db, { schema }) {
+      const q = quoteIdent(schema);
+      await db.query(`
+        CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_photos_filename`)}
+          ON ${q}.photos(filename);
+        CREATE INDEX IF NOT EXISTS ${quoteIdent(`${schema}_idx_photos_poster_filename`)}
+          ON ${q}.photos(poster_filename) WHERE poster_filename IS NOT NULL;
+      `);
+    },
+  },
 ];
 
 async function createTenantTables(schema) {
@@ -807,6 +820,15 @@ async function initSchema() {
 
   await pool.query(TRIGGER_FUNCTIONS);
   await runMigrations('global', GLOBAL_MIGRATIONS, {});
+
+  // One account per name, whatever its capitals. A server that already holds such a pair
+  // can't have the index until one is renamed; registration refuses new ones either way.
+  try {
+    await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username))');
+  } catch (err) {
+    if (err.code !== '23505') throw err;
+    require('./utils/logger').scope('database').warn('two accounts differ only by capitals in their username; rename one to finish securing sign-up');
+  }
 
   const { rows: users } = await pool.query('SELECT id FROM users');
   for (const user of users) {

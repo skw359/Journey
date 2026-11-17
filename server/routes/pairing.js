@@ -7,7 +7,7 @@ const { hashToken, PAIRING_TOKEN_IDLE_DAYS } = require('../middleware/auth');
 const log = require('../utils/logger').scope('pairing');
 
 // Tokens are stored hashed and shown once. A new token must be used within
-// PENDING_MINUTES; see pairingTokenAllowed in app.js for what tokens may do.
+// PENDING_MINUTES; see webOnly in routes/journeys.js for what tokens may do.
 
 const PENDING_MINUTES = 15;
 

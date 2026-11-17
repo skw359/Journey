@@ -431,7 +431,7 @@ export default function FlightImportModal({ open, onClose, onImported }) {
                 <div className="flight-map-container" ref={mapContainerRef} />
                 <div className="flight-stats-row">
                   <div className="flight-stat">
-                    <span className="flight-stat-value">{convertDistance(trackData.distance).toFixed(1)}</span>
+                    <span className="flight-stat-value">{(convertDistance(trackData.distance) ?? 0).toFixed(1)}</span>
                     <span className="flight-stat-label">{distanceUnit}</span>
                   </div>
                   <div className="flight-stat">
@@ -439,11 +439,11 @@ export default function FlightImportModal({ open, onClose, onImported }) {
                     <span className="flight-stat-label">Duration</span>
                   </div>
                   <div className="flight-stat">
-                    <span className="flight-stat-value">{convertSpeed(trackData.topSpeed).toFixed(0)}</span>
+                    <span className="flight-stat-value">{(convertSpeed(trackData.topSpeed) ?? 0).toFixed(0)}</span>
                     <span className="flight-stat-label">{speedUnit}</span>
                   </div>
                   <div className="flight-stat">
-                    <span className="flight-stat-value">{convertElevation(trackData.topElevation).toFixed(0)}</span>
+                    <span className="flight-stat-value">{(convertElevation(trackData.topElevation) ?? 0).toFixed(0)}</span>
                     <span className="flight-stat-label">{elevationUnit}</span>
                   </div>
                 </div>

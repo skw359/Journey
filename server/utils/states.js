@@ -22,8 +22,8 @@ const GRID_DEG = 1;
 const BAND_DEG = 0.05;
 
 // Coordinates within ~110 m of each other resolve to the same state, so the
-// aggregate helper tests one point per cell — the same trade cities.js and
-// places.js make when caching geocoder answers. Cell keys are packed into a
+// aggregate helper tests one point per cell — the same trade passedThrough.js
+// makes when caching geocoder answers. Cell keys are packed into a
 // single integer rather than a string: over a full history the dedupe key is
 // built millions of times, and toFixed() there costs more than every
 // point-in-polygon test combined.

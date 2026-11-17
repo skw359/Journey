@@ -405,6 +405,21 @@ async function main() {
             'aborted');
     }
     {
+        // Stop during tool selection: the signal reaches that round too, and its abort is a
+        // cancel for the route rather than an "Ollama unreachable" error.
+        const { OllamaError } = require('../ollama');
+        const controller = new AbortController();
+        let seen = null;
+        const ollama = {
+            chatToolSelect: async ({ signal }) => { seen = signal; throw new OllamaError('aborted', 'user hit stop'); },
+            chatAnswer: async () => { throw new Error('must not be called'); },
+        };
+        await checkRejects('select-abort: MarcoError aborted',
+            () => ask(input('today?', []), { ...DEPS_BASE, ollama, signal: controller.signal }),
+            'aborted');
+        check('select-abort: the selection round received the signal', seen === controller.signal, true);
+    }
+    {
         // A listener that throws must never damage the answer.
         const ollama = {
             chatToolSelect: async () => ({

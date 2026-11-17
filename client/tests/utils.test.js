@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import apiFetch, { onLoadingChange } from '../src/api/apiFetch.js';
+import apiFetch, { onLoadingChange, onUnauthorized } from '../src/api/apiFetch.js';
 import { escapeHtml } from '../src/utils/html.js';
 import { createLruCache } from '../src/utils/lruCache.js';
 import { heatmapWeights } from '../src/utils/heatmapWeights.js';
@@ -71,4 +71,26 @@ test('heatmap weights spread out instead of saturating', () => {
   }
   assert.deepEqual(heatmapWeights([]), []);
   assert.equal(heatmapWeights([0, 0])[0], 0);
+});
+
+test('a 401 on any request is reported, so an expired session is noticed', async () => {
+  let reported = 0;
+  const off = onUnauthorized(() => { reported += 1; });
+
+  globalThis.fetch = async () => new Response('{"error":"Not authenticated"}', { status: 401 });
+  const res = await apiFetch('/api/routes');
+  assert.equal(res.status, 401, 'the caller still gets the response');
+  assert.equal(reported, 1);
+
+  globalThis.fetch = async () => new Response('{"error":"nope"}', { status: 403 });
+  await apiFetch('/api/admin/users');
+  globalThis.fetch = async () => new Response('[]', { status: 200 });
+  await apiFetch('/api/routes');
+  assert.equal(reported, 1, 'only 401 counts');
+
+  off();
+  globalThis.fetch = async () => new Response('{}', { status: 401 });
+  await apiFetch('/api/routes');
+  assert.equal(reported, 1, 'unsubscribed listeners are not called');
+  await tick();
 });

@@ -17,7 +17,7 @@ import {
   getFlightConfig,
   updateFlightConfig,
 } from '../api/settings';
-import { uploadAvatar } from '../api/auth';
+import { uploadAvatar, changePassword } from '../api/auth';
 import { getMarcoConfig, updateMarcoConfig, testMarcoConnection } from '../api/ask';
 import './Settings.css';
 
@@ -62,6 +62,9 @@ export default function Settings() {
   const weatherSoundingTouchedRef = useRef(false);
 
   const [flightApiKey, setFlightApiKey] = useState('');
+  // Whether the server holds a key, so it can be removed as well as replaced.
+  const [flightKeyStored, setFlightKeyStored] = useState(false);
+  const [weatherKeyStored, setWeatherKeyStored] = useState(false);
   const [flightSaving, setFlightSaving] = useState(false);
   const [flightResult, setFlightResult] = useState(null);
 
@@ -80,6 +83,12 @@ export default function Settings() {
   const [deleteError, setDeleteError] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordNotice, setPasswordNotice] = useState('');
+
 
   useEffect(() => {
     // Server-wide settings are the admin's; other accounts don't load them.
@@ -88,6 +97,7 @@ export default function Settings() {
 
     getFlightConfig().then(config => {
       if (config.flightaware_api_key) setFlightApiKey(config.flightaware_api_key);
+      setFlightKeyStored(Boolean(config.configured));
     }).catch(() => {});
 
     getMarcoConfig().then(config => {
@@ -107,6 +117,8 @@ export default function Settings() {
       setWeatherEnabled(config.weather_enabled !== 'false');
       if (config.weather_provider) setWeatherProvider(config.weather_provider);
       if (config.weather_custom_url) setWeatherCustomUrl(config.weather_custom_url);
+      if (config.weather_api_key) setWeatherApiKey(config.weather_api_key);
+      setWeatherKeyStored(Boolean(config.weather_api_key));
       const nextSoundingEnabled = config.weather_sounding_enabled !== 'false';
       if (!weatherSoundingTouchedRef.current) {
         setWeatherSoundingEnabled(nextSoundingEnabled);
@@ -199,7 +211,24 @@ export default function Settings() {
       setWeatherResult({ success: true, message: 'Weather settings saved' });
       if (weatherApiKey && !weatherApiKey.startsWith('\u2022')) {
         setWeatherApiKey('\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022');
+        setWeatherKeyStored(true);
       }
+    } catch (err) {
+      setWeatherResult({ success: false, error: err.message });
+    } finally {
+      setWeatherSaving(false);
+    }
+  };
+
+  // An empty field means "leave the key alone", so removing one is its own action.
+  const handleRemoveWeatherKey = async () => {
+    setWeatherSaving(true);
+    setWeatherResult(null);
+    try {
+      await updateWeatherConfig({ apiKey: '' });
+      setWeatherApiKey('');
+      setWeatherKeyStored(false);
+      setWeatherResult({ success: true, message: 'API key removed' });
     } catch (err) {
       setWeatherResult({ success: false, error: err.message });
     } finally {
@@ -219,7 +248,23 @@ export default function Settings() {
       setFlightResult({ success: true, message: 'Flight settings saved' });
       if (flightApiKey && !flightApiKey.startsWith('\u2022')) {
         setFlightApiKey('\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022');
+        setFlightKeyStored(true);
       }
+    } catch (err) {
+      setFlightResult({ success: false, error: err.message });
+    } finally {
+      setFlightSaving(false);
+    }
+  };
+
+  const handleRemoveFlightKey = async () => {
+    setFlightSaving(true);
+    setFlightResult(null);
+    try {
+      await updateFlightConfig({ apiKey: '' });
+      setFlightApiKey('');
+      setFlightKeyStored(false);
+      setFlightResult({ success: true, message: 'API key removed. Flight imports will use estimated routes.' });
     } catch (err) {
       setFlightResult({ success: false, error: err.message });
     } finally {
@@ -280,6 +325,35 @@ export default function Settings() {
     setDeleteModalOpen(false);
     setDeletePassword('');
     setDeleteError('');
+  };
+
+  const closePasswordModal = () => {
+    if (passwordSaving) return;
+    setPasswordModalOpen(false);
+    setPasswordForm({ current: '', next: '', confirm: '' });
+    setPasswordError('');
+  };
+
+  const handleChangePassword = async (event) => {
+    event.preventDefault();
+    if (passwordForm.next !== passwordForm.confirm) {
+      setPasswordError('The new passwords do not match');
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordError('');
+    try {
+      const { sessionsEnded } = await changePassword(passwordForm.current, passwordForm.next);
+      setPasswordModalOpen(false);
+      setPasswordForm({ current: '', next: '', confirm: '' });
+      setPasswordNotice(sessionsEnded > 0
+        ? `Password changed. Signed out of ${sessionsEnded} other ${sessionsEnded === 1 ? 'session' : 'sessions'}.`
+        : 'Password changed.');
+    } catch (err) {
+      setPasswordError(err.message || 'Failed to change password');
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -544,6 +618,11 @@ export default function Settings() {
                 >
                   <BtnLabel loading={weatherSaving}>Save Weather Settings</BtnLabel>
                 </button>
+                {weatherKeyStored && weatherProvider !== 'open-meteo' && (
+                  <button className="settings-btn settings-btn-secondary" onClick={handleRemoveWeatherKey} disabled={weatherSaving}>
+                    Remove API Key
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -597,6 +676,11 @@ export default function Settings() {
             >
               <BtnLabel loading={flightSaving}>Save Flight Settings</BtnLabel>
             </button>
+            {flightKeyStored && (
+              <button className="settings-btn settings-btn-secondary" onClick={handleRemoveFlightKey} disabled={flightSaving}>
+                Remove API Key
+              </button>
+            )}
           </div>
         </section>
 
@@ -822,9 +906,16 @@ export default function Settings() {
         <section className="settings-panel" style={{ marginTop: 24 }}>
           <h2 className="settings-section-title">Account</h2>
           <p className="settings-description">Manage sign-in and account lifecycle actions.</p>
+          {passwordNotice && <div className="settings-connection-status success">{passwordNotice}</div>}
           <div className="settings-btn-row">
             <button className="settings-btn settings-btn-secondary" onClick={logout}>
               Sign Out
+            </button>
+            <button
+              className="settings-btn settings-btn-secondary"
+              onClick={() => { setPasswordNotice(''); setPasswordModalOpen(true); }}
+            >
+              Change Password
             </button>
             <button className="settings-btn settings-btn-danger" onClick={handleDeleteModalOpen}>
               Delete Account
@@ -836,6 +927,63 @@ export default function Settings() {
           </p>
         </section>
       </main>
+
+      <Modal open={passwordModalOpen} onClose={closePasswordModal}>
+        <form onSubmit={handleChangePassword}>
+          <div className="modal-header">
+            <h3>Change Password</h3>
+          </div>
+          <div className="modal-body">
+            <p>Your other browsers will be signed out. Paired devices keep working.</p>
+            {/* Lets a password manager file the new password under the right account. */}
+            <input type="text" name="username" autoComplete="username" value={user?.username || ''} readOnly hidden />
+            <label className="settings-field-label" htmlFor="current-password">Current password</label>
+            <input
+              id="current-password"
+              className="modern-input"
+              type="password"
+              value={passwordForm.current}
+              onChange={(e) => setPasswordForm(form => ({ ...form, current: e.target.value }))}
+              autoComplete="current-password"
+              disabled={passwordSaving}
+              required
+            />
+            <label className="settings-field-label" htmlFor="new-password" style={{ marginTop: 12 }}>New password</label>
+            <input
+              id="new-password"
+              className="modern-input"
+              type="password"
+              value={passwordForm.next}
+              onChange={(e) => setPasswordForm(form => ({ ...form, next: e.target.value }))}
+              autoComplete="new-password"
+              minLength={8}
+              placeholder="At least 8 characters"
+              disabled={passwordSaving}
+              required
+            />
+            <label className="settings-field-label" htmlFor="confirm-new-password" style={{ marginTop: 12 }}>New password again</label>
+            <input
+              id="confirm-new-password"
+              className="modern-input"
+              type="password"
+              value={passwordForm.confirm}
+              onChange={(e) => setPasswordForm(form => ({ ...form, confirm: e.target.value }))}
+              autoComplete="new-password"
+              disabled={passwordSaving}
+              required
+            />
+            {passwordError && <div className="settings-inline-error" role="alert">{passwordError}</div>}
+          </div>
+          <div className="modal-buttons">
+            <button type="button" className="modal-btn modal-btn-cancel" onClick={closePasswordModal} disabled={passwordSaving}>
+              Cancel
+            </button>
+            <button type="submit" className="modal-btn modal-btn-confirm" disabled={passwordSaving}>
+              {passwordSaving ? 'Saving...' : 'Change Password'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={deleteModalOpen} onClose={handleDeleteModalClose}>
         <div className="modal-header">
