@@ -20,7 +20,7 @@ import { X } from 'lucide-react';
 
 import { useTheme } from '../context/ThemeContext';
 import { useUnits } from '../context/UnitsContext';
-import { createBasemapLayer } from '../utils/basemap';
+import { createBasemapLayer, isBasemapLayer } from '../utils/basemap';
 import { formatTime, calculateAcceleration } from '../utils/formatters';
 import { douglasPeucker, getToleranceForZoom, shouldShowHover } from '../utils/simplify';
 import { speedToColor } from '../utils/speedColors';
@@ -473,7 +473,11 @@ export default function RouteMap({
           }
         }
         return false;
-      }, { hitTolerance: 3 });
+      }, {
+        hitTolerance: 3,
+        // Hit-testing the vector basemap costs tens of ms per move and can never match.
+        layerFilter: (layer) => !isBasemapLayer(layer),
+      });
 
       if (foundContent) {
         tooltipEl.innerHTML = foundContent;
@@ -500,8 +504,8 @@ export default function RouteMap({
       }, {
         hitTolerance: 3,
         // Without this the outline drawn by a previous probe would count as a
-        // hit and block the next one.
-        layerFilter: (layer) => layer !== buildingProbe.layer,
+        // hit and block the next one. The basemap can't match either.
+        layerFilter: (layer) => layer !== buildingProbe.layer && !isBasemapLayer(layer),
       });
 
       if (hitOwnFeature) {
