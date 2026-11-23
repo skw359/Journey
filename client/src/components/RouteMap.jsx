@@ -2,9 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import 'ol/ol.css';
 import Map from 'ol/Map';
 import View from 'ol/View';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import XYZ from 'ol/source/XYZ';
 import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
 import LineString from 'ol/geom/LineString';
@@ -22,7 +20,7 @@ import { X } from 'lucide-react';
 
 import { useTheme } from '../context/ThemeContext';
 import { useUnits } from '../context/UnitsContext';
-import { TILE_ATTRIBUTION } from '../utils/mapUtils';
+import { createBasemapLayer, isBasemapLayer } from '../utils/basemap';
 import { formatTime, calculateAcceleration } from '../utils/formatters';
 import { douglasPeucker, getToleranceForZoom, shouldShowHover } from '../utils/simplify';
 import { speedToColor } from '../utils/speedColors';
@@ -67,21 +65,6 @@ function syncMeasureActive(map, measure, active) {
   map.getTargetElement().style.cursor = active ? 'crosshair' : '';
 }
 
-function tileUrlsFromTemplate(template) {
-  const cleaned = template.replace('{r}', '');
-  if (!cleaned.includes('{s}')) return [cleaned];
-  return ['a', 'b', 'c', 'd'].map(s => cleaned.replace('{s}', s));
-}
-
-function buildXYZ(template) {
-  return new XYZ({
-    urls: tileUrlsFromTemplate(template),
-    attributions: TILE_ATTRIBUTION,
-    maxZoom: 20,
-    crossOrigin: 'anonymous',
-  });
-}
-
 function lonLat(coord) {
   return fromLonLat([coord[1], coord[0]]);
 }
@@ -118,7 +101,7 @@ export default function RouteMap({
   measureActive = false,
   onMeasureActiveChange,
 }) {
-  const { tileUrl } = useTheme();
+  const { theme } = useTheme();
   const {
     isMetric,
     convertSpeed,
@@ -375,7 +358,7 @@ export default function RouteMap({
   useEffect(() => {
     if (mapInstanceRef.current) return;
 
-    const tileLayer = new TileLayer({ source: buildXYZ(tileUrl) });
+    const tileLayer = createBasemapLayer(theme);
     tileLayerRef.current = tileLayer;
 
     const routeSource = new VectorSource();
@@ -490,7 +473,11 @@ export default function RouteMap({
           }
         }
         return false;
-      }, { hitTolerance: 3 });
+      }, {
+        hitTolerance: 3,
+        // Hit-testing the vector basemap costs tens of ms per move and can never match.
+        layerFilter: (layer) => !isBasemapLayer(layer),
+      });
 
       if (foundContent) {
         tooltipEl.innerHTML = foundContent;
@@ -517,8 +504,8 @@ export default function RouteMap({
       }, {
         hitTolerance: 3,
         // Without this the outline drawn by a previous probe would count as a
-        // hit and block the next one.
-        layerFilter: (layer) => layer !== buildingProbe.layer,
+        // hit and block the next one. The basemap can't match either.
+        layerFilter: (layer) => layer !== buildingProbe.layer && !isBasemapLayer(layer),
       });
 
       if (hitOwnFeature) {
@@ -603,12 +590,7 @@ export default function RouteMap({
       map.setTarget(null);
       mapInstanceRef.current = null;
     };
-  }, [emitViewportChange, renderRouteLayers, tileUrl]);
-
-  useEffect(() => {
-    if (!tileLayerRef.current) return;
-    tileLayerRef.current.setSource(buildXYZ(tileUrl));
-  }, [tileUrl]);
+  }, [emitViewportChange, renderRouteLayers, theme]);
 
   useEffect(() => {
     const currentRoute = routeRef.current;

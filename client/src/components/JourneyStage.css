@@ -85,6 +85,15 @@
 .journey-hero .ol-attribution {
   bottom: calc(var(--hero-fade-height) + 0.5em);
 }
+
+/* Zoom and fullscreen stack on the right edge, clear of the header actions */
+.journey-hero .ol-zoom,
+.journey-hero .ol-full-screen {
+  left: auto;
+  right: 16px;
+}
+.journey-hero .ol-zoom { top: calc(50% - 22px); }
+.journey-hero .ol-full-screen { top: calc(50% - 70px); }
 .journey-hero #map:fullscreen .ol-attribution {
   bottom: 0.5em;
 }

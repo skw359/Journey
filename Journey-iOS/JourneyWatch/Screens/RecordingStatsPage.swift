@@ -35,6 +35,7 @@ struct RecordingStatsPage: View {
                               label: "Total Time", alignment: .trailing)
                 }
             }
+            .padding(.horizontal, 6) // nudge toward center so the bottom corners don't clip
         }
         .padding(.horizontal, 12)
         .padding(.top, 4)

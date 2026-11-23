@@ -177,7 +177,7 @@ Legacy migration:
 - Weather is fetched for the **city** a journey starts in, never its exact start point. `resolveWeatherLocation()` asks the configured geocoder (`GEOCODE_BASE_URL`, your own service) for the start's city; if its reply includes `city_lat`/`city_lon` (or `city_center: { lat, lon }`) that point is used, otherwise the city's point comes from Open-Meteo's geocoding search, which is sent only the city name (same-named places are told apart by country, state and distance). Without a city (rural, at sea, geocoder down or not configured) weather uses the center of the 0.1° grid cell (~11 km)
 - The resolved city and point are stored on the journey (`weather_city`, `weather_lat`, `weather_lon`) and reused by soundings and backfills. Weather is cached in memory by place and hour
 - Custom providers receive that point in `{lat}`/`{lon}` and the name in `{city}`; their URL must be `http(s)`
-- Other outbound requests: CARTO basemap tiles (from the browser; they reveal which map areas are viewed), FlightAware (flight number/airports, only with an API key), the geocoder (`GEOCODE_BASE_URL`), and Ollama for Marco (the admin-configured URL)
+- Other outbound requests: OpenFreeMap vector tiles (from the browser; they reveal which map areas are viewed), plus the Google Fonts stylesheet, which the basemap's web worker fetches to label the map in Montserrat. The CSP's `connect-src` allows only those two hosts; without the fonts host the maps fall back to drawing on the main thread, FlightAware (flight number/airports, only with an API key), the geocoder (`GEOCODE_BASE_URL`), and Ollama for Marco (the admin-configured URL)
 
 ## API Surface
 
