@@ -64,22 +64,30 @@ struct StartScreen: View {
 
 private struct SettingsSheet: View {
     @AppStorage("usePreciseUnits") private var usePreciseUnits = false
+    @AppStorage(JourneyRecorder.autoEndKey) private var endsWhenStill = true
 
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
                 Text("Settings").font(.headline)
-                VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Use Precise Units", isOn: $usePreciseUnits)
-                        .toggleStyle(.switch)
-                    Text("Display values with two decimal places.")
-                        .font(.caption2)
-                        .foregroundStyle(Theme.dim)
-                }
-                .padding(10)
-                .background(Color(hex: 0x1C1C1E), in: .rect(cornerRadius: 12))
+                setting("Use Precise Units", isOn: $usePreciseUnits,
+                        detail: "Display values with two decimal places.")
+                setting("Auto-End When Still", isOn: $endsWhenStill,
+                        detail: "End the journey after 60 seconds without moving.")
             }
             .padding(.horizontal, 8)
         }
+    }
+
+    private func setting(_ title: String, isOn: Binding<Bool>, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(title, isOn: isOn)
+                .toggleStyle(.switch)
+            Text(detail)
+                .font(.caption2)
+                .foregroundStyle(Theme.dim)
+        }
+        .padding(10)
+        .background(Color(hex: 0x1C1C1E), in: .rect(cornerRadius: 12))
     }
 }

@@ -16,6 +16,7 @@ final class JourneyRecorder: NSObject {
     private static let placeRefreshDistance: CLLocationDistance = 1000
     private static let placeLookupInterval: TimeInterval = 60
     private static let usableFixAccuracy: CLLocationAccuracy = 500
+    static let autoEndKey = "autoEndWhenStill"
 
     private(set) var isRecording = false
     private(set) var isPaused = false
@@ -31,6 +32,7 @@ final class JourneyRecorder: NSObject {
     private(set) var heading: CLLocationDirection = 0
     private(set) var place = Place()
     private(set) var startDate = Date.now
+    private(set) var route = RouteTrack()
 
     private(set) var waypoint: CLLocation?
     private(set) var speedgoal: Speedgoal?
@@ -38,6 +40,7 @@ final class JourneyRecorder: NSObject {
     var usesHeading = false { didSet { syncHeading() } }
 
     var hasUsableFix: Bool { accuracy.map { $0 <= Self.usableFixAccuracy } ?? false }
+    private var endsWhenStill: Bool { UserDefaults.standard.object(forKey: Self.autoEndKey) as? Bool ?? true }
 
     private let manager = CLLocationManager()
     private let workout = WorkoutSession()
@@ -68,6 +71,7 @@ final class JourneyRecorder: NSObject {
         guard !isRecording else { return }
         progress = TripProgress()
         routeLog = RouteLog()
+        route = RouteTrack()
         startDate = .now
         isRecording = true
         isPaused = false
@@ -108,6 +112,7 @@ final class JourneyRecorder: NSObject {
             isRecording = false
             isPaused = false
             isProcessing = false
+            route = RouteTrack()
             finishedTrip = trip
         }
     }
@@ -194,9 +199,10 @@ final class JourneyRecorder: NSObject {
             sendAltitudeAlert(for: fix.altitude)
         }
         routeLog?.append(fix)
+        if route.shouldAdd(fix.coordinate) { route.add(fix.coordinate) }
         updateSpeedgoal()
 
-        if progress.stillness.isStill(after: fix) { end() }
+        if endsWhenStill, progress.stillness.isStill(after: fix) { end() }
     }
 
     private func updateSpeedgoal() {

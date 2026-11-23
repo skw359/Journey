@@ -181,7 +181,7 @@ export default function JourneyTopOverlay({
         </div>
 
         <div className="jto-badges">
-          {route.watchRecorded && <span className="jto-badge jto-badge-watch">Watch</span>}
+          {route.watchRecorded && <span className="jto-badge jto-badge-watch"> Watch</span>}
           {route.waypoints?.length > 0 && (
             <span className="jto-badge jto-badge-waypoints">
               {route.waypoints.length} Saved Spot{route.waypoints.length === 1 ? '' : 's'}
