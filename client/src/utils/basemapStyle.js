@@ -1,6 +1,13 @@
 import VectorTileLayer from 'ol/layer/VectorTile';
 import VectorTileSource from 'ol/source/VectorTile';
+import CanvasVectorTileLayerRenderer from 'ol/renderer/canvas/VectorTileLayer';
 import MVT from 'ol/format/MVT';
+import {
+  reset as resetTransform,
+  scale as scaleTransform,
+  translate as translateTransform,
+} from 'ol/transform';
+import { getUid } from 'ol/util';
 import { applyStyle, applyBackground } from 'ol-mapbox-style';
 
 // Vector basemap: OpenFreeMap's free, keyless OpenMapTiles data drawn with
@@ -434,6 +441,63 @@ export function basemapBackground(theme) {
   return (PALETTES[theme] || PALETTES.dark).land;
 }
 
+// Bounds tile canvases on HiDPI screens (3 = 1536px for a 512px tile).
+const MAX_TILE_PIXEL_RATIO = 3;
+
+// OpenLayers draws a tile image at a whole-number pixel ratio, so at the
+// fractional zooms fit() lands on (most first views) tiles were upscaled up
+// to 2x and looked blurry. Draw them at exactly the ratio they're shown at.
+// Mirrors ol 10.9's renderTileImage_ with only the pixel ratio changed.
+class SharpVectorTileLayerRenderer extends CanvasVectorTileLayerRenderer {
+  renderTileImage_(tile, frameState) {
+    const layer = this.getLayer();
+    const replayState = tile.getReplayState(layer);
+    const executorGroups = tile.executorGroups[getUid(layer)];
+    replayState.renderedTileRevision = layer.getRevision();
+
+    const tileCoord = tile.wrappedTileCoord;
+    const z = tileCoord[0];
+    const source = layer.getSource();
+    const projection = frameState.viewState.projection;
+    const tileGrid = source.getTileGridForProjection(projection);
+    const tileResolution = tileGrid.getResolution(tile.tileCoord[0]);
+    const renderPixelRatio = (frameState.pixelRatio / tile.wantedResolution) * tileResolution;
+    const pixelRatio = Math.min(renderPixelRatio, MAX_TILE_PIXEL_RATIO);
+    const context = tile.getContext();
+    const size = source.getTilePixelSize(z, pixelRatio, projection);
+    context.canvas.width = size[0];
+    context.canvas.height = size[1];
+    const renderScale = pixelRatio / renderPixelRatio;
+    if (renderScale !== 1) {
+      const canvasTransform = scaleTransform(resetTransform(this.tmpTransform_), renderScale, renderScale);
+      context.setTransform.apply(context, canvasTransform);
+    }
+    const tileExtent = tileGrid.getTileCoordExtent(tileCoord, this.tempExtent);
+    const pixelScale = renderPixelRatio / tileGrid.getResolution(z);
+    const transform = resetTransform(this.tmpTransform_);
+    scaleTransform(transform, pixelScale, -pixelScale);
+    translateTransform(transform, -tileExtent[0], -tileExtent[3]);
+    for (const executorGroup of executorGroups) {
+      executorGroup.execute(
+        context,
+        [context.canvas.width * renderScale, context.canvas.height * renderScale],
+        transform,
+        0,
+        true,
+        ['Polygon', 'LineString'], // what 'hybrid' render mode bakes into tiles
+        null,
+      );
+    }
+    replayState.renderedTileResolution = tile.wantedResolution;
+  }
+}
+
+class SharpVectorTileLayer extends VectorTileLayer {
+  createRenderer() {
+    return new SharpVectorTileLayerRenderer(this, { cacheSize: this.cacheSize_ });
+  }
+}
+
 // The basemap as an ordinary OpenLayers layer. The worker renders this same
 // layer; the page uses it directly when a worker can't be used.
 export function createVectorBasemapLayer(theme) {
@@ -447,7 +511,7 @@ export function createVectorBasemapLayer(theme) {
     state: 'loading',
     format: new MVT({ layerName: 'mvt:layer', layers: sourceLayers }),
   });
-  const layer = new VectorTileLayer({ declutter: true, source, properties: { [BASEMAP_PROPERTY]: true } });
+  const layer = new SharpVectorTileLayer({ declutter: true, source, properties: { [BASEMAP_PROPERTY]: true } });
   applyBackground(layer, style);
   applyStyle(layer, style, { updateSource: true })
     .then(() => source.setState('ready'))
