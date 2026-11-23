@@ -2,9 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import 'ol/ol.css';
 import OlMap from 'ol/Map';
 import View from 'ol/View';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import XYZ from 'ol/source/XYZ';
 import VectorSource from 'ol/source/Vector';
 import Feature from 'ol/Feature';
 import LineString from 'ol/geom/LineString';
@@ -15,17 +13,12 @@ import Modal from './Modal';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { useUnits } from '../context/UnitsContext';
-import { TILE_ATTRIBUTION } from '../utils/mapUtils';
+import { createBasemapLayer } from '../utils/basemap';
 import { searchFlights, getFlightTrack, importFlight, fetchAirports } from '../api/journeys';
 import { Plane, ArrowLeft, Search, ArrowRight, MapPin } from 'lucide-react';
 import './FlightImportModal.css';
 
 const STEPS = { SEARCH: 'search', RESULTS: 'results', PREVIEW: 'preview' };
-
-function tileUrls(template) {
-  const cleaned = template.replace('{r}', '');
-  return cleaned.includes('{s}') ? ['a', 'b', 'c', 'd'].map((sub) => cleaned.replace('{s}', sub)) : [cleaned];
-}
 
 function endpointStyle(color) {
   return new Style({
@@ -34,7 +27,7 @@ function endpointStyle(color) {
 }
 
 // Flight path preview: the track with green start and red end markers.
-function createPreviewMap(target, tileUrl, coords) {
+function createPreviewMap(target, theme, coords) {
   const projected = coords.map(([lat, lon]) => fromLonLat([lon, lat]));
   const line = new Feature({ geometry: new LineString(projected) });
   line.setStyle(new Style({ stroke: new Stroke({ color: 'rgba(168, 85, 247, 0.9)', width: 3 }) }));
@@ -46,7 +39,7 @@ function createPreviewMap(target, tileUrl, coords) {
   const map = new OlMap({
     target,
     layers: [
-      new TileLayer({ source: new XYZ({ urls: tileUrls(tileUrl), attributions: TILE_ATTRIBUTION, maxZoom: 20, crossOrigin: 'anonymous' }) }),
+      createBasemapLayer(theme),
       new VectorLayer({ source: new VectorSource({ features: [line, start, end] }) }),
     ],
     view: new View({ center: projected[0], zoom: 4 }),
@@ -57,7 +50,7 @@ function createPreviewMap(target, tileUrl, coords) {
 
 export default function FlightImportModal({ open, onClose, onImported }) {
   const toast = useToast();
-  const { tileUrl } = useTheme();
+  const { theme } = useTheme();
   const { convertDistance, convertSpeed, convertElevation, distanceUnit, speedUnit, elevationUnit } = useUnits();
 
   const [step, setStep] = useState(STEPS.SEARCH);
@@ -225,14 +218,14 @@ export default function FlightImportModal({ open, onClose, onImported }) {
 
       const coords = trackData.coordinates;
       if (coords && coords.length >= 2) {
-        mapInstanceRef.current = createPreviewMap(mapContainerRef.current, tileUrl, coords);
+        mapInstanceRef.current = createPreviewMap(mapContainerRef.current, theme, coords);
       }
     }, 50);
 
     return () => {
       clearTimeout(timer);
     };
-  }, [step, trackData, tileUrl]);
+  }, [step, trackData, theme]);
 
   const handleImport = async () => {
     if (!selectedFlight || !trackData) return;

@@ -116,24 +116,18 @@ The frontend has its own environment file. Copy the template:
 cp client/.env.example client/.env
 ```
 
-Then edit `client/.env` and add your CARTO Basemaps key:
-
-```env
-VITE_CARTO_KEY=REPLACE_WITH_YOUR_CARTO_KEY
-```
+No frontend variables are required today. The maps draw
+[OpenFreeMap](https://openfreemap.org) vector tiles, which are free and need
+no key.
 
 Important:
 
-- Request a free key at https://carto.com/basemaps/apikey/. The free tier covers
-  non-commercial use at 5 million tile requests per calendar month.
-- Without a key Journey still runs, but every map tile is stamped with an
-  "API KEY REQUIRED" watermark by CARTO.
-- Vite inlines `VITE_`-prefixed variables at build time, so `client/.env` must
-  exist **before** step 6. Changing the key later requires another `npm run build`.
-- This value ships inside the frontend bundle and is readable by anyone who loads
-  your site. That is expected for basemap keys, which CARTO scopes to the domain
-  you registered. Keep real secrets in the root `.env` above instead.
-- CARTO and OpenStreetMap attribution must stay visible on the maps.
+- Vite inlines `VITE_`-prefixed variables at build time, so anything you add to
+  `client/.env` later needs another `npm run build`.
+- Values in `client/.env` ship inside the frontend bundle and are readable by
+  anyone who loads your site. Keep real secrets in the root `.env` above instead.
+- OpenFreeMap, OpenMapTiles and OpenStreetMap attribution must stay visible on
+  the maps (the ⓘ button in the corner of each map).
 
 ## 6. Build and Test Manually
 
@@ -142,9 +136,6 @@ Now it's time to put everything together and build the frontend. We use this com
 ```bash
 npm run build
 ```
-
-Confirm `client/.env` exists before running this. The CARTO key is compiled into
-the bundle, so a build without it produces watermarked maps until you rebuild.
 
 To start the server:
 

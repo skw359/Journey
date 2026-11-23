@@ -32,16 +32,16 @@ function securityHeaders(req, res, next) {
     next();
 }
 
-// What the web app loads: its own files, Google Fonts, and Carto map tiles. Inline styles are
-// allowed because React and the map set them; inline scripts are not.
+// What the web app loads: its own files, Google Fonts, and OpenFreeMap vector tiles. Inline
+// styles are allowed because React and the map set them; inline scripts are not.
 const CONTENT_SECURITY_POLICY = [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://*.basemaps.cartocdn.com",
+    "img-src 'self' data: blob:",
     "media-src 'self' blob:",
-    "connect-src 'self'",
+    "connect-src 'self' https://tiles.openfreemap.org",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

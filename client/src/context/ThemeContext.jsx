@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { getTileUrl, getChartColors } from '../utils/mapUtils';
+import { getChartColors } from '../utils/mapUtils';
 
 const ThemeContext = createContext();
 const THEME_TRANSITION_DURATION_MS = 250;
@@ -41,11 +41,10 @@ export function ThemeProvider({ children }) {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const tileUrl = getTileUrl(theme);
   const chartColors = getChartColors(theme);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, tileUrl, chartColors }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, chartColors }}>
       {children}
     </ThemeContext.Provider>
   );

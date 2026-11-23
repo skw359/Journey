@@ -2,10 +2,8 @@ import { useState, useEffect, useEffectEvent, useRef } from 'react';
 import 'ol/ol.css';
 import OlMap from 'ol/Map';
 import View from 'ol/View';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import HeatmapLayer from 'ol/layer/Heatmap';
-import XYZ from 'ol/source/XYZ';
 import VectorSource from 'ol/source/Vector';
 import ClusterSource from 'ol/source/Cluster';
 import Feature from 'ol/Feature';
@@ -23,7 +21,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopLoader from '../components/TopLoader';
 import { useTheme } from '../context/ThemeContext';
 import { useUnits } from '../context/UnitsContext';
-import { TILE_ATTRIBUTION } from '../utils/mapUtils';
+import { createBasemapLayer, applyBasemapTheme } from '../utils/basemap';
 import { fetchAllTimeMapData, fetchHeatmapGrid } from '../api/journeys';
 import { computeFilteredStats } from '../utils/travelStats';
 import { createBuildingProbe } from '../utils/buildingProbe';
@@ -55,21 +53,6 @@ const MARKER_STROKE = 1;
 const CLUSTER_STROKE = 2;
 const CLUSTER_MAX_RADIUS = 20;
 const clusterRadius = (size) => Math.min(CLUSTER_MAX_RADIUS, 12 + Math.log(size) * 3);
-
-function tileUrlsFromTemplate(template) {
-  const cleaned = template.replace('{r}', '');
-  if (!cleaned.includes('{s}')) return [cleaned];
-  return ['a', 'b', 'c', 'd'].map(s => cleaned.replace('{s}', s));
-}
-
-function buildXYZ(template) {
-  return new XYZ({
-    urls: tileUrlsFromTemplate(template),
-    attributions: TILE_ATTRIBUTION,
-    maxZoom: 20,
-    crossOrigin: 'anonymous',
-  });
-}
 
 function lonLat(coord) {
   return fromLonLat([coord[1], coord[0]]);
@@ -120,7 +103,7 @@ function formatNumber(value, options = {}) {
 }
 
 export default function Atlas({ sidebarCollapsed = false }) {
-  const { tileUrl } = useTheme();
+  const { theme } = useTheme();
   const { convertDistance, distanceUnit } = useUnits();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -187,7 +170,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
 
   // The map is built once, by the effect below. Its listeners reach the component's current
   // state through these, so the effect doesn't have to be rebuilt when that state changes.
-  const initialTileUrl = useEffectEvent(() => tileUrl);
+  const initialTheme = useEffectEvent(() => theme);
   const openJourney = useEffectEvent((routeId) => navigate(`/journeys?routeId=${routeId}`));
   const refreshHeatmap = useEffectEvent(() => loadHeatmapGrid(startDateRef.current, endDateRef.current));
   const loadInitialData = useEffectEvent(() => loadData());
@@ -195,7 +178,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
   useEffect(() => {
     if (mapInstanceRef.current) return;
 
-    const tileLayer = new TileLayer({ source: buildXYZ(initialTileUrl()) });
+    const tileLayer = createBasemapLayer(initialTheme());
     tileLayerRef.current = tileLayer;
 
     const routeSource = new VectorSource();
@@ -604,7 +587,7 @@ export default function Atlas({ sidebarCollapsed = false }) {
     };
   }, []);
 
-  useEffect(() => { tileLayerRef.current?.setSource(buildXYZ(tileUrl)); }, [tileUrl]);
+  useEffect(() => { if (tileLayerRef.current) applyBasemapTheme(tileLayerRef.current, theme); }, [theme]);
 
   // Features are always built now; these toggles just flip layer visibility
   // instead of tearing down and rebuilding every geometry.
