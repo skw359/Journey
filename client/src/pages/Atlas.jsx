@@ -103,7 +103,7 @@ function formatNumber(value, options = {}) {
 }
 
 export default function Atlas({ sidebarCollapsed = false }) {
-  const { theme } = useTheme();
+  const { mapTheme: theme } = useTheme();
   const { convertDistance, distanceUnit } = useUnits();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

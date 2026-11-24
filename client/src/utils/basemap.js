@@ -1,19 +1,16 @@
 import Layer from 'ol/layer/Layer';
 import Source from 'ol/source/Source';
 import { unByKey } from 'ol/Observable';
-import {
-  BASEMAP_ATTRIBUTION,
-  BASEMAP_PROPERTY,
-  basemapBackground,
-  createVectorBasemapLayer,
-  applyVectorBasemapTheme,
-} from './basemapStyle';
+import { BASEMAP_ATTRIBUTION, BASEMAP_PROPERTY, basemapBackground } from './basemapTheme';
 import BasemapWorker from './basemap.worker.js?worker';
 
 // The basemap is drawn in a worker (basemap.worker.js) so that placing labels
 // and drawing tiles never blocks panning, zooming or the rest of the page.
 // Browsers without OffscreenCanvas, or a worker that fails, get the same layer
-// drawn on the main thread instead.
+// drawn on the main thread instead. That renderer (basemapStyle.js, with
+// ol-mapbox-style) is only loaded then; the worker bundles its own copy.
+
+const loadVectorBasemap = () => import('./basemapStyle');
 
 function workerRenderingSupported() {
   try {
@@ -30,8 +27,10 @@ function workerRenderingSupported() {
 // Once a worker has failed, later maps go straight to the main thread.
 let useWorker = workerRenderingSupported();
 
+// Always a WorkerBasemapLayer; without a worker it swaps itself for the
+// main-thread layer on its first render.
 export function createBasemapLayer(theme) {
-  return useWorker ? new WorkerBasemapLayer(theme) : createVectorBasemapLayer(theme);
+  return new WorkerBasemapLayer(theme);
 }
 
 export function applyBasemapTheme(layer, theme) {
@@ -39,7 +38,7 @@ export function applyBasemapTheme(layer, theme) {
     layer.setTheme(theme);
     return Promise.resolve();
   }
-  return applyVectorBasemapTheme(layer, theme);
+  return loadVectorBasemap().then((m) => m.applyVectorBasemapTheme(layer, theme));
 }
 
 export function isBasemapLayer(layer) {
@@ -55,6 +54,7 @@ class WorkerBasemapLayer extends Layer {
     this.theme_ = theme;
     this.worker_ = null;
     this.fallback_ = null;
+    this.fallingBack_ = false;
     this.mapTargetKey_ = null;
     this.lastViewKey_ = '';
     // The view the map is showing now, and the view the current bitmap was drawn for.
@@ -107,7 +107,7 @@ class WorkerBasemapLayer extends Layer {
 
   setTheme(theme) {
     this.theme_ = theme;
-    if (this.fallback_) applyVectorBasemapTheme(this.fallback_, theme);
+    if (this.fallback_) loadVectorBasemap().then((m) => m.applyVectorBasemapTheme(this.fallback_, theme));
     else this.worker_?.postMessage({ type: 'theme', theme });
   }
 
@@ -156,6 +156,10 @@ class WorkerBasemapLayer extends Layer {
   }
 
   startWorker_() {
+    if (!useWorker) {
+      this.fallBack_('no worker rendering');
+      return;
+    }
     let worker;
     try {
       worker = new BasemapWorker();
@@ -234,18 +238,20 @@ class WorkerBasemapLayer extends Layer {
   }
 
   fallBack_(reason) {
-    if (this.fallback_) return;
+    if (this.fallingBack_) return;
+    this.fallingBack_ = true;
     console.warn('[basemap] drawing the basemap on the main thread instead of a worker:', reason);
     useWorker = false;
     this.stopWorker_();
-    const fallback = createVectorBasemapLayer(this.theme_);
-    this.fallback_ = fallback;
-    // Not mid-render: this can be reached from render().
-    queueMicrotask(() => {
+    // Async, so never mid-render: this can be reached from render().
+    loadVectorBasemap().then((m) => {
+      if (this.disposed) return;
+      const fallback = m.createVectorBasemapLayer(this.theme_);
+      this.fallback_ = fallback;
       const layers = this.getMapInternal()?.getLayers();
       const index = layers ? layers.getArray().indexOf(this) : -1;
       if (index >= 0) layers.setAt(index, fallback);
-    });
+    }, (error) => console.error('[basemap] could not load the main-thread renderer:', error));
   }
 
   disposeInternal() {
