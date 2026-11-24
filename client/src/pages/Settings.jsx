@@ -32,7 +32,7 @@ function BtnLabel({ loading, children }) {
 }
 
 export default function Settings() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, coloredMap, setColoredMap } = useTheme();
   const { user, logout, updateUser, deleteAccount, setMarcoEnabled: setMarcoNavEnabled } = useAuth();
   const { isMetric, setUnitPreference } = useUnits();
   const isAdmin = user?.isAdmin === true;
@@ -437,6 +437,26 @@ export default function Settings() {
                 type="checkbox"
                 checked={theme === 'dark'}
                 onChange={toggleTheme}
+              />
+              <span className="settings-slider" />
+            </span>
+          </label>
+
+          <label className="settings-item" htmlFor="map-color-toggle">
+            <div className="settings-item-copy">
+              <span className="settings-item-title">Colored map</span>
+              <span className="settings-item-detail">
+                {coloredMap
+                  ? 'Maps show parks, water and roads in color.'
+                  : `Maps are plain ${theme === 'dark' ? 'black' : 'white'}, without color.`}
+              </span>
+            </div>
+            <span className="settings-switch">
+              <input
+                id="map-color-toggle"
+                type="checkbox"
+                checked={coloredMap}
+                onChange={(e) => setColoredMap(e.target.checked)}
               />
               <span className="settings-slider" />
             </span>

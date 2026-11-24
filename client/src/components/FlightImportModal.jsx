@@ -50,7 +50,7 @@ function createPreviewMap(target, theme, coords) {
 
 export default function FlightImportModal({ open, onClose, onImported }) {
   const toast = useToast();
-  const { theme } = useTheme();
+  const { mapTheme: theme } = useTheme();
   const { convertDistance, convertSpeed, convertElevation, distanceUnit, speedUnit, elevationUnit } = useUnits();
 
   const [step, setStep] = useState(STEPS.SEARCH);

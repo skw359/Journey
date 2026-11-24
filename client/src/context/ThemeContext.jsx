@@ -1,11 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { getChartColors } from '../utils/mapUtils';
+import { basemapThemeKey } from '../utils/basemapTheme';
 
 const ThemeContext = createContext();
 const THEME_TRANSITION_DURATION_MS = 250;
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [coloredMap, setColoredMapState] = useState(() => localStorage.getItem('coloredMap') !== 'false');
   const hasMountedRef = useRef(false);
 
   useEffect(() => {
@@ -41,10 +43,17 @@ export function ThemeProvider({ children }) {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
+  const setColoredMap = useCallback((value) => {
+    localStorage.setItem('coloredMap', String(value));
+    setColoredMapState(value);
+  }, []);
+
   const chartColors = getChartColors(theme);
+  // What the maps' basemaps draw with.
+  const mapTheme = basemapThemeKey(theme, coloredMap);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, chartColors }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, chartColors, coloredMap, setColoredMap, mapTheme }}>
       {children}
     </ThemeContext.Provider>
   );

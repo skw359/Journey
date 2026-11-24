@@ -101,7 +101,7 @@ export default function RouteMap({
   measureActive = false,
   onMeasureActiveChange,
 }) {
-  const { theme } = useTheme();
+  const { mapTheme: theme } = useTheme();
   const {
     isMetric,
     convertSpeed,
